@@ -1,0 +1,42 @@
+@import url("https://cdn.jsdelivr.net/npm/pretendard/dist/web/static/pretendard.css");
+@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap");
+
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #FF5722;
+  --color-primary-dark: #E64A19;
+  --color-surface: #ffffff;
+  --color-surface-dark: #121212;
+  --color-ink-black: #121212;
+  --color-comic-orange: #FF5722;
+  --color-comic-blue: #2563EB;
+  --color-border: #dfe4dc;
+  
+  --font-sans: 'Pretendard', system-ui, -apple-system, sans-serif;
+  --font-serif: 'Playfair Display', 'Iowan Old Style', 'Georgia', serif;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-surface);
+  color: var(--color-ink-black);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  background-image: 
+    linear-gradient(to right, rgba(0,0,0,0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0,0,0,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  background-attachment: fixed;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background-color: var(--color-surface-dark);
+    color: #ffffff;
+    background-image: 
+      linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px);
+  }
+}

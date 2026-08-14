@@ -1,0 +1,22 @@
+{
+  "_note": "말풍선 레이아웃 공유 설정. 프론트(bubbleSpec.json)와 백엔드(bubble_spec.json) 값을 반드시 동기화할 것.",
+  "baseFontSize": 14,
+  "charWidth": 0.72,
+  "lineHeightRatio": 1.45,
+  "ovalExtra": 12,
+  "spikeMargin": 8,
+  "styles": {
+    "round":     { "paddingX": 16, "paddingY": 14 },
+    "narration": { "paddingX": 14, "paddingY": 10 },
+    "thought":   { "paddingX": 20, "paddingY": 14 },
+    "whisper":   { "paddingX": 22, "paddingY": 16 },
+    "shout":     { "paddingX": 26, "paddingY": 22 },
+    "angry":     { "paddingX": 28, "paddingY": 24 },
+    "happy":     { "paddingX": 16, "paddingY": 14 },
+    "sad":       { "paddingX": 20, "paddingY": 14 },
+    "surprised": { "paddingX": 24, "paddingY": 20 },
+    "shy":       { "paddingX": 20, "paddingY": 14 },
+    "flustered": { "paddingX": 20, "paddingY": 14 },
+    "realize":   { "paddingX": 20, "paddingY": 14 }
+  }
+}

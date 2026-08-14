@@ -1,8 +1,10 @@
 """게이트 4 — 콘티 엔드포인트. API-Spec 6장."""
 
+import json
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.database import get_db
 from app.auth.deps import get_current_user
@@ -86,6 +88,19 @@ async def create_storyboard(
     else:
         cuts = create_cuts_from_script(episode_id, script_data, db)
 
+    # 재생성 후 게이트4 상태가 invalidated이면 draft로 변경
+    # create_cuts_from_script가 db.commit()을 호출하므로 episode를 refresh해야 함
+    db.refresh(episode)
+    # deep copy로 SQLAlchemy JSON 변경 감지 보장
+    gate_status = json.loads(json.dumps(episode.gate_status))
+    g4 = gate_status.get("gates", {}).get("4_storyboard", {})
+    if g4.get("status") == "invalidated":
+        gate_status["gates"]["4_storyboard"]["status"] = "draft"
+        gate_status["gates"]["4_storyboard"]["approved_at"] = None
+        episode.gate_status = gate_status
+        flag_modified(episode, "gate_status")
+        db.commit()
+
     return {"cuts": cuts, "total": len(cuts)}
 
 
@@ -119,6 +134,7 @@ async def list_cuts(
             "location_id": (c.spec or {}).get("location_id"),
             "action": (c.spec or {}).get("action"),
             "dialogue": (c.spec or {}).get("dialogue", []),
+            "sfx_items": (c.spec or {}).get("sfx_items", []),
             "emphasis": (c.spec or {}).get("emphasis"),
         }
         for c in cuts
@@ -188,6 +204,7 @@ async def approve_storyboard(
 
 class DialogueUpdateRequest(BaseModel):
     dialogue: list[dict]
+    sfx_items: list[dict] | None = None  # 효과음 요소 (선택, 없으면 기존 유지)
 
 
 @router.put("/cuts/{cut_id}/dialogue")
@@ -197,26 +214,32 @@ async def update_cut_dialogue(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """대사만 수정 → 재조판 (이미지 재생성 없음, 과금 없음)."""
+    """대사·효과음 수정 → 재조판 (이미지 재생성 없음, 과금 없음)."""
     cut = db.query(Cut).filter(Cut.cut_id == cut_id).first()
     if not cut:
         raise HTTPException(status_code=404, detail="Cut not found")
 
-    # spec의 dialogue 갱신
     spec = dict(cut.spec)
     spec["dialogue"] = body.dialogue
+    if body.sfx_items is not None:
+        spec["sfx_items"] = body.sfx_items
     cut.spec = spec
 
-    # 원본 이미지 위에 재조판
+    # 원본 이미지 위에 재조판 (말풍선만, 효과음은 프론트엔드 SVG로 렌더링)
     if cut.image_url:
+        from datetime import datetime, timezone
+        from app.composition.service import RENDERER_VERSION
         composed_url = compose_cut(cut.image_url, body.dialogue, cut.episode_id, cut.cut_id, cut_spec=cut.spec)
         cut.composed_image_url = composed_url
+        cut.composed_renderer_version = RENDERER_VERSION
+        cut.composed_at = datetime.now(timezone.utc)
 
     db.commit()
     return {
         "cut_id": cut_id,
         "composed_image_url": cut.composed_image_url,
         "dialogue": body.dialogue,
+        "sfx_items": spec.get("sfx_items", []),
     }
 
 

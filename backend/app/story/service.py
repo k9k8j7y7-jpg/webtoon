@@ -1,0 +1,100 @@
+"""Story Engine — 게이트 1: 아이디어 → 기획(제목·로그라인·시놉시스·세계관·인물목록)
+
+API-Spec 3장, PRD 3.1 참조.
+"""
+
+import json
+
+from app.adapters.gemini import generate_text
+
+SYSTEM_INSTRUCTION = """너는 웹툰 스토리 기획 전문가야.
+사용자의 아이디어를 받아서 웹툰 기획안을 만들어줘.
+반드시 아래 JSON 형식으로만 응답해. 다른 텍스트는 절대 넣지 마.
+
+{
+  "title": "웹툰 제목",
+  "logline": "한 줄 요약 (1~2문장)",
+  "synopsis": "시놉시스 (3~5문단, 전체 줄거리)",
+  "world": "세계관 설명 (배경, 시대, 특수 규칙 등)",
+  "characters": [
+    {
+      "ref_key": "영문 식별자 (예: hero, sidekick)",
+      "name": "캐릭터 이름",
+      "gender": "성별 (남/여/기타)",
+      "age": "나이 (숫자)",
+      "description": "외모, 성격, 역할 등 상세 묘사"
+    }
+  ]
+}"""
+
+SUGGEST_CHARACTERS_INSTRUCTION = """너는 웹툰 캐릭터 기획 전문가야.
+사용자의 아이디어를 바탕으로 어울리는 등장인물을 제안해줘.
+반드시 아래 JSON 형식으로만 응답해. 다른 텍스트는 절대 넣지 마.
+
+{
+  "characters": [
+    {
+      "name": "캐릭터 이름",
+      "gender": "남 또는 여 또는 기타",
+      "age": 나이(숫자)
+    }
+  ]
+}
+
+3~5명의 캐릭터를 제안해줘. 이름은 한국 이름으로 해줘."""
+
+
+def _parse_json(raw: str) -> dict:
+    """Gemini 응답에서 JSON을 파싱한다 (마크다운 코드블록 제거)."""
+    text = raw.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+    if text.endswith("```"):
+        text = text[:-3]
+    text = text.strip()
+    if text.startswith("json"):
+        text = text[4:].strip()
+    return json.loads(text)
+
+
+async def suggest_characters(idea: str) -> list[dict]:
+    """아이디어를 바탕으로 등장인물을 자동 제안한다."""
+    prompt = f"아이디어: {idea}\n\n위 아이디어에 어울리는 등장인물을 제안해줘."
+
+    raw = await generate_text(
+        prompt=prompt,
+        system_instruction=SUGGEST_CHARACTERS_INSTRUCTION,
+        temperature=0.9,
+        max_output_tokens=2048,
+    )
+
+    result = _parse_json(raw)
+    return result.get("characters", [])
+
+
+async def generate_planning(idea: str, mood: str | None = None, characters: list[dict] | None = None) -> dict:
+    """아이디어로부터 기획안을 생성한다."""
+    prompt = f"아이디어: {idea}"
+    if mood:
+        prompt += f"\n분위기/장르: {mood}"
+    if characters:
+        prompt += "\n\n등장인물 정보:"
+        for c in characters:
+            parts = [c.get("name", "이름 미정")]
+            if c.get("gender"):
+                parts.append(f"성별: {c['gender']}")
+            if c.get("age"):
+                parts.append(f"나이: {c['age']}세")
+            prompt += f"\n- {', '.join(parts)}"
+        prompt += "\n\n위 등장인물을 반드시 포함해서 기획안을 만들어줘. 등장인물의 ref_key, description은 네가 생성해줘."
+    else:
+        prompt += "\n\n위 아이디어로 웹툰 기획안을 만들어줘."
+
+    raw = await generate_text(
+        prompt=prompt,
+        system_instruction=SYSTEM_INSTRUCTION,
+        temperature=0.9,
+        max_output_tokens=4096,
+    )
+
+    return _parse_json(raw)

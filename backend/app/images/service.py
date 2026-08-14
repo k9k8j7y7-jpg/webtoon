@@ -160,10 +160,13 @@ async def generate_cut_image(
     cut.status = "approved"
 
     # 말풍선 조판 (dialogue가 있으면 합성)
-    from app.composition.service import compose_cut
+    from datetime import datetime, timezone
+    from app.composition.service import compose_cut, RENDERER_VERSION
     dialogue = spec.get("dialogue", [])
     composed_url = compose_cut(url, dialogue, episode_id, cut.cut_id, cut_spec=spec)
     cut.composed_image_url = composed_url
+    cut.composed_renderer_version = RENDERER_VERSION
+    cut.composed_at = datetime.now(timezone.utc)
 
     # generation 정보를 spec에도 기록
     updated_spec = dict(spec)
