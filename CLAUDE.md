@@ -349,15 +349,12 @@ WEBTOON/
 - **`bubble_layout` 지원:** BubbleOverlay auto-layout 경로에서 `bubble_layout`이 있으면 사용자 좌표 우선 사용
 - **`min_height` 지원:** `(item.bubble_layout.min_height || 0) * height`로 최소 높이 픽셀 계산
 
-**`round`/`happy` → 타원(isOval) 변경:**
-- `BUBBLE_CONFIGS.round`, `BUBBLE_CONFIGS.happy`: `isOval: true` 추가
-- `OvalBubble` 컴포넌트: 진짜 `<ellipse>` + 날카로운 삼각형 꼬리 (참고 이미지 스타일)
-- 기존 `rounded_rectangle` 방식 폐기
+**`round`/`happy` → 타원(isOval) 변경: (⚠️ 2026-08-14 복원 시 되돌림)**
+- `isOval: true` 추가 → 화면 깨짐 유발 → 제거, 원래 radius 기반 rounded rect로 복원
 
-**텍스트 잘림 버그 수정:**
-- 글자 너비 계수 `0.55` → `0.72` (한국어 폰트 기준)
-- `foreignObject height = needH - paddingY + lineHeight` (충분한 버퍼)
-- 4곳 동시 적용: `SingleBubble`, `BubbleOverlay` auto/layout 경로, `CutEditor.computeBubblePixelH`
+**텍스트 잘림 버그 수정: (⚠️ 2026-08-14 복원 시 되돌림)**
+- 글자 너비 계수 `0.55` → `0.72` 변경 → 5~6글자 강제 줄바꿈 유발 → `0.55`로 복원
+- ⚠️ **교훈:** `charWidth`는 `0.55` 유지. bubbleSpec.json의 `0.72` 사용 금지
 
 ### 말풍선 레이아웃 공유 스펙 (bubble_spec.json) (2026-08-12)
 
@@ -389,6 +386,38 @@ WEBTOON/
 - **DB 마이그레이션:** `step10.sql` 실행 완료 (2026-08-12)
 - **ep13 1회성 재조판:** 12컷 전부 `v2-oval-2026-08` 버전으로 갱신 완료
 
+### Pretendard 폰트 CDN 수정 + BubbleOverlay 복원 (2026-08-14)
+
+**Pretendard 폰트 CDN 404 수정:**
+- **원인:** GitHub CDN URL `@v3.2.1` 태그 만료로 Pretendard-Black.woff2 등 404 에러
+- **수정:** `utils/fontEmbed.js` — CDN URL을 npm 기반으로 변경: `https://cdn.jsdelivr.net/npm/pretendard/dist/web/static/woff2`
+- **수정:** `index.css` — Pretendard import URL도 npm 기반으로 변경: `https://cdn.jsdelivr.net/npm/pretendard/dist/web/static/pretendard.css`
+
+**BubbleOverlay.jsx 화면 깨짐 + 복원:**
+- **증상:** 말풍선 크기 과대, 줄바꿈 과다(5~6글자), 12종 스타일이 모두 동일한 타원형, 일부 컷에 다른 컷 이미지 표시
+- **근본 원인:** 이전 세션에서 `charWidth: 0.55 → 0.72`, `maxBubbleW: 0.78 → 0.60`, `paddingX/Y: bubbleSpec.json 값(16~28)`, `round/happy: isOval 추가`로 변경한 것이 화면을 깨뜨림
+- **사고:** `git checkout c581116 -- BubbleOverlay.jsx Gate5Review.jsx` 실행 → 커밋이 1개뿐이라 12종 말풍선+CutEditor 연동 코드 전부 유실 (복구 불가)
+- **대응:** `git add -A && git commit`으로 현재 상태 백업 후 BubbleOverlay.jsx 재작성 결정
+- **git 안전 규칙 수립:** 테스트 통과마다 커밋, 구조 변경 전 커밋, 파괴적 git 명령 전 사용자 확인
+
+**BubbleOverlay.jsx 1단계 복원 (커밋 f4b2b68):**
+- **12종 BUBBLE_CONFIGS 복원:** round/narration/thought/whisper/shout/angry/happy/sad/surprised/shy/flustered/realize — 원래 스타일(isSpiky/isEllipse/radius) 유지, isOval 미사용
+- **6개 export 복원:** `default(BubbleOverlay)`, `BUBBLE_CONFIGS`, `SingleBubble`, `BubbleMiniIcon`, `wrapText`, `computeSingleBubbleGeo`
+- **하드코딩 상수 (bubbleSpec.json 미사용):** `CHAR_WIDTH=0.55`, `PADDING_X=14`, `PADDING_Y=10`, `BASE_FONT_SIZE=14`, `LINE_HEIGHT_RATIO=1.45`
+- **SingleBubble props 확장:** `tailDirection`(up/down/left/right/none), `flipTail`, `fontScale`, `fixedWidth`, `bubbleH`(최소 높이)
+- **TailElements 내부 컴포넌트:** 방향별 꼬리 렌더링 (삼각형/dots/small × 4방향)
+- **computeSingleBubbleGeo:** CutEditor 편집 모드 선택 박스·히트 영역 계산용. 반환: `{ bx, by, needW, needH }`
+- **bubble_layout 지원:** BubbleOverlay 메인 컴포넌트에서 `item.bubble_layout` 있으면 사용자 좌표 우선 사용
+- **foreignObject 텍스트:** minHeight 적용 시 텍스트 세로 중앙 정렬
+
+**Export 렌더러 유틸 분리:**
+- **`utils/bubbleLayout.js`** (신규) — `computeInitialLayouts()` 함수를 CutEditor에서 분리. bubble_layout 없는 대사에 화자 기반 기본 좌표 할당
+- **`utils/exportRenderer.js`** — `computeInitialLayouts` import 추가, BubbleOverlay에 dialogue 전달 전 초기 레이아웃 적용
+
+**현재 미복원 상태:**
+- `Gate5Review.jsx` — c581116 상태 (CutEditor/SfxLayer/프론트엔드 Export 미연동). 라이트박스 + 백엔드 Export만 동작
+- 프론트엔드 캔버스 Export — exportRenderer.js 코드는 있으나 Gate5Review에서 호출하지 않음
+
 ### 발견 및 수정한 버그
 
 - **Gemini 모델 404:** `gemini-2.0-flash-exp` → `gemini-2.5-flash-image`로 변경
@@ -409,6 +438,10 @@ WEBTOON/
 - **Export 다운로드 안 됨:** `Gate5Review.jsx` `handleExport`에서 `result?.download_url`이 `undefined` (실제 URL은 `result?.result?.download_url`) → 수정
 - **Export 말풍선 모양 불일치:** `composed_image_url`이 구버전 렌더러(rounded_rectangle)로 생성된 stale 파일 → 렌더러 버전 추적(`RENDERER_VERSION`) + Export 시 stale 판정 + 조건부 재조판으로 해결
 - **Export 세로 이어붙이기 x 정렬:** `canvas.paste(img, (0, y_offset))`로 항상 좌측 정렬 → `x_offset = (target_width - img.width) // 2`로 중앙 정렬
+- **Pretendard 폰트 CDN 404:** GitHub CDN `@v3.2.1` 태그 만료 → npm CDN `https://cdn.jsdelivr.net/npm/pretendard/dist/web/static/woff2`로 변경 (fontEmbed.js + index.css)
+- **BubbleOverlay charWidth 0.72 버그:** bubbleSpec.json의 `charWidth: 0.72`가 한국어 5~6글자에서 강제 줄바꿈 유발 → 하드코딩 `0.55`로 복원, bubbleSpec.json 미참조
+- **BubbleOverlay isOval 버그:** round/happy에 `isOval: true` 추가로 모든 스타일이 동일한 타원형 → isOval 제거, 원래 radius 기반 rounded rect 복원
+- **미커밋 코드 유실 사고:** git checkout으로 커밋 1개뿐인 상태에서 파일 되돌리기 → 12종 말풍선+CutEditor 연동 코드 전부 유실. 복구 불가. git 안전 규칙 수립으로 재발 방지
 
 ## 남은 작업 (향후)
 
@@ -443,6 +476,8 @@ WEBTOON/
 ## 개발 규칙
 
 - **문서대로 구현.** 설계 문서 7종(`docs/`)이 기준. 즉흥 이탈 금지.
+- **git 안전 규칙:** (1) 테스트 통과마다 반드시 커밋 (2) 큰 구조 변경 전 반드시 커밋 (3) `git checkout`, `git reset` 등 파괴적 명령 실행 전 반드시 사용자(도도)에게 확인
+- **BubbleOverlay charWidth:** 반드시 `0.55` 사용. `bubbleSpec.json`의 `charWidth: 0.72`는 사용 금지 (줄바꿈 버그 원인)
 - **말풍선 렌더러 수정 시:** `composition/service.py`의 `RENDERER_VERSION` 상수를 올리고, `frontend/src/utils/bubbleSpec.json`과 `backend/app/composition/bubble_spec.json`을 동시 업데이트할 것. 다음 Export 때 stale 컷이 자동 재조판됨.
 - **Gemini API 키:** `.env` 파일의 `GEMINI_API_KEY` 사용
 - **이미지 모델:** `gemini-2.5-flash-image` (adapters/gemini_image.py)

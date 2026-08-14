@@ -21,6 +21,7 @@ const BUBBLE_CONFIGS = {
     strokeWidth: 2,
     textColor: '#1e1e1e',
     radius: 18,
+    isOval: true,
     hasTail: true,
     position: 'top',
   },
@@ -238,16 +239,24 @@ export function computeSingleBubbleGeo(style, text, bubbleX, bubbleY, bubbleW, m
   const lineHeight = fontSize * LINE_HEIGHT_RATIO;
   const maxChars = Math.max(4, Math.floor((bubbleW - PADDING_X * 2) / (fontSize * CHAR_WIDTH)));
   const lines = wrapText(text, maxChars);
+  const longestLine = Math.max(...lines.map(l => l.length), 1);
   const textBlockH = lines.length * lineHeight;
 
   const computedH = textBlockH + PADDING_Y * 2;
-  const needH = Math.max(computedH, minHeightPx || 0);
+  let needH = Math.max(computedH, minHeightPx || 0);
 
   let needW;
   if (cfg.isCaption || fixedWidth) {
     needW = bubbleW;
   } else {
-    needW = Math.min(bubbleW, Math.max(60, maxChars * fontSize * CHAR_WIDTH + PADDING_X * 2));
+    needW = Math.min(bubbleW, Math.max(60, longestLine * fontSize * CHAR_WIDTH + PADDING_X * 2));
+  }
+
+  // 타원은 내접 사각형이 좁으므로 확대 (3줄 이상은 세로 여유 더 필요)
+  if (cfg.isOval || cfg.isEllipse) {
+    const ovalScale = lines.length >= 3 ? 1.55 : 1.42;
+    needW = Math.min(bubbleW, needW * ovalScale);
+    needH = needH * ovalScale;
   }
 
   const bx = bubbleX + (bubbleW - needW) / 2;
@@ -352,57 +361,122 @@ function TailElements({ cfg, bx, by, needW, needH, tailDirection, flipTail }) {
 
   if (cfg.hasTail === true) {
     // 일반 삼각형 꼬리 (round, happy)
-    if (dir === 'down') {
-      tx = bx + tailOffset;
-      ty = by + needH;
+    const isOvalShape = cfg.isOval || cfg.isEllipse;
+    const rxE = needW / 2;
+    const ryE = needH / 2;
+    // flipTail: 꼬리를 중심 기준 반대쪽으로
+    const tailSide = flipTail ? 0.25 : -0.25; // 중심에서 좌/우 오프셋 비율
+
+    if (isOvalShape) {
+      // 타원 테두리 기반 꼬리 (참고: Speech bubble.jpg)
+      // 밑변 두 점을 타원 위에서 구하고, 꼬리 끝을 바깥으로 뻗음
+      const tailLen = 15;
+      const inset = 3; // 밑변을 타원 안쪽으로 당기는 픽셀
+      // flipTail이면 기준 각도를 25도(0.44rad) 옮김
+      const flipOffset = flipTail ? 0.44 : 0;
+
+      // 방향별 기준 각도와 꼬리 뻗는 방향
+      let baseAngle, tipDx, tipDy;
+      if (dir === 'down') {
+        baseAngle = Math.PI / 2 + 0.35 + flipOffset; // 왼쪽 하단 치우침 (참고 이미지)
+        tipDx = -8; tipDy = tailLen;
+      } else if (dir === 'up') {
+        baseAngle = -Math.PI / 2 - 0.35 - flipOffset;
+        tipDx = -8; tipDy = -tailLen;
+      } else if (dir === 'left') {
+        baseAngle = Math.PI + 0.35 + flipOffset;
+        tipDx = -tailLen; tipDy = 8;
+      } else { // right
+        baseAngle = 0 - 0.35 - flipOffset;
+        tipDx = tailLen; tipDy = 8;
+      }
+
+      // 밑변 두 점: 기준 각도에서 ±0.20rad 벌림
+      const a1 = baseAngle - 0.20;
+      const a2 = baseAngle + 0.20;
+      // 타원 위의 점에서 중심 방향으로 inset만큼 당김
+      const p1x = cx + rxE * Math.cos(a1);
+      const p1y = cy + ryE * Math.sin(a1);
+      const p2x = cx + rxE * Math.cos(a2);
+      const p2y = cy + ryE * Math.sin(a2);
+      // 중심 방향 단위벡터로 inset
+      const d1 = Math.sqrt((p1x - cx) ** 2 + (p1y - cy) ** 2);
+      const d2 = Math.sqrt((p2x - cx) ** 2 + (p2y - cy) ** 2);
+      const bx1 = p1x - (p1x - cx) / d1 * inset;
+      const by1 = p1y - (p1y - cy) / d1 * inset;
+      const bx2 = p2x - (p2x - cx) / d2 * inset;
+      const by2 = p2y - (p2y - cy) / d2 * inset;
+      // 꼬리 끝: 밑변 중점에서 바깥으로
+      const midX = (bx1 + bx2) / 2;
+      const midY = (by1 + by2) / 2;
+      const tipX = midX + tipDx;
+      const tipY = midY + tipDy;
+
       elements.push(
         <polygon key="tail"
-          points={`${tx},${ty - 1} ${tx + 8},${ty + 10} ${tx + 16},${ty - 1}`}
+          points={`${bx1},${by1} ${tipX},${tipY} ${bx2},${by2}`}
           fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth}
           strokeLinejoin="round" />
       );
+      // 내부 fill 타원으로 밑변 연결부의 stroke 겹침 가림
       elements.push(
-        <rect key="tail-cover" x={tx + 1} y={ty - 2} width={14} height={4}
+        <ellipse key="tail-cover" cx={cx} cy={cy} rx={rxE - 1} ry={ryE - 1}
           fill={cfg.fill} stroke="none" />
       );
-    } else if (dir === 'up') {
-      tx = bx + tailOffset;
-      ty = by;
-      elements.push(
-        <polygon key="tail"
-          points={`${tx},${ty + 1} ${tx + 8},${ty - 10} ${tx + 16},${ty + 1}`}
-          fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth}
-          strokeLinejoin="round" />
-      );
-      elements.push(
-        <rect key="tail-cover" x={tx + 1} y={ty - 2} width={14} height={4}
-          fill={cfg.fill} stroke="none" />
-      );
-    } else if (dir === 'left') {
-      ty = by + needH * 0.35;
-      elements.push(
-        <polygon key="tail"
-          points={`${bx + 1},${ty} ${bx - 10},${ty + 8} ${bx + 1},${ty + 16}`}
-          fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth}
-          strokeLinejoin="round" />
-      );
-      elements.push(
-        <rect key="tail-cover" x={bx - 2} y={ty + 1} width={4} height={14}
-          fill={cfg.fill} stroke="none" />
-      );
-    } else if (dir === 'right') {
-      ty = by + needH * 0.35;
-      const rx = bx + needW;
-      elements.push(
-        <polygon key="tail"
-          points={`${rx - 1},${ty} ${rx + 10},${ty + 8} ${rx - 1},${ty + 16}`}
-          fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth}
-          strokeLinejoin="round" />
-      );
-      elements.push(
-        <rect key="tail-cover" x={rx - 2} y={ty + 1} width={4} height={14}
-          fill={cfg.fill} stroke="none" />
-      );
+    } else {
+      // 사각형 기반 꼬리 (기존)
+      if (dir === 'down') {
+        tx = bx + tailOffset;
+        ty = by + needH;
+        elements.push(
+          <polygon key="tail"
+            points={`${tx},${ty - 1} ${tx + 8},${ty + 10} ${tx + 16},${ty - 1}`}
+            fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth}
+            strokeLinejoin="round" />
+        );
+        elements.push(
+          <rect key="tail-cover" x={tx + 1} y={ty - 2} width={14} height={4}
+            fill={cfg.fill} stroke="none" />
+        );
+      } else if (dir === 'up') {
+        tx = bx + tailOffset;
+        ty = by;
+        elements.push(
+          <polygon key="tail"
+            points={`${tx},${ty + 1} ${tx + 8},${ty - 10} ${tx + 16},${ty + 1}`}
+            fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth}
+            strokeLinejoin="round" />
+        );
+        elements.push(
+          <rect key="tail-cover" x={tx + 1} y={ty - 2} width={14} height={4}
+            fill={cfg.fill} stroke="none" />
+        );
+      } else if (dir === 'left') {
+        ty = by + needH * 0.35;
+        elements.push(
+          <polygon key="tail"
+            points={`${bx + 1},${ty} ${bx - 10},${ty + 8} ${bx + 1},${ty + 16}`}
+            fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth}
+            strokeLinejoin="round" />
+        );
+        elements.push(
+          <rect key="tail-cover" x={bx - 2} y={ty + 1} width={4} height={14}
+            fill={cfg.fill} stroke="none" />
+        );
+      } else if (dir === 'right') {
+        ty = by + needH * 0.35;
+        const rx = bx + needW;
+        elements.push(
+          <polygon key="tail"
+            points={`${rx - 1},${ty} ${rx + 10},${ty + 8} ${rx - 1},${ty + 16}`}
+            fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth}
+            strokeLinejoin="round" />
+        );
+        elements.push(
+          <rect key="tail-cover" x={rx - 2} y={ty + 1} width={4} height={14}
+            fill={cfg.fill} stroke="none" />
+        );
+      }
     }
     return <>{elements}</>;
   }
@@ -422,6 +496,7 @@ export function SingleBubble({
   const lineHeight = fontSize * LINE_HEIGHT_RATIO;
   const maxChars = Math.max(4, Math.floor((bubbleW - PADDING_X * 2) / (fontSize * CHAR_WIDTH)));
   const lines = wrapText(text, maxChars);
+  const longestLine = Math.max(...lines.map(l => l.length), 1);
   const textBlockH = lines.length * lineHeight;
 
   // 실제 말풍선 크기 (텍스트에 맞춤, minHeight 적용)
@@ -429,10 +504,17 @@ export function SingleBubble({
   if (cfg.isCaption || fixedWidth) {
     needW = bubbleW;
   } else {
-    needW = Math.min(bubbleW, Math.max(60, maxChars * fontSize * CHAR_WIDTH + PADDING_X * 2));
+    needW = Math.min(bubbleW, Math.max(60, longestLine * fontSize * CHAR_WIDTH + PADDING_X * 2));
   }
   const computedH = textBlockH + PADDING_Y * 2;
-  const needH = Math.max(computedH, bubbleH || 0);
+  let needH = Math.max(computedH, bubbleH || 0);
+
+  // 타원은 내접 사각형이 좁으므로 확대 (3줄 이상은 세로 여유 더 필요)
+  if (cfg.isOval || cfg.isEllipse) {
+    const ovalScale = lines.length >= 3 ? 1.55 : 1.42;
+    needW = Math.min(bubbleW, needW * ovalScale);
+    needH = needH * ovalScale;
+  }
 
   const bx = bubbleX + (bubbleW - needW) / 2;
   const by = bubbleY;
@@ -470,11 +552,62 @@ export function SingleBubble({
   }
 
   // ── 말풍선 모양 ──
+  const rxE = needW / 2;
+  const ryE = needH / 2;
+  const ovalWithTail = cfg.isOval && cfg.hasTail === true;
+
   if (cfg.isSpiky) {
     const margin = 8;
     const path = spikyPath(cx, cy, needW / 2 + margin, needH / 2 + margin, cfg.spikeCount, cfg.spikeDepth);
     elements.push(
       <path key="shape" d={path} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} strokeLinejoin="round" />
+    );
+  } else if (ovalWithTail) {
+    // 타원 + 꼬리를 하나의 <path>로 합침 — 이음새 없음
+    const dir = tailDirection || 'down';
+    const flipOffset = flipTail ? 0.44 : 0;
+    let baseAngle;
+    if (dir === 'down') baseAngle = Math.PI / 2 + 0.35 + flipOffset;
+    else if (dir === 'up') baseAngle = -Math.PI / 2 - 0.35 - flipOffset;
+    else if (dir === 'left') baseAngle = Math.PI + 0.35 + flipOffset;
+    else baseAngle = -0.35 - flipOffset;
+
+    const a1 = baseAngle - 0.20; // 꼬리 밑변 점1 각도
+    const a2 = baseAngle + 0.20; // 꼬리 밑변 점2 각도
+    const p1x = cx + rxE * Math.cos(a1);
+    const p1y = cy + ryE * Math.sin(a1);
+    const p2x = cx + rxE * Math.cos(a2);
+    const p2y = cy + ryE * Math.sin(a2);
+
+    // 꼬리 끝점
+    const tailLen = 15;
+    let tipDx, tipDy;
+    if (dir === 'down') { tipDx = -8; tipDy = tailLen; }
+    else if (dir === 'up') { tipDx = -8; tipDy = -tailLen; }
+    else if (dir === 'left') { tipDx = -tailLen; tipDy = 8; }
+    else { tipDx = tailLen; tipDy = 8; }
+    const midX = (p1x + p2x) / 2;
+    const midY = (p1y + p2y) / 2;
+    const tipX = midX + tipDx;
+    const tipY = midY + tipDy;
+
+    // 경로: p1 → (큰 호로 타원 돌아서) → p2 → tip → p1 닫기
+    // p1에서 p2까지 "긴 쪽"으로 호를 그림 (꼬리 틈을 건너뛰는 방향)
+    // large-arc=1 (긴 호), sweep 방향은 시행착오 없이 결정:
+    // a2 - a1 = 0.40 rad (짧은 구간), 나머지 ~5.88 rad이 긴 구간
+    // SVG에서 sweep=1은 시계방향(양의 y 아래). p1(a1)→p2(a2) 긴 호는 a1에서 감소 방향.
+    const d = `M${p1x},${p1y} A${rxE},${ryE} 0 1,0 ${p2x},${p2y} L${tipX},${tipY} Z`;
+
+    elements.push(
+      <path key="shape" d={d}
+        fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth}
+        strokeLinejoin="round" />
+    );
+  } else if (cfg.isOval) {
+    elements.push(
+      <ellipse key="shape" cx={cx} cy={cy}
+        rx={rxE} ry={ryE}
+        fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} />
     );
   } else if (cfg.isEllipse) {
     elements.push(
@@ -491,12 +624,14 @@ export function SingleBubble({
     );
   }
 
-  // ── 꼬리 ──
-  elements.push(
-    <TailElements key="tail-group"
-      cfg={cfg} bx={bx} by={by} needW={needW} needH={needH}
-      tailDirection={tailDirection} flipTail={flipTail} />
-  );
+  // ── 꼬리 (ovalWithTail은 위에서 path에 포함됨) ──
+  if (!ovalWithTail) {
+    elements.push(
+      <TailElements key="tail-group"
+        cfg={cfg} bx={bx} by={by} needW={needW} needH={needH}
+        tailDirection={tailDirection} flipTail={flipTail} />
+    );
+  }
 
   // ── 아이콘 ──
   if (cfg.icon) {
