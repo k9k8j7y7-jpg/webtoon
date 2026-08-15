@@ -418,35 +418,56 @@ WEBTOON/
 - `Gate5Review.jsx` — c581116 상태 (CutEditor/SfxLayer/프론트엔드 Export 미연동). 라이트박스 + 백엔드 Export만 동작
 - 프론트엔드 캔버스 Export — exportRenderer.js 코드는 있으나 Gate5Review에서 호출하지 않음
 
-### BubbleOverlay 말풍선 12종 리팩토링 (2026-08-14)
+### BubbleOverlay 말풍선 round+narration 리팩토링 (2026-08-14~16)
 
-설계 문서: `docs/Bubble-12-Styles-v1.0.md`
+설계 문서: `docs/Bubble-Round-Narration-Fix-v2.0.md`
 
-**1단계: 골격 개선 (커밋 6e088b8)**
-- **round 타원 전환:** `BUBBLE_CONFIGS.round`에 `isOval: true` 추가, `<rect rx>` → `<ellipse>` 렌더링
-- **needW 텍스트 폭 반영:** `maxChars`(역산값) 대신 `longestLine`(실제 가장 긴 줄) 기준으로 needW 계산 → 짧은 텍스트에서 말풍선이 줄어듦
-- **타원+꼬리 단일 path:** `<ellipse>` + `<polygon>` + cover 방식을 버리고, `M p1 A(큰 호) p2 L tip Z` 하나의 `<path>`로 합침 → 이음새 없음
+**A-1: 나레이션 바 각진 사각형 복구, 꼬리 제거 (커밋 11524cc)**
+- 나레이션을 둥근모서리 사각형 → 각진 사각형(`<rect>`)으로 변경, 꼬리 제거
 
-**2단계: 12종 공통 기반 (8-1단계, 미커밋)**
-- **BUBBLE_CONFIGS 12종 색상 맞춤:** 백엔드 `service.py`의 `STYLE_FILL`/`STYLE_STROKE`/`TEXT_COLORS` (RGBA 튜플) 기준으로 프론트 색상 통일
-- **꼬리 헬퍼 4종 신규:**
-  - `buildTailA()` — 낫형 갈고리 (round, surprised, flustered). 바깥쪽 직선 + 안쪽 Q 곡선
-  - `buildTailB()` — 직선 침형 (happy, sad, realize, shy, shout, angry). 좁고 뾰족한 삼각형
-  - `buildTailC()` — 대칭 삼각형 (narration). 하단 중앙, flipTail 무시
-  - `buildTailD()` — 원 2개 (thought, whisper). 본체와 분리된 별도 `<circle>`
-- **공통 헬퍼:** `tailBaseAngle()`, `pointOnEllipse()`, `lerp()`, `lerpPt()`
-- **`BUBBLE_CONFIGS`에 `tail` 설정 블록 추가:** 각 스타일별로 `{ type, baseSpread, length, skewDeg, curveAmount }` 등 파라미터 정의
-- **insetX/insetY 방식 도입:** ovalScale(1.42/1.55 배율) 제거 → 스타일별 `insetX`/`insetY` 비율로 needW/needH 역산. `computeBubbleSize()` 함수로 통합
-- **텍스트 중앙 정렬 수정:** `cy - textBlockH/2`, `cx - textBlockW/2` 기준 정렬 (꼬리 제외)
-- **텍스트 오프셋 지원:** `textOffsetX`/`textOffsetY` prop 추가 (bubble_layout.text_offset_x/y). 기본값 0, UI는 4단계
-- **round 꼬리 타입A 교체:** 이등변삼각형 → 낫형 (바깥 직선 + 안쪽 Q 곡선)
-- **narration 꼬리 타입C:** 둥근 모서리 사각형 + 하단 대칭 삼각형을 하나의 path로
+**A-2: round 타원 + 갈고리 꼬리 (커밋 8dbd02c)**
+- round `isOval: true`, `<ellipse>` + `buildRoundTail()` 단일 path
+- 꼬리: 낫형 갈고리 (바깥 직선 + 안쪽 Q 곡선), sweep-flag flip 대응
+- `/bubble-test` 페이지 + `scripts/bubble-shot.mjs` Playwright 검증 추가
 
-**남은 8-2~8-5단계 (미착수):**
-- 8-2: 사각형 계열 3종 (narration, flustered, shy) 본체 모양
-- 8-3: 타원·구름 계열 5종 (whisper, thought, happy, sad, realize) 본체 모양
-- 8-4: 스파이크 계열 3종 (shout, angry, surprised) 본체 모양
-- 8-5: BubbleMiniIcon 12종 축소판 정확도
+**B-1: 텍스트 렌더링 정규화 (커밋 bf4f5a2)**
+- 나레이션 바 높이를 줄수에 비례하도록 수정
+- `CHAR_WIDTH` 0.55→0.93 (Playwright 실측, Pretendard + letter-spacing 0.02em)
+- `nowrap` + `overflow: visible` 줄단위 렌더 통일 (round/narration 동일 방식)
+
+**B-2: round 타원 방정식 텍스트 맞춤 (커밋 a37e186)**
+- `fixedWidth=true`: `ry = b / √(1 - (a/rx)²)` 역산 + `safeRatio = min(a/rx, 0.85)` 상한
+- `fixedWidth=false`: `√2` 배율 자동 크기
+- `REF_WIDTH=800` 스케일링: `scale = viewW/800` → fontSize, PADDING_X, PADDING_Y 비례 조정
+- `scripts/episode-shot.mjs`: 실제 에피소드 모달 컷별 스크린샷 스크립트
+- `BubbleTestPage`: fixedWidth=true 테스트 섹션 추가
+- 미리보기 모달 기준 12/12컷 통과
+
+**현재 상수 (BubbleOverlay.jsx):**
+```
+CHAR_WIDTH = 0.93, REF_WIDTH = 800, BASE_FONT_SIZE = 14
+LINE_HEIGHT_RATIO = 1.45, BASE_PADDING_X = 14, BASE_PADDING_Y = 10
+```
+
+**검증 인프라:**
+- `/bubble-test` 페이지: 방향4×flip2×줄수3 그리드 + fixedWidth=true 섹션 + 스타일 드롭다운
+- `scripts/bubble-shot.mjs`: 테스트 페이지 스크린샷
+- `scripts/episode-shot.mjs`: 실제 에피소드 모달 컷별 스크린샷 (JWT로 로그인 → Gate5 라이트박스 순회)
+- 작업 방식: 코드 수정 → 스크린샷 셀프 검증 → 통과 시에만 보고
+
+**진행 중 (다음 세션 시작점):**
+- 썸네일 스케일링 수정: 픽셀 상수에 `scale = width/REF_WIDTH` 곱하기는 구현됨. 원인 규명 완료, 추가 조정 필요 시 다음 세션
+- 주의: `CHAR_WIDTH` 등 비율 상수는 건드리지 않는다
+
+**그 다음 대기 작업:**
+- 나머지 10종 말풍선 본체 (8-2~8-4절, `docs/Bubble-12-Styles-v1.0.md`)
+- 3단계: Gate5Review.jsx 재작성
+- 4단계: 편집 모드 (텍스트 위치 조절 UI 포함)
+
+**알려진 사항:**
+- ep13 #7 `dialogue=[]` — 데이터 비어있음, 코드 문제 아님
+- 미리보기(모달)가 판정 기준. 썸네일은 스케일링 수정 전까지 무시
+- 커밋 규칙: 단계 완료 + 사용자 확인 후에만. 파괴적 git 명령 금지
 
 ### 발견 및 수정한 버그
 
@@ -476,7 +497,7 @@ WEBTOON/
 ## 남은 작업 (향후)
 
 ### 설계 문서 기반 미완료 번들
-- [ ] **말풍선 12종 구현 (진행 중):** 8-1단계(공통 기반) 완료, 8-2~8-5단계 미착수. 설계 문서: `docs/Bubble-12-Styles-v1.0.md`
+- [ ] **말풍선 12종 구현 (진행 중):** round+narration 본체 완료 (A-1~B-2). 나머지 10종 본체(8-2~8-4) + BubbleMiniIcon(8-5) 미착수. 설계: `docs/Bubble-12-Styles-v1.0.md`, `docs/Bubble-Round-Narration-Fix-v2.0.md`
 - [ ] Character Consistency — Part B: 그림 속 한글 텍스트 처리 (긴 문장 억제, 짧은 단어 명시)
 - [x] Gate3 Asset Revision — Bundle B: 캐릭터 조건 폼 (2026-08-11 완료)
 - [x] Gate3 Asset Revision — Bundle C: 장소 AI 제안·편집 + mood_notes (2026-08-11 완료)
@@ -508,7 +529,8 @@ WEBTOON/
 
 - **문서대로 구현.** 설계 문서 7종(`docs/`)이 기준. 즉흥 이탈 금지.
 - **git 안전 규칙:** (1) 테스트 통과마다 반드시 커밋 (2) 큰 구조 변경 전 반드시 커밋 (3) `git checkout`, `git reset` 등 파괴적 명령 실행 전 반드시 사용자(도도)에게 확인
-- **BubbleOverlay charWidth:** 반드시 `0.55` 사용. `bubbleSpec.json`의 `charWidth: 0.72`는 사용 금지 (줄바꿈 버그 원인)
+- **BubbleOverlay CHAR_WIDTH:** 반드시 `0.93` 사용 (Pretendard 14px + letter-spacing 0.02em 실측값). `bubbleSpec.json`의 `charWidth: 0.72`는 사용 금지
+- **BubbleOverlay 비율 상수 불변:** `CHAR_WIDTH`, `LINE_HEIGHT_RATIO` 등 비율 상수는 변경 금지. 스케일링은 `REF_WIDTH=800` 기반 `getScale(viewW)` 사용
 - **말풍선 렌더러 수정 시:** `composition/service.py`의 `RENDERER_VERSION` 상수를 올리고, `frontend/src/utils/bubbleSpec.json`과 `backend/app/composition/bubble_spec.json`을 동시 업데이트할 것. 다음 Export 때 stale 컷이 자동 재조판됨.
 - **Gemini API 키:** `.env` 파일의 `GEMINI_API_KEY` 사용
 - **이미지 모델:** `gemini-2.5-flash-image` (adapters/gemini_image.py)
