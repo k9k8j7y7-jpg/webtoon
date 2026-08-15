@@ -12,135 +12,148 @@
 import { useMemo } from 'react';
 import { resolveBubbleStyle } from '../utils/bubbleMapping';
 
-// ── 스타일별 설정 ──
+// ── 스타일별 설정 (색상은 backend/app/composition/service.py 기준) ──
 
 const BUBBLE_CONFIGS = {
   round: {
-    fill: 'rgba(255,255,255,0.92)',
-    stroke: '#333',
+    fill: 'rgba(255,255,255,0.95)',
+    stroke: '#1a1a1a',
     strokeWidth: 2,
-    textColor: '#1e1e1e',
-    radius: 18,
+    textColor: '#1a1a1a',
     isOval: true,
-    hasTail: true,
     position: 'top',
+    insetX: 0.12, insetY: 0.14,
+    tail: { type: 'A', baseSpread: 0.22, length: 0.35, skewDeg: 22, curveAmount: 0.40 },
   },
   narration: {
-    fill: 'rgba(0,0,0,0.6)',
+    fill: 'rgba(0,0,0,0.65)',
     stroke: 'none',
     strokeWidth: 0,
     textColor: '#ffffff',
-    radius: 0,
-    hasTail: false,
     position: 'bottom',
     isCaption: true,
     fontSize: 0.9,
+    insetX: 0.06, insetY: 0.08,
   },
   thought: {
-    fill: 'rgba(255,255,255,0.82)',
-    stroke: '#999',
+    fill: 'rgba(255,255,255,0.78)',
+    stroke: '#969696',
     strokeWidth: 2,
     textColor: '#505050',
-    radius: 22,
-    hasTail: 'dots',
+    isCloud: true,
+    cloudPreset: 'thought',
     position: 'top',
+    insetX: 0.16, insetY: 0.18,
+    tail: { type: 'D', r1: 0.09, r2Ratio: 0.58, gap1: 0.07, gap2: 0.10, skewDeg: 24 },
   },
   whisper: {
-    fill: 'rgba(255,255,255,0.72)',
-    stroke: '#999',
+    fill: 'rgba(255,255,255,0.71)',
+    stroke: '#8c8c8c',
     strokeWidth: 2,
     strokeDash: '6,4',
-    textColor: '#777',
-    radius: 50,
+    textColor: '#787878',
     isEllipse: true,
-    hasTail: 'small',
     position: 'top',
     fontSize: 0.85,
+    insetX: 0.12, insetY: 0.14,
+    tail: { type: 'D', r1: 0.07, r2Ratio: 0.62, gap1: 0.09, gap2: 0.11, skewDeg: -26 },
   },
   shout: {
     fill: 'rgba(255,255,255,0.95)',
-    stroke: '#222',
+    stroke: '#1e1e1e',
     strokeWidth: 3,
-    textColor: '#111',
+    textColor: '#141414',
     isSpiky: true,
-    spikeCount: 14,
-    spikeDepth: 0.16,
-    hasTail: false,
+    spikeCount: 13,
+    spikeDepth: 0.22,
     position: 'top',
     fontSize: 1.15,
+    insetX: 0.20, insetY: 0.22,
+    tail: { type: 'B', baseSpread: 0.08, length: 0.48, skewDeg: 26 },
   },
   angry: {
     fill: 'rgba(255,230,230,0.95)',
-    stroke: '#cc2222',
+    stroke: '#c82828',
     strokeWidth: 3,
-    textColor: '#aa2222',
+    textColor: '#aa1e1e',
     isSpiky: true,
-    spikeCount: 14,
-    spikeDepth: 0.18,
-    hasTail: false,
+    spikeCount: 15,
+    spikeDepth: 0.30,
     position: 'top',
     fontSize: 1.15,
     icon: 'lightning',
+    insetX: 0.20, insetY: 0.22,
+    tail: { type: 'B', baseSpread: 0.08, length: 0.40, skewDeg: 26 },
   },
   happy: {
-    fill: 'rgba(255,230,240,0.92)',
+    fill: 'rgba(255,230,242,0.95)',
     stroke: '#e06090',
     strokeWidth: 2,
-    textColor: '#b03060',
-    radius: 22,
-    hasTail: true,
+    textColor: '#aa3264',
+    isCloud: true,
+    cloudPreset: 'happy',
     position: 'top',
+    insetX: 0.16, insetY: 0.18,
+    tail: { type: 'B', baseSpread: 0.10, length: 0.22, skewDeg: 16 },
   },
   sad: {
-    fill: 'rgba(225,235,255,0.92)',
-    stroke: '#5070b0',
+    fill: 'rgba(225,235,255,0.90)',
+    stroke: '#506eb4',
     strokeWidth: 2,
-    textColor: '#3050a0',
-    isEllipse: true,
-    hasTail: false,
+    textColor: '#324678',
+    isCloud: true,
+    cloudPreset: 'sad',
     position: 'top',
     icon: 'teardrop',
+    insetX: 0.16, insetY: 0.18,
+    tail: { type: 'B', baseSpread: 0.10, length: 0.22, skewDeg: -16 },
   },
   surprised: {
     fill: 'rgba(255,248,220,0.95)',
-    stroke: '#cc8800',
+    stroke: '#c88800',
     strokeWidth: 2,
-    textColor: '#aa6600',
-    isSpiky: true,
-    spikeCount: 12,
-    spikeDepth: 0.14,
-    hasTail: false,
+    textColor: '#a06414',
+    isBigSpiky: true,
+    spikeCount: 8,
+    spikeDepth: 0.18,
     position: 'top',
     icon: 'star',
+    insetX: 0.18, insetY: 0.20,
+    tail: { type: 'A', baseSpread: 0.20, length: 0.42, skewDeg: -28, curveAmount: 0.62 },
   },
   shy: {
-    fill: 'rgba(255,220,235,0.88)',
-    stroke: '#cc6090',
+    fill: 'rgba(255,220,235,0.86)',
+    stroke: '#c86090',
     strokeWidth: 2,
-    textColor: '#a04070',
-    isEllipse: true,
-    hasTail: 'small',
+    textColor: '#96426c',
+    isTrapezoidal: true,
     position: 'top',
+    insetX: 0.10, insetY: 0.12,
+    tail: { type: 'B', baseSpread: 0.11, length: 0.24, skewDeg: 14 },
   },
   flustered: {
-    fill: 'rgba(255,230,238,0.88)',
-    stroke: '#bb5080',
+    fill: 'rgba(255,230,238,0.86)',
+    stroke: '#be5078',
     strokeWidth: 2,
-    textColor: '#903060',
-    isEllipse: true,
-    hasTail: false,
+    textColor: '#8c3250',
+    isRoundedRect: true,
+    cornerRadius: 0.12,
     position: 'top',
     icon: 'swirl',
+    insetX: 0.08, insetY: 0.10,
+    tail: { type: 'A', baseSpread: 0.16, length: 0.20, skewDeg: -18, curveAmount: 0.35 },
   },
   realize: {
-    fill: 'rgba(255,255,220,0.92)',
+    fill: 'rgba(255,255,220,0.90)',
     stroke: '#b0a030',
     strokeWidth: 2,
-    textColor: '#706010',
-    isEllipse: true,
-    hasTail: false,
+    textColor: '#5a5014',
+    isCloud: true,
+    cloudPreset: 'realize',
     position: 'top',
     icon: 'lightbulb',
+    insetX: 0.14, insetY: 0.16,
+    tail: { type: 'B', baseSpread: 0.09, length: 0.18, skewDeg: 6 },
   },
 };
 
@@ -179,6 +192,306 @@ function spikyPath(cx, cy, rx, ry, count, depth) {
   }
   return `M${points.join('L')}Z`;
 }
+
+// ══════════════════════════════════════════════════════
+// 꼬리 공통 헬퍼
+// ══════════════════════════════════════════════════════
+
+function tailBaseAngle(tailDirection) {
+  switch (tailDirection) {
+    case 'up': return -Math.PI / 2;
+    case 'left': return Math.PI;
+    case 'right': return 0;
+    default: return Math.PI / 2; // down
+  }
+}
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+function lerpPt(ax, ay, bx, by, t) {
+  return [lerp(ax, bx, t), lerp(ay, by, t)];
+}
+
+// 타원 윤곽선 위의 점
+function pointOnEllipse(cx, cy, rx, ry, theta) {
+  return [cx + rx * Math.cos(theta), cy + ry * Math.sin(theta)];
+}
+
+// ── 타입 A — 낫형 (갈고리) ──
+// 바깥쪽 변은 직선, 안쪽 변은 곡선으로 휘어 들어옴
+// 반환: { pathSuffix, p1, p2 } — pathSuffix는 "L tip Q ctrl p2" 형태
+function buildTailA(cx, cy, rx, ry, needH, tailDir, flip, params) {
+  const { baseSpread, length: lenRatio, skewDeg, curveAmount } = params;
+  const base = tailBaseAngle(tailDir);
+  const skew = (flip ? -skewDeg : skewDeg) * Math.PI / 180;
+  const center = base + skew;
+  const a1 = center - baseSpread;
+  const a2 = center + baseSpread;
+
+  // 밑변 두 점 (타원 위, 안쪽으로 3px 당김)
+  const [raw1x, raw1y] = pointOnEllipse(cx, cy, rx, ry, a1);
+  const [raw2x, raw2y] = pointOnEllipse(cx, cy, rx, ry, a2);
+  const inset = 3;
+  const d1 = Math.sqrt((raw1x - cx) ** 2 + (raw1y - cy) ** 2);
+  const d2 = Math.sqrt((raw2x - cx) ** 2 + (raw2y - cy) ** 2);
+  const p1x = raw1x - (raw1x - cx) / d1 * inset;
+  const p1y = raw1y - (raw1y - cy) / d1 * inset;
+  const p2x = raw2x - (raw2x - cx) / d2 * inset;
+  const p2y = raw2y - (raw2y - cy) / d2 * inset;
+
+  // 꼬리 끝점: 밑변 중점에서 진행 방향으로 length만큼
+  const tailLen = needH * lenRatio;
+  const midX = (p1x + p2x) / 2;
+  const midY = (p1y + p2y) / 2;
+  const tipX = midX + tailLen * Math.cos(center);
+  const tipY = midY + tailLen * Math.sin(center);
+
+  // 안쪽 변 곡선 제어점: tip→p2 중점에서 본체 중심 쪽으로 당김
+  const [qMidX, qMidY] = lerpPt(tipX, tipY, p2x, p2y, 0.5);
+  const [ctrlX, ctrlY] = lerpPt(qMidX, qMidY, cx, cy, curveAmount);
+
+  return {
+    p1: [p1x, p1y],
+    p2: [p2x, p2y],
+    pathSuffix: `L${tipX},${tipY} Q${ctrlX},${ctrlY} ${p2x},${p2y}`,
+  };
+}
+
+// ── 타입 B — 직선 침형 ──
+function buildTailB(cx, cy, rx, ry, needH, tailDir, flip, params) {
+  const { baseSpread, length: lenRatio, skewDeg } = params;
+  const base = tailBaseAngle(tailDir);
+  const skew = (flip ? -skewDeg : skewDeg) * Math.PI / 180;
+  const center = base + skew;
+  const a1 = center - baseSpread;
+  const a2 = center + baseSpread;
+
+  const [raw1x, raw1y] = pointOnEllipse(cx, cy, rx, ry, a1);
+  const [raw2x, raw2y] = pointOnEllipse(cx, cy, rx, ry, a2);
+  const inset = 3;
+  const d1 = Math.sqrt((raw1x - cx) ** 2 + (raw1y - cy) ** 2);
+  const d2 = Math.sqrt((raw2x - cx) ** 2 + (raw2y - cy) ** 2);
+  const p1x = raw1x - (raw1x - cx) / d1 * inset;
+  const p1y = raw1y - (raw1y - cy) / d1 * inset;
+  const p2x = raw2x - (raw2x - cx) / d2 * inset;
+  const p2y = raw2y - (raw2y - cy) / d2 * inset;
+
+  const tailLen = needH * lenRatio;
+  const midX = (p1x + p2x) / 2;
+  const midY = (p1y + p2y) / 2;
+  const tipX = midX + tailLen * Math.cos(center);
+  const tipY = midY + tailLen * Math.sin(center);
+
+  return {
+    p1: [p1x, p1y],
+    p2: [p2x, p2y],
+    pathSuffix: `L${tipX},${tipY} L${p2x},${p2y}`,
+  };
+}
+
+// ── 타입 C — 대칭 삼각형 (narration) ──
+// 사각형 하단 중앙에서 아래로 뻗음. flipTail 무시.
+function buildTailC(bx, by, needW, needH, params) {
+  const { baseWidthRatio, length: lenRatio } = params;
+  const halfBase = needW * baseWidthRatio / 2;
+  const tailLen = needH * lenRatio;
+  const centerX = bx + needW / 2;
+  const bottomY = by + needH;
+
+  const p1x = centerX - halfBase;
+  const p2x = centerX + halfBase;
+  const tipX = centerX;
+  const tipY = bottomY + tailLen;
+
+  return {
+    p1: [p1x, bottomY],
+    p2: [p2x, bottomY],
+    pathSuffix: `L${tipX},${tipY} L${p2x},${bottomY}`,
+    // 사각형 path에 삽입: 하단 변을 p1→tip→p2로 끊음
+    insertAtBottom: true,
+  };
+}
+
+// ── 타입 D — 원 2개 (별도 JSX) ──
+function buildTailD(cx, cy, rx, ry, needH, tailDir, flip, params, cfg) {
+  const { r1, r2Ratio, gap1, gap2, skewDeg } = params;
+  const base = tailBaseAngle(tailDir);
+  const skew = (flip ? -skewDeg : skewDeg) * Math.PI / 180;
+  const center = base + skew;
+
+  // 본체 윤곽선 위의 점
+  const [edgeX, edgeY] = pointOnEllipse(cx, cy, rx, ry, center);
+
+  // 큰 원
+  const bigR = needH * r1;
+  const bigCx = edgeX + (gap1 * needH + bigR) * Math.cos(center);
+  const bigCy = edgeY + (gap1 * needH + bigR) * Math.sin(center);
+
+  // 작은 원
+  const smallR = bigR * r2Ratio;
+  const smallCx = bigCx + (gap2 * needH + smallR) * Math.cos(center);
+  const smallCy = bigCy + (gap2 * needH + smallR) * Math.sin(center);
+
+  return [
+    <circle key="tail-dot1" cx={bigCx} cy={bigCy} r={bigR}
+      fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} />,
+    <circle key="tail-dot2" cx={smallCx} cy={smallCy} r={smallR}
+      fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} />,
+  ];
+}
+
+// ── 큰 스파이크 path (surprised) — 골이 둥글게 파임 ──
+function bigSpikyPath(cx, cy, rx, ry, count, depth) {
+  const total = count * 2;
+  let d = '';
+  for (let i = 0; i < total; i++) {
+    const angle = (2 * Math.PI / total) * i - Math.PI / 2;
+    const nextAngle = (2 * Math.PI / total) * (i + 1) - Math.PI / 2;
+    const isOuter = i % 2 === 0;
+    const rxi = isOuter ? rx : rx * (1 - depth);
+    const ryi = isOuter ? ry : ry * (1 - depth);
+    const x = cx + rxi * Math.cos(angle);
+    const y = cy + ryi * Math.sin(angle);
+
+    if (i === 0) {
+      d = `M${x},${y}`;
+    }
+
+    // 골짜기(inner→outer)에서 Q 곡선으로 둥글게
+    const nextIsOuter = (i + 1) % 2 === 0;
+    const nrx = nextIsOuter ? rx : rx * (1 - depth);
+    const nry = nextIsOuter ? ry : ry * (1 - depth);
+    const nx = cx + nrx * Math.cos(nextAngle);
+    const ny = cy + nry * Math.sin(nextAngle);
+
+    if (!isOuter) {
+      // 현재가 골짜기 → Q 곡선으로 둥글게 파임
+      const midAngle = (angle + nextAngle) / 2;
+      const cR = (rxi + nrx) / 2 * 0.92; // 곡선 제어점은 약간 안쪽
+      const ctrlX = cx + cR * Math.cos(midAngle);
+      const ctrlY = cy + cR * Math.sin(midAngle);
+      d += ` Q${ctrlX},${ctrlY} ${nx},${ny}`;
+    } else {
+      d += ` L${nx},${ny}`;
+    }
+  }
+  d += ' Z';
+  return d;
+}
+
+// ── 사다리꼴 path (shy) ──
+// 왼쪽이 좁고 오른쪽이 넓은 기울어진 사각형, 모서리를 Q 곡선으로 둥글게
+function trapezoidPath(bx, by, w, h) {
+  // 4 꼭짓점
+  const tl = { x: bx + w * 0.03, y: by + h * 0.12 };
+  const tr = { x: bx + w * 0.97, y: by };
+  const br = { x: bx + w * 0.95, y: by + h };
+  const bl = { x: bx, y: by + h * 0.90 };
+  const r = Math.max(4, w * 0.06); // corner radius
+
+  // Helper: point on edge at distance r from corner
+  function towards(from, to, dist) {
+    const dx = to.x - from.x, dy = to.y - from.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    const t = Math.min(dist / len, 0.4);
+    return { x: from.x + dx * t, y: from.y + dy * t };
+  }
+
+  const p = [
+    towards(tl, tr, r), // start: top-left → top-right
+    towards(tr, tl, r), // before top-right corner
+    towards(tr, br, r), // after top-right corner
+    towards(br, tr, r), // before bottom-right corner
+    towards(br, bl, r), // after bottom-right corner
+    towards(bl, br, r), // before bottom-left corner
+    towards(bl, tl, r), // after bottom-left corner
+    towards(tl, bl, r), // before top-left corner
+  ];
+
+  return `M${p[0].x},${p[0].y} L${p[1].x},${p[1].y} Q${tr.x},${tr.y} ${p[2].x},${p[2].y} L${p[3].x},${p[3].y} Q${br.x},${br.y} ${p[4].x},${p[4].y} L${p[5].x},${p[5].y} Q${bl.x},${bl.y} ${p[6].x},${p[6].y} L${p[7].x},${p[7].y} Q${tl.x},${tl.y} ${p[0].x},${p[0].y} Z`;
+}
+
+// ── 구름 path 생성기 ──
+// bumps: [{angle, radius}] — 각도(라디안)와 범프 반지름 비율의 배열
+// 하나의 path에 A(호) 명령을 이어붙여 매끄러운 구름 윤곽 생성
+function cloudPath(cx, cy, rx, ry, bumps) {
+  // bumps를 angle 순으로 정렬
+  const sorted = [...bumps].sort((a, b) => a.angle - b.angle);
+  const pts = [];
+
+  for (let i = 0; i < sorted.length; i++) {
+    const bump = sorted[i];
+    const next = sorted[(i + 1) % sorted.length];
+
+    // 범프 정점 (타원 바깥으로 튀어나온 점)
+    const peakR = bump.radius;
+    const peakX = cx + (rx + peakR) * Math.cos(bump.angle);
+    const peakY = cy + (ry + peakR) * Math.sin(bump.angle);
+
+    // 범프 사이 골짜기 (타원 윤곽 안쪽)
+    const midAngle = bump.angle + (next.angle - bump.angle + (next.angle < bump.angle ? Math.PI * 2 : 0)) / 2;
+    const valleyX = cx + rx * 0.92 * Math.cos(midAngle);
+    const valleyY = cy + ry * 0.92 * Math.sin(midAngle);
+
+    pts.push({ x: peakX, y: peakY, r: peakR });
+    pts.push({ x: valleyX, y: valleyY, r: peakR * 0.3, isValley: true });
+  }
+
+  if (pts.length < 2) return '';
+
+  // 시작점
+  let d = `M${pts[0].x},${pts[0].y}`;
+
+  for (let i = 0; i < pts.length; i++) {
+    const curr = pts[i];
+    const next = pts[(i + 1) % pts.length];
+    const r = curr.isValley ? curr.r * 2 : curr.r;
+    d += ` A${r},${r} 0 0,1 ${next.x},${next.y}`;
+  }
+
+  d += ' Z';
+  return d;
+}
+
+// 프리셋 구름 범프 설정
+const CLOUD_PRESETS = {
+  // thought: 위 3개 큰 범프, 좌우 중간, 아래 완만
+  thought: [
+    { angle: -Math.PI * 0.75, radius: 0.28 },  // 좌상
+    { angle: -Math.PI * 0.5,  radius: 0.35 },  // 상단 중앙
+    { angle: -Math.PI * 0.25, radius: 0.28 },  // 우상
+    { angle: 0,               radius: 0.18 },  // 우
+    { angle: Math.PI * 0.35,  radius: 0.15 },  // 우하
+    { angle: Math.PI * 0.65,  radius: 0.15 },  // 좌하
+    { angle: Math.PI,         radius: 0.18 },  // 좌
+  ],
+  // happy: 뭉게구름 6개 범프, 전체적으로 폭신
+  happy: [
+    { angle: -Math.PI * 0.8,  radius: 0.22 },
+    { angle: -Math.PI * 0.5,  radius: 0.30 },
+    { angle: -Math.PI * 0.2,  radius: 0.25 },
+    { angle: Math.PI * 0.15,  radius: 0.20 },
+    { angle: Math.PI * 0.5,   radius: 0.22 },
+    { angle: Math.PI * 0.85,  radius: 0.20 },
+  ],
+  // sad: 5개 범프, 아래쪽 완만 (처진 느낌)
+  sad: [
+    { angle: -Math.PI * 0.75, radius: 0.25 },
+    { angle: -Math.PI * 0.4,  radius: 0.30 },
+    { angle: -Math.PI * 0.05, radius: 0.22 },
+    { angle: Math.PI * 0.4,   radius: 0.12 },  // 아래쪽 작게
+    { angle: Math.PI * 0.85,  radius: 0.14 },  // 아래쪽 작게
+  ],
+  // realize: 위 3개 범프, 아래는 평평
+  realize: [
+    { angle: -Math.PI * 0.7,  radius: 0.24 },
+    { angle: -Math.PI * 0.4,  radius: 0.28 },
+    { angle: -Math.PI * 0.1,  radius: 0.22 },
+    { angle: Math.PI * 0.2,   radius: 0.08 },  // 우하 거의 평평
+    { angle: Math.PI * 0.5,   radius: 0.06 },  // 하단 거의 평평
+    { angle: Math.PI * 0.8,   radius: 0.08 },  // 좌하 거의 평평
+  ],
+};
 
 // ── 아이콘 렌더러 ──
 
@@ -230,6 +543,31 @@ function BubbleIcon({ type, x, y, size = 16 }) {
   }
 }
 
+// ══════════════════════════════════════════════════════
+// needW / needH 계산 — inset 방식 (ovalScale 대체)
+// ══════════════════════════════════════════════════════
+
+function computeBubbleSize(cfg, textBlockW, textBlockH, bubbleW, fixedWidth, minHeightPx) {
+  const ix = cfg.insetX || 0;
+  const iy = cfg.insetY || 0;
+
+  let needW;
+  if (cfg.isCaption || fixedWidth) {
+    needW = bubbleW;
+  } else {
+    // 텍스트 블록 + padding → inset 역산
+    const rawW = textBlockW + PADDING_X * 2;
+    needW = ix > 0 ? rawW / (1 - ix * 2) : rawW;
+    needW = Math.min(bubbleW, Math.max(60, needW));
+  }
+
+  const rawH = textBlockH + PADDING_Y * 2;
+  let needH = iy > 0 ? rawH / (1 - iy * 2) : rawH;
+  needH = Math.max(needH, minHeightPx || 0);
+
+  return { needW, needH };
+}
+
 // ── 말풍선 기하학 계산 (CutEditor 편집 모드에서 선택 박스·히트 영역에 사용) ──
 
 export function computeSingleBubbleGeo(style, text, bubbleX, bubbleY, bubbleW, minHeightPx, fontScale, tailDirection, flipTail, fixedWidth) {
@@ -240,24 +578,10 @@ export function computeSingleBubbleGeo(style, text, bubbleX, bubbleY, bubbleW, m
   const maxChars = Math.max(4, Math.floor((bubbleW - PADDING_X * 2) / (fontSize * CHAR_WIDTH)));
   const lines = wrapText(text, maxChars);
   const longestLine = Math.max(...lines.map(l => l.length), 1);
+  const textBlockW = longestLine * fontSize * CHAR_WIDTH;
   const textBlockH = lines.length * lineHeight;
 
-  const computedH = textBlockH + PADDING_Y * 2;
-  let needH = Math.max(computedH, minHeightPx || 0);
-
-  let needW;
-  if (cfg.isCaption || fixedWidth) {
-    needW = bubbleW;
-  } else {
-    needW = Math.min(bubbleW, Math.max(60, longestLine * fontSize * CHAR_WIDTH + PADDING_X * 2));
-  }
-
-  // 타원은 내접 사각형이 좁으므로 확대 (3줄 이상은 세로 여유 더 필요)
-  if (cfg.isOval || cfg.isEllipse) {
-    const ovalScale = lines.length >= 3 ? 1.55 : 1.42;
-    needW = Math.min(bubbleW, needW * ovalScale);
-    needH = needH * ovalScale;
-  }
+  const { needW, needH } = computeBubbleSize(cfg, textBlockW, textBlockH, bubbleW, fixedWidth, minHeightPx);
 
   const bx = bubbleX + (bubbleW - needW) / 2;
   const by = bubbleY;
@@ -265,230 +589,12 @@ export function computeSingleBubbleGeo(style, text, bubbleX, bubbleY, bubbleW, m
   return { bx, by, needW, needH, style, cfg };
 }
 
-// ── 꼬리 요소 생성 (방향 지원) ──
-
-function TailElements({ cfg, bx, by, needW, needH, tailDirection, flipTail }) {
-  const dir = tailDirection || 'down';
-  if (dir === 'none') return null;
-  if (!cfg.hasTail) return null;
-
-  const elements = [];
-
-  // 꼬리 기준점 계산
-  let tx, ty;
-  const tailOffset = flipTail ? needW * 0.7 : Math.min(35, needW * 0.3);
-  const cx = bx + needW / 2;
-  const cy = by + needH / 2;
-
-  if (cfg.hasTail === 'dots') {
-    // 생각 말풍선: 원형 점 꼬리
-    if (dir === 'down') {
-      tx = bx + tailOffset;
-      ty = by + needH;
-      elements.push(
-        <circle key="dot1" cx={tx + 5} cy={ty + 6} r={4}
-          fill={cfg.fill} stroke={cfg.stroke} strokeWidth={1} />,
-        <circle key="dot2" cx={tx + 9} cy={ty + 14} r={2.5}
-          fill={cfg.fill} stroke={cfg.stroke} strokeWidth={1} />
-      );
-    } else if (dir === 'up') {
-      tx = bx + tailOffset;
-      ty = by;
-      elements.push(
-        <circle key="dot1" cx={tx + 5} cy={ty - 6} r={4}
-          fill={cfg.fill} stroke={cfg.stroke} strokeWidth={1} />,
-        <circle key="dot2" cx={tx + 9} cy={ty - 14} r={2.5}
-          fill={cfg.fill} stroke={cfg.stroke} strokeWidth={1} />
-      );
-    } else if (dir === 'left') {
-      ty = by + needH * 0.4;
-      elements.push(
-        <circle key="dot1" cx={bx - 6} cy={ty} r={4}
-          fill={cfg.fill} stroke={cfg.stroke} strokeWidth={1} />,
-        <circle key="dot2" cx={bx - 14} cy={ty + 2} r={2.5}
-          fill={cfg.fill} stroke={cfg.stroke} strokeWidth={1} />
-      );
-    } else if (dir === 'right') {
-      ty = by + needH * 0.4;
-      elements.push(
-        <circle key="dot1" cx={bx + needW + 6} cy={ty} r={4}
-          fill={cfg.fill} stroke={cfg.stroke} strokeWidth={1} />,
-        <circle key="dot2" cx={bx + needW + 14} cy={ty + 2} r={2.5}
-          fill={cfg.fill} stroke={cfg.stroke} strokeWidth={1} />
-      );
-    }
-    return <>{elements}</>;
-  }
-
-  if (cfg.hasTail === 'small') {
-    // 작은 꼬리 (whisper, shy)
-    const ellipseBase = cfg.isEllipse ? 2 : 0;
-    if (dir === 'down') {
-      tx = bx + tailOffset;
-      ty = cfg.isEllipse ? cy + needH / 2 + ellipseBase : by + needH;
-      elements.push(
-        <polygon key="tail"
-          points={`${tx},${ty - 1} ${tx + 6},${ty + 7} ${tx + 12},${ty - 1}`}
-          fill={cfg.fill} stroke="none" />
-      );
-    } else if (dir === 'up') {
-      tx = bx + tailOffset;
-      ty = cfg.isEllipse ? cy - needH / 2 - ellipseBase : by;
-      elements.push(
-        <polygon key="tail"
-          points={`${tx},${ty + 1} ${tx + 6},${ty - 7} ${tx + 12},${ty + 1}`}
-          fill={cfg.fill} stroke="none" />
-      );
-    } else if (dir === 'left') {
-      ty = by + needH * 0.4;
-      const lx = cfg.isEllipse ? cx - needW / 2 - 4 : bx;
-      elements.push(
-        <polygon key="tail"
-          points={`${lx + 1},${ty} ${lx - 7},${ty + 6} ${lx + 1},${ty + 12}`}
-          fill={cfg.fill} stroke="none" />
-      );
-    } else if (dir === 'right') {
-      ty = by + needH * 0.4;
-      const rx = cfg.isEllipse ? cx + needW / 2 + 4 : bx + needW;
-      elements.push(
-        <polygon key="tail"
-          points={`${rx - 1},${ty} ${rx + 7},${ty + 6} ${rx - 1},${ty + 12}`}
-          fill={cfg.fill} stroke="none" />
-      );
-    }
-    return <>{elements}</>;
-  }
-
-  if (cfg.hasTail === true) {
-    // 일반 삼각형 꼬리 (round, happy)
-    const isOvalShape = cfg.isOval || cfg.isEllipse;
-    const rxE = needW / 2;
-    const ryE = needH / 2;
-    // flipTail: 꼬리를 중심 기준 반대쪽으로
-    const tailSide = flipTail ? 0.25 : -0.25; // 중심에서 좌/우 오프셋 비율
-
-    if (isOvalShape) {
-      // 타원 테두리 기반 꼬리 (참고: Speech bubble.jpg)
-      // 밑변 두 점을 타원 위에서 구하고, 꼬리 끝을 바깥으로 뻗음
-      const tailLen = 15;
-      const inset = 3; // 밑변을 타원 안쪽으로 당기는 픽셀
-      // flipTail이면 기준 각도를 25도(0.44rad) 옮김
-      const flipOffset = flipTail ? 0.44 : 0;
-
-      // 방향별 기준 각도와 꼬리 뻗는 방향
-      let baseAngle, tipDx, tipDy;
-      if (dir === 'down') {
-        baseAngle = Math.PI / 2 + 0.35 + flipOffset; // 왼쪽 하단 치우침 (참고 이미지)
-        tipDx = -8; tipDy = tailLen;
-      } else if (dir === 'up') {
-        baseAngle = -Math.PI / 2 - 0.35 - flipOffset;
-        tipDx = -8; tipDy = -tailLen;
-      } else if (dir === 'left') {
-        baseAngle = Math.PI + 0.35 + flipOffset;
-        tipDx = -tailLen; tipDy = 8;
-      } else { // right
-        baseAngle = 0 - 0.35 - flipOffset;
-        tipDx = tailLen; tipDy = 8;
-      }
-
-      // 밑변 두 점: 기준 각도에서 ±0.20rad 벌림
-      const a1 = baseAngle - 0.20;
-      const a2 = baseAngle + 0.20;
-      // 타원 위의 점에서 중심 방향으로 inset만큼 당김
-      const p1x = cx + rxE * Math.cos(a1);
-      const p1y = cy + ryE * Math.sin(a1);
-      const p2x = cx + rxE * Math.cos(a2);
-      const p2y = cy + ryE * Math.sin(a2);
-      // 중심 방향 단위벡터로 inset
-      const d1 = Math.sqrt((p1x - cx) ** 2 + (p1y - cy) ** 2);
-      const d2 = Math.sqrt((p2x - cx) ** 2 + (p2y - cy) ** 2);
-      const bx1 = p1x - (p1x - cx) / d1 * inset;
-      const by1 = p1y - (p1y - cy) / d1 * inset;
-      const bx2 = p2x - (p2x - cx) / d2 * inset;
-      const by2 = p2y - (p2y - cy) / d2 * inset;
-      // 꼬리 끝: 밑변 중점에서 바깥으로
-      const midX = (bx1 + bx2) / 2;
-      const midY = (by1 + by2) / 2;
-      const tipX = midX + tipDx;
-      const tipY = midY + tipDy;
-
-      elements.push(
-        <polygon key="tail"
-          points={`${bx1},${by1} ${tipX},${tipY} ${bx2},${by2}`}
-          fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth}
-          strokeLinejoin="round" />
-      );
-      // 내부 fill 타원으로 밑변 연결부의 stroke 겹침 가림
-      elements.push(
-        <ellipse key="tail-cover" cx={cx} cy={cy} rx={rxE - 1} ry={ryE - 1}
-          fill={cfg.fill} stroke="none" />
-      );
-    } else {
-      // 사각형 기반 꼬리 (기존)
-      if (dir === 'down') {
-        tx = bx + tailOffset;
-        ty = by + needH;
-        elements.push(
-          <polygon key="tail"
-            points={`${tx},${ty - 1} ${tx + 8},${ty + 10} ${tx + 16},${ty - 1}`}
-            fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth}
-            strokeLinejoin="round" />
-        );
-        elements.push(
-          <rect key="tail-cover" x={tx + 1} y={ty - 2} width={14} height={4}
-            fill={cfg.fill} stroke="none" />
-        );
-      } else if (dir === 'up') {
-        tx = bx + tailOffset;
-        ty = by;
-        elements.push(
-          <polygon key="tail"
-            points={`${tx},${ty + 1} ${tx + 8},${ty - 10} ${tx + 16},${ty + 1}`}
-            fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth}
-            strokeLinejoin="round" />
-        );
-        elements.push(
-          <rect key="tail-cover" x={tx + 1} y={ty - 2} width={14} height={4}
-            fill={cfg.fill} stroke="none" />
-        );
-      } else if (dir === 'left') {
-        ty = by + needH * 0.35;
-        elements.push(
-          <polygon key="tail"
-            points={`${bx + 1},${ty} ${bx - 10},${ty + 8} ${bx + 1},${ty + 16}`}
-            fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth}
-            strokeLinejoin="round" />
-        );
-        elements.push(
-          <rect key="tail-cover" x={bx - 2} y={ty + 1} width={4} height={14}
-            fill={cfg.fill} stroke="none" />
-        );
-      } else if (dir === 'right') {
-        ty = by + needH * 0.35;
-        const rx = bx + needW;
-        elements.push(
-          <polygon key="tail"
-            points={`${rx - 1},${ty} ${rx + 10},${ty + 8} ${rx - 1},${ty + 16}`}
-            fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth}
-            strokeLinejoin="round" />
-        );
-        elements.push(
-          <rect key="tail-cover" x={rx - 2} y={ty + 1} width={4} height={14}
-            fill={cfg.fill} stroke="none" />
-        );
-      }
-    }
-    return <>{elements}</>;
-  }
-
-  return null;
-}
-
 // ── 단일 말풍선 렌더러 ──
 
 export function SingleBubble({
   style, text, bubbleX, bubbleY, bubbleW, bubbleH,
   tailDirection, flipTail, fontScale, fixedWidth, viewW,
+  textOffsetX, textOffsetY,
 }) {
   const cfg = BUBBLE_CONFIGS[style] || BUBBLE_CONFIGS.round;
   const fs = fontScale || 1.0;
@@ -497,41 +603,37 @@ export function SingleBubble({
   const maxChars = Math.max(4, Math.floor((bubbleW - PADDING_X * 2) / (fontSize * CHAR_WIDTH)));
   const lines = wrapText(text, maxChars);
   const longestLine = Math.max(...lines.map(l => l.length), 1);
+  const textBlockW = longestLine * fontSize * CHAR_WIDTH;
   const textBlockH = lines.length * lineHeight;
 
-  // 실제 말풍선 크기 (텍스트에 맞춤, minHeight 적용)
-  let needW;
-  if (cfg.isCaption || fixedWidth) {
-    needW = bubbleW;
-  } else {
-    needW = Math.min(bubbleW, Math.max(60, longestLine * fontSize * CHAR_WIDTH + PADDING_X * 2));
-  }
-  const computedH = textBlockH + PADDING_Y * 2;
-  let needH = Math.max(computedH, bubbleH || 0);
-
-  // 타원은 내접 사각형이 좁으므로 확대 (3줄 이상은 세로 여유 더 필요)
-  if (cfg.isOval || cfg.isEllipse) {
-    const ovalScale = lines.length >= 3 ? 1.55 : 1.42;
-    needW = Math.min(bubbleW, needW * ovalScale);
-    needH = needH * ovalScale;
-  }
+  const { needW, needH } = computeBubbleSize(cfg, textBlockW, textBlockH, bubbleW, fixedWidth, bubbleH);
 
   const bx = bubbleX + (bubbleW - needW) / 2;
   const by = bubbleY;
   const cx = bx + needW / 2;
   const cy = by + needH / 2;
+  const rxE = needW / 2;
+  const ryE = needH / 2;
 
   const elements = [];
+  const dir = tailDirection || 'down';
+  const flip = flipTail || false;
+  const tailCfg = cfg.tail;
 
-  // ── 자막 (나레이션) — 전체 너비, 테두리/꼬리 없음 ──
+  // ── 자막 (나레이션) — 전폭, 각진 사각형, 꼬리 없음 ──
   if (cfg.isCaption) {
     elements.push(
       <rect key="shape" x={bx} y={by} width={needW} height={needH}
-        fill={cfg.fill} stroke="none" />
+        rx={0} ry={0} fill={cfg.fill} stroke="none" />
     );
+    // 텍스트 — 중앙 정렬
+    const txOff = (textOffsetX || 0) * needW;
+    const tyOff = (textOffsetY || 0) * needH;
+    const textX = cx - textBlockW / 2 - PADDING_X + txOff;
+    const textY = cy - textBlockH / 2 + tyOff;
     elements.push(
-      <foreignObject key="text" x={bx + PADDING_X} y={by + PADDING_Y}
-        width={needW - PADDING_X * 2} height={textBlockH + lineHeight}>
+      <foreignObject key="text" x={textX} y={textY}
+        width={textBlockW + PADDING_X * 2} height={textBlockH + lineHeight}>
         <div xmlns="http://www.w3.org/1999/xhtml"
           style={{
             color: cfg.textColor,
@@ -551,86 +653,150 @@ export function SingleBubble({
     return <g>{elements}</g>;
   }
 
-  // ── 말풍선 모양 ──
-  const rxE = needW / 2;
-  const ryE = needH / 2;
-  const ovalWithTail = cfg.isOval && cfg.hasTail === true;
+  // ── 말풍선 모양 + 꼬리 (하나의 path로 합침) ──
+
+  // 꼬리 데이터 계산
+  let tailData = null;
+  let tailDots = null; // 타입D용
+  if (tailCfg && dir !== 'none') {
+    if (tailCfg.type === 'A') {
+      tailData = buildTailA(cx, cy, rxE, ryE, needH, dir, flip, tailCfg);
+    } else if (tailCfg.type === 'B') {
+      tailData = buildTailB(cx, cy, rxE, ryE, needH, dir, flip, tailCfg);
+    } else if (tailCfg.type === 'D') {
+      tailDots = buildTailD(cx, cy, rxE, ryE, needH, dir, flip, tailCfg, cfg);
+    }
+  }
 
   if (cfg.isSpiky) {
     const margin = 8;
     const path = spikyPath(cx, cy, needW / 2 + margin, needH / 2 + margin, cfg.spikeCount, cfg.spikeDepth);
-    elements.push(
-      <path key="shape" d={path} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} strokeLinejoin="round" />
-    );
-  } else if (ovalWithTail) {
-    // 타원 + 꼬리를 하나의 <path>로 합침 — 이음새 없음
-    const dir = tailDirection || 'down';
-    const flipOffset = flipTail ? 0.44 : 0;
-    let baseAngle;
-    if (dir === 'down') baseAngle = Math.PI / 2 + 0.35 + flipOffset;
-    else if (dir === 'up') baseAngle = -Math.PI / 2 - 0.35 - flipOffset;
-    else if (dir === 'left') baseAngle = Math.PI + 0.35 + flipOffset;
-    else baseAngle = -0.35 - flipOffset;
-
-    const a1 = baseAngle - 0.20; // 꼬리 밑변 점1 각도
-    const a2 = baseAngle + 0.20; // 꼬리 밑변 점2 각도
-    const p1x = cx + rxE * Math.cos(a1);
-    const p1y = cy + ryE * Math.sin(a1);
-    const p2x = cx + rxE * Math.cos(a2);
-    const p2y = cy + ryE * Math.sin(a2);
-
-    // 꼬리 끝점
-    const tailLen = 15;
-    let tipDx, tipDy;
-    if (dir === 'down') { tipDx = -8; tipDy = tailLen; }
-    else if (dir === 'up') { tipDx = -8; tipDy = -tailLen; }
-    else if (dir === 'left') { tipDx = -tailLen; tipDy = 8; }
-    else { tipDx = tailLen; tipDy = 8; }
-    const midX = (p1x + p2x) / 2;
-    const midY = (p1y + p2y) / 2;
-    const tipX = midX + tipDx;
-    const tipY = midY + tipDy;
-
-    // 경로: p1 → (큰 호로 타원 돌아서) → p2 → tip → p1 닫기
-    // p1에서 p2까지 "긴 쪽"으로 호를 그림 (꼬리 틈을 건너뛰는 방향)
-    // large-arc=1 (긴 호), sweep 방향은 시행착오 없이 결정:
-    // a2 - a1 = 0.40 rad (짧은 구간), 나머지 ~5.88 rad이 긴 구간
-    // SVG에서 sweep=1은 시계방향(양의 y 아래). p1(a1)→p2(a2) 긴 호는 a1에서 감소 방향.
-    const d = `M${p1x},${p1y} A${rxE},${ryE} 0 1,0 ${p2x},${p2y} L${tipX},${tipY} Z`;
-
-    elements.push(
-      <path key="shape" d={d}
-        fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth}
-        strokeLinejoin="round" />
-    );
+    // 스파이크 + 타입B 꼬리 합침: 꼬리 밑변은 innerR 기준
+    if (tailData) {
+      // 스파이크 본체는 그대로 그리고, 꼬리는 별도 polygon으로 위에 겹침
+      // (스파이크 path에 꼬리를 삽입하면 복잡도가 너무 높으므로 fill로 겹침 가림)
+      elements.push(
+        <path key="shape" d={path} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} strokeLinejoin="round" />
+      );
+      const [p1x, p1y] = tailData.p1;
+      const [p2x, p2y] = tailData.p2;
+      const tailPath = `M${p1x},${p1y} ${tailData.pathSuffix} Z`;
+      elements.push(
+        <path key="tail" d={tailPath} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} strokeLinejoin="round" />
+      );
+      // 스파이크 내부 fill로 꼬리 밑변 stroke 가림
+      const innerPath = spikyPath(cx, cy, (needW / 2 + margin) * 0.97, (needH / 2 + margin) * 0.97, cfg.spikeCount, cfg.spikeDepth);
+      elements.push(
+        <path key="tail-cover" d={innerPath} fill={cfg.fill} stroke="none" />
+      );
+    } else {
+      elements.push(
+        <path key="shape" d={path} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} strokeLinejoin="round" />
+      );
+    }
+  } else if (cfg.isBigSpiky) {
+    // surprised — 큰 스파이크, 골이 둥글게 파임
+    const margin = 8;
+    const path = bigSpikyPath(cx, cy, needW / 2 + margin, needH / 2 + margin, cfg.spikeCount, cfg.spikeDepth);
+    if (tailData) {
+      elements.push(
+        <path key="shape" d={path} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} strokeLinejoin="round" />
+      );
+      const [p1x, p1y] = tailData.p1;
+      const tailPath = `M${p1x},${p1y} ${tailData.pathSuffix} Z`;
+      elements.push(
+        <path key="tail" d={tailPath} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} strokeLinejoin="round" />
+      );
+      const innerPath = bigSpikyPath(cx, cy, (needW / 2 + margin) * 0.97, (needH / 2 + margin) * 0.97, cfg.spikeCount, cfg.spikeDepth);
+      elements.push(
+        <path key="tail-cover" d={innerPath} fill={cfg.fill} stroke="none" />
+      );
+    } else {
+      elements.push(
+        <path key="shape" d={path} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} strokeLinejoin="round" />
+      );
+    }
   } else if (cfg.isOval) {
-    elements.push(
-      <ellipse key="shape" cx={cx} cy={cy}
-        rx={rxE} ry={ryE}
-        fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} />
-    );
+    // 타원 + 꼬리(타입A/B)를 하나의 path로
+    if (tailData) {
+      const [p1x, p1y] = tailData.p1;
+      const [p2x, p2y] = tailData.p2;
+      const d = `M${p1x},${p1y} A${rxE},${ryE} 0 1,0 ${p2x},${p2y} ${tailData.pathSuffix} Z`;
+      elements.push(
+        <path key="shape" d={d}
+          fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth}
+          strokeLinejoin="round" />
+      );
+    } else {
+      elements.push(
+        <ellipse key="shape" cx={cx} cy={cy} rx={rxE} ry={ryE}
+          fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} />
+      );
+    }
   } else if (cfg.isEllipse) {
+    // whisper 등 — 타원 + 별도 꼬리(타입D)
     elements.push(
-      <ellipse key="shape" cx={cx} cy={cy} rx={needW / 2 + 4} ry={needH / 2 + 4}
+      <ellipse key="shape" cx={cx} cy={cy} rx={rxE} ry={ryE}
         fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth}
         strokeDasharray={cfg.strokeDash || 'none'} />
     );
+  } else if (cfg.isCloud) {
+    // 구름 계열 (thought, happy, sad, realize)
+    const preset = CLOUD_PRESETS[cfg.cloudPreset] || CLOUD_PRESETS.thought;
+    const scaledBumps = preset.map(b => ({
+      angle: b.angle,
+      radius: b.radius * Math.min(rxE, ryE),
+    }));
+    const d = cloudPath(cx, cy, rxE * 0.82, ryE * 0.82, scaledBumps);
+    elements.push(
+      <path key="shape" d={d} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} strokeLinejoin="round" />
+    );
+    if (tailData) {
+      const [p1x, p1y] = tailData.p1;
+      const tailPath = `M${p1x},${p1y} ${tailData.pathSuffix} Z`;
+      elements.push(
+        <path key="tail" d={tailPath} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} strokeLinejoin="round" />
+      );
+    }
+  } else if (cfg.isTrapezoidal) {
+    // shy — 비대칭 사다리꼴
+    const d = trapezoidPath(bx, by, needW, needH);
+    elements.push(
+      <path key="shape" d={d} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} strokeLinejoin="round" />
+    );
+    if (tailData) {
+      const [p1x, p1y] = tailData.p1;
+      const tailPath = `M${p1x},${p1y} ${tailData.pathSuffix} Z`;
+      elements.push(
+        <path key="tail" d={tailPath} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} strokeLinejoin="round" />
+      );
+    }
   } else {
-    elements.push(
-      <rect key="shape" x={bx} y={by} width={needW} height={needH}
-        rx={cfg.radius} ry={cfg.radius}
-        fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth}
-        strokeDasharray={cfg.strokeDash || 'none'} />
-    );
+    // 사각형 계열 (flustered 등) — 둥근 사각형
+    const radius = cfg.cornerRadius ? Math.max(4, needW * cfg.cornerRadius) : Math.max(4, needW * 0.08);
+    if (tailData) {
+      elements.push(
+        <rect key="shape" x={bx} y={by} width={needW} height={needH}
+          rx={radius} ry={radius}
+          fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} />
+      );
+      const [p1x, p1y] = tailData.p1;
+      const tailPath = `M${p1x},${p1y} ${tailData.pathSuffix} Z`;
+      elements.push(
+        <path key="tail" d={tailPath} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} strokeLinejoin="round" />
+      );
+    } else {
+      elements.push(
+        <rect key="shape" x={bx} y={by} width={needW} height={needH}
+          rx={radius} ry={radius}
+          fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} />
+      );
+    }
   }
 
-  // ── 꼬리 (ovalWithTail은 위에서 path에 포함됨) ──
-  if (!ovalWithTail) {
-    elements.push(
-      <TailElements key="tail-group"
-        cfg={cfg} bx={bx} by={by} needW={needW} needH={needH}
-        tailDirection={tailDirection} flipTail={flipTail} />
-    );
+  // ── 타입D 꼬리 (별도 원 2개) ──
+  if (tailDots) {
+    elements.push(...tailDots);
   }
 
   // ── 아이콘 ──
@@ -642,12 +808,14 @@ export function SingleBubble({
     );
   }
 
-  // ── 텍스트 (foreignObject) ──
-  // 텍스트 y를 높이 기준 중앙 정렬 (minHeight 적용 시 텍스트가 상단에 붙지 않도록)
-  const textY = by + (needH - textBlockH) / 2;
+  // ── 텍스트 (foreignObject) — 가로·세로 중앙 정렬 + 오프셋 ──
+  const txOff = (textOffsetX || 0) * needW;
+  const tyOff = (textOffsetY || 0) * needH;
+  const textX = cx - textBlockW / 2 - PADDING_X + txOff;
+  const textY = cy - textBlockH / 2 + tyOff;
   elements.push(
-    <foreignObject key="text" x={bx + PADDING_X} y={textY}
-      width={needW - PADDING_X * 2} height={textBlockH + lineHeight}>
+    <foreignObject key="text" x={textX} y={textY}
+      width={textBlockW + PADDING_X * 2} height={textBlockH + lineHeight}>
       <div xmlns="http://www.w3.org/1999/xhtml"
         style={{
           color: cfg.textColor,
@@ -667,8 +835,6 @@ export function SingleBubble({
   return <g>{elements}</g>;
 }
 
-// ── 메인 오버레이 컴포넌트 ──
-
 // ── 미니 말풍선 아이콘 (팔레트용, 32x28 SVG) ──
 
 const STYLE_LABELS = {
@@ -686,36 +852,57 @@ export function BubbleMiniIcon({ styleKey, size = 32, selected = false, onClick 
   const cfg = BUBBLE_CONFIGS[styleKey] || BUBBLE_CONFIGS.round;
   const w = size;
   const h = size * 0.8;
-  const cx = w / 2, cy = h / 2;
+  const mcx = w / 2, mcy = h / 2;
   const pad = 3;
 
   let shape;
   if (cfg.isSpiky) {
-    const path = spikyPath(cx, cy, cx - pad, cy - pad, cfg.spikeCount || 12, cfg.spikeDepth || 0.15);
+    const path = spikyPath(mcx, mcy, mcx - pad, mcy - pad, cfg.spikeCount || 12, cfg.spikeDepth || 0.15);
+    shape = <path d={path} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={1.5} strokeLinejoin="round" />;
+  } else if (cfg.isBigSpiky) {
+    const path = bigSpikyPath(mcx, mcy, mcx - pad, mcy - pad, cfg.spikeCount || 8, cfg.spikeDepth || 0.18);
     shape = <path d={path} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={1.5} strokeLinejoin="round" />;
   } else if (cfg.isEllipse) {
-    shape = <ellipse cx={cx} cy={cy} rx={cx - pad} ry={cy - pad}
+    shape = <ellipse cx={mcx} cy={mcy} rx={mcx - pad} ry={mcy - pad}
       fill={cfg.fill} stroke={cfg.stroke} strokeWidth={1.5}
       strokeDasharray={cfg.strokeDash || 'none'} />;
-  } else if (styleKey === 'narration') {
+  } else if (cfg.isOval) {
+    shape = <ellipse cx={mcx} cy={mcy} rx={mcx - pad} ry={mcy - pad}
+      fill={cfg.fill} stroke={cfg.stroke} strokeWidth={1.5} />;
+  } else if (cfg.isCloud) {
+    const miniRx = mcx - pad - 2, miniRy = mcy - pad - 2;
+    const preset = CLOUD_PRESETS[cfg.cloudPreset] || CLOUD_PRESETS.thought;
+    const scaledBumps = preset.map(b => ({
+      angle: b.angle,
+      radius: b.radius * Math.min(miniRx, miniRy) * 0.7,
+    }));
+    const d = cloudPath(mcx, mcy, miniRx * 0.75, miniRy * 0.75, scaledBumps);
+    shape = <path d={d} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={1.5} strokeLinejoin="round" />;
+  } else if (cfg.isCaption) {
     shape = <rect x={pad} y={pad} width={w - pad * 2} height={h - pad * 2}
       rx={2} fill={cfg.fill} stroke={cfg.stroke || '#444'} strokeWidth={1} />;
+  } else if (cfg.isTrapezoidal) {
+    const mw = w - pad * 2, mh = h - pad * 2;
+    const d = trapezoidPath(pad, pad, mw, mh);
+    shape = <path d={d} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={1.5} strokeLinejoin="round" />;
   } else {
+    const radius = cfg.cornerRadius ? Math.max(3, (w - pad * 2) * cfg.cornerRadius) : Math.max(3, (w - pad * 2) * 0.08);
     shape = <rect x={pad} y={pad} width={w - pad * 2} height={h - pad * 2}
-      rx={cfg.radius ? Math.min(cfg.radius, 8) : 6}
-      fill={cfg.fill} stroke={cfg.stroke} strokeWidth={1.5}
-      strokeDasharray={cfg.strokeDash || 'none'} />;
+      rx={radius}
+      fill={cfg.fill} stroke={cfg.stroke} strokeWidth={1.5} />;
   }
 
   // 미니 꼬리
   let tail = null;
-  if (cfg.hasTail === true) {
-    tail = <polygon points={`${cx - 3},${h - pad} ${cx},${h + 2} ${cx + 3},${h - pad}`} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={1} />;
-  } else if (cfg.hasTail === 'dots') {
-    tail = <>
-      <circle cx={cx - 1} cy={h - pad + 3} r={1.5} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={0.8} />
-      <circle cx={cx + 1} cy={h - pad + 6} r={1} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={0.8} />
-    </>;
+  if (cfg.tail) {
+    if (cfg.tail.type === 'A' || cfg.tail.type === 'B' || cfg.tail.type === 'C') {
+      tail = <polygon points={`${mcx - 3},${h - pad} ${mcx},${h + 2} ${mcx + 3},${h - pad}`} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={1} />;
+    } else if (cfg.tail.type === 'D') {
+      tail = <>
+        <circle cx={mcx - 1} cy={h - pad + 3} r={1.5} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={0.8} />
+        <circle cx={mcx + 1} cy={h - pad + 6} r={1} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={0.8} />
+      </>;
+    }
   }
 
   // 미니 아이콘
@@ -758,6 +945,8 @@ export function BubbleMiniIcon({ styleKey, size = 32, selected = false, onClick 
 
 export { STYLE_ORDER, STYLE_LABELS, BUBBLE_CONFIGS };
 
+// ── 메인 오버레이 컴포넌트 ──
+
 export default function BubbleOverlay({ dialogue, characters, width, height }) {
   const bubbles = useMemo(() => {
     if (!dialogue || dialogue.length === 0 || !width || !height) return [];
@@ -787,19 +976,23 @@ export default function BubbleOverlay({ dialogue, characters, width, height }) {
         const minH = (bl.min_height || 0) * height;
         const tailDir = bl.tail_direction || 'down';
         const flip = bl.tail_flip || false;
+        const txOff = bl.text_offset_x || 0;
+        const tyOff = bl.text_offset_y || 0;
 
         const fontSize = BASE_FONT_SIZE * (cfg.fontSize || 1) * fs;
         const lineHeight = fontSize * LINE_HEIGHT_RATIO;
         const maxChars = Math.max(4, Math.floor((bw - PADDING_X * 2) / (fontSize * CHAR_WIDTH)));
         const lines = wrapText(item.text || '', maxChars);
+        const textBlockW = Math.max(...lines.map(l => l.length), 1) * fontSize * CHAR_WIDTH;
         const textH = lines.length * lineHeight;
-        const bubbleH = Math.max(textH + PADDING_Y * 2, minH);
+        const { needW: w2, needH: h2 } = computeBubbleSize(cfg, textBlockW, textH, bw, true, minH);
 
         result.push({
           style, text: item.text,
-          x: bx, y: by, w: bw, h: bubbleH,
+          x: bx, y: by, w: bw, h: h2,
           tailDirection: tailDir, flipTail: flip, fontScale: fs,
           fixedWidth: true,
+          textOffsetX: txOff, textOffsetY: tyOff,
         });
         continue;
       }
@@ -809,16 +1002,17 @@ export default function BubbleOverlay({ dialogue, characters, width, height }) {
       const lineHeight = fontSize * LINE_HEIGHT_RATIO;
       const maxChars = Math.max(4, Math.floor((maxBubbleW - PADDING_X * 2) / (fontSize * CHAR_WIDTH)));
       const lines = wrapText(item.text || '', maxChars);
+      const textBlockW = Math.max(...lines.map(l => l.length), 1) * fontSize * CHAR_WIDTH;
       const textH = lines.length * lineHeight;
-      const bubbleH = textH + PADDING_Y * 2;
+      const { needW: autoW, needH: autoH } = computeBubbleSize(cfg, textBlockW, textH, maxBubbleW, false, 0);
 
       if (isBottom) {
-        bottomY -= bubbleH;
-        result.push({ style, text: item.text, x: (width - maxBubbleW) / 2, y: bottomY, w: maxBubbleW, h: bubbleH });
+        bottomY -= autoH;
+        result.push({ style, text: item.text, x: (width - autoW) / 2, y: bottomY, w: autoW, h: autoH });
         bottomY -= gap;
       } else {
-        result.push({ style, text: item.text, x: (width - maxBubbleW) / 2, y: topY, w: maxBubbleW, h: bubbleH });
-        topY += bubbleH + gap + tailSpace;
+        result.push({ style, text: item.text, x: (width - autoW) / 2, y: topY, w: autoW, h: autoH });
+        topY += autoH + gap + tailSpace;
       }
     }
 
@@ -850,6 +1044,8 @@ export default function BubbleOverlay({ dialogue, characters, width, height }) {
           fontScale={b.fontScale}
           fixedWidth={b.fixedWidth}
           viewW={width}
+          textOffsetX={b.textOffsetX}
+          textOffsetY={b.textOffsetY}
         />
       ))}
     </svg>

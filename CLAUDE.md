@@ -418,6 +418,36 @@ WEBTOON/
 - `Gate5Review.jsx` — c581116 상태 (CutEditor/SfxLayer/프론트엔드 Export 미연동). 라이트박스 + 백엔드 Export만 동작
 - 프론트엔드 캔버스 Export — exportRenderer.js 코드는 있으나 Gate5Review에서 호출하지 않음
 
+### BubbleOverlay 말풍선 12종 리팩토링 (2026-08-14)
+
+설계 문서: `docs/Bubble-12-Styles-v1.0.md`
+
+**1단계: 골격 개선 (커밋 6e088b8)**
+- **round 타원 전환:** `BUBBLE_CONFIGS.round`에 `isOval: true` 추가, `<rect rx>` → `<ellipse>` 렌더링
+- **needW 텍스트 폭 반영:** `maxChars`(역산값) 대신 `longestLine`(실제 가장 긴 줄) 기준으로 needW 계산 → 짧은 텍스트에서 말풍선이 줄어듦
+- **타원+꼬리 단일 path:** `<ellipse>` + `<polygon>` + cover 방식을 버리고, `M p1 A(큰 호) p2 L tip Z` 하나의 `<path>`로 합침 → 이음새 없음
+
+**2단계: 12종 공통 기반 (8-1단계, 미커밋)**
+- **BUBBLE_CONFIGS 12종 색상 맞춤:** 백엔드 `service.py`의 `STYLE_FILL`/`STYLE_STROKE`/`TEXT_COLORS` (RGBA 튜플) 기준으로 프론트 색상 통일
+- **꼬리 헬퍼 4종 신규:**
+  - `buildTailA()` — 낫형 갈고리 (round, surprised, flustered). 바깥쪽 직선 + 안쪽 Q 곡선
+  - `buildTailB()` — 직선 침형 (happy, sad, realize, shy, shout, angry). 좁고 뾰족한 삼각형
+  - `buildTailC()` — 대칭 삼각형 (narration). 하단 중앙, flipTail 무시
+  - `buildTailD()` — 원 2개 (thought, whisper). 본체와 분리된 별도 `<circle>`
+- **공통 헬퍼:** `tailBaseAngle()`, `pointOnEllipse()`, `lerp()`, `lerpPt()`
+- **`BUBBLE_CONFIGS`에 `tail` 설정 블록 추가:** 각 스타일별로 `{ type, baseSpread, length, skewDeg, curveAmount }` 등 파라미터 정의
+- **insetX/insetY 방식 도입:** ovalScale(1.42/1.55 배율) 제거 → 스타일별 `insetX`/`insetY` 비율로 needW/needH 역산. `computeBubbleSize()` 함수로 통합
+- **텍스트 중앙 정렬 수정:** `cy - textBlockH/2`, `cx - textBlockW/2` 기준 정렬 (꼬리 제외)
+- **텍스트 오프셋 지원:** `textOffsetX`/`textOffsetY` prop 추가 (bubble_layout.text_offset_x/y). 기본값 0, UI는 4단계
+- **round 꼬리 타입A 교체:** 이등변삼각형 → 낫형 (바깥 직선 + 안쪽 Q 곡선)
+- **narration 꼬리 타입C:** 둥근 모서리 사각형 + 하단 대칭 삼각형을 하나의 path로
+
+**남은 8-2~8-5단계 (미착수):**
+- 8-2: 사각형 계열 3종 (narration, flustered, shy) 본체 모양
+- 8-3: 타원·구름 계열 5종 (whisper, thought, happy, sad, realize) 본체 모양
+- 8-4: 스파이크 계열 3종 (shout, angry, surprised) 본체 모양
+- 8-5: BubbleMiniIcon 12종 축소판 정확도
+
 ### 발견 및 수정한 버그
 
 - **Gemini 모델 404:** `gemini-2.0-flash-exp` → `gemini-2.5-flash-image`로 변경
@@ -446,6 +476,7 @@ WEBTOON/
 ## 남은 작업 (향후)
 
 ### 설계 문서 기반 미완료 번들
+- [ ] **말풍선 12종 구현 (진행 중):** 8-1단계(공통 기반) 완료, 8-2~8-5단계 미착수. 설계 문서: `docs/Bubble-12-Styles-v1.0.md`
 - [ ] Character Consistency — Part B: 그림 속 한글 텍스트 처리 (긴 문장 억제, 짧은 단어 명시)
 - [x] Gate3 Asset Revision — Bundle B: 캐릭터 조건 폼 (2026-08-11 완료)
 - [x] Gate3 Asset Revision — Bundle C: 장소 AI 제안·편집 + mood_notes (2026-08-11 완료)
@@ -491,7 +522,7 @@ WEBTOON/
 
 ```bash
 # 백엔드 파일 배포
-scp -i "C:\Users\k9k8j\Downloads\DONGHAESSHKE.pem" <로컬파일> bitnami@52.79.94.122:/home/bitnami/project-t/backend/<경로>
+scp -i "C:\Users\user\Downloads\DONGHAESSHKEy.pem" <로컬파일> bitnami@52.79.94.122:/home/bitnami/project-t/backend/<경로>
 
 # 프론트엔드 빌드 + 배포
 cd frontend && npx vite build
@@ -501,7 +532,7 @@ scp -r dist/. bitnami@52.79.94.122:/home/bitnami/project-t/backend/frontend/dist
 ssh bitnami@52.79.94.122 '/opt/bitnami/mariadb/bin/mariadb -u root -p"<비밀번호>" project_t < /home/bitnami/project-t/backend/stepN.sql'
 
 # JWT 토큰 발급 (user_id=1, 유효기간 7일)
-ssh -i "C:\Users\k9k8j\Downloads\DONGHAESSHKE.pem" -o StrictHostKeyChecking=no bitnami@52.79.94.122 'cd /home/bitnami/project-t/backend && source venv/bin/activate && python3 -c "from app.auth.jwt import create_access_token; print(create_access_token(user_id=1))"'
+ssh -i "C:\Users\user\Downloads\DONGHAESSHKEy.pem" -o StrictHostKeyChecking=no bitnami@52.79.94.122 'cd /home/bitnami/project-t/backend && source venv/bin/activate && python3 -c "from app.auth.jwt import create_access_token; print(create_access_token(user_id=1))"'
 ```
 
 > **JWT 발급 요청 시:** 위 명령을 Bash 도구로 직접 실행하여 토큰을 발급하고 사용자에게 전달할 것. SSH 키 경로 포함 필수.
