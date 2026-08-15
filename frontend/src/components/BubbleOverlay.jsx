@@ -32,7 +32,6 @@ const BUBBLE_CONFIGS = {
     position: 'bottom',
     isCaption: true,
     fontSize: 0.9,
-    insetX: 0.06, insetY: 0.08,
   },
   thought: {
     fill: 'rgba(255,255,255,0.78)',
@@ -157,7 +156,7 @@ const BUBBLE_CONFIGS = {
 };
 
 // ── 하드코딩 상수 (bubbleSpec.json 사용 금지 — 0.72 charWidth가 버그 원인) ──
-const CHAR_WIDTH = 0.55;
+const CHAR_WIDTH = 0.93;
 const BASE_FONT_SIZE = 14;
 const LINE_HEIGHT_RATIO = 1.45;
 const PADDING_X = 14;
@@ -663,27 +662,25 @@ export function SingleBubble({
       <rect key="shape" x={bx} y={by} width={needW} height={needH}
         rx={0} ry={0} fill={cfg.fill} stroke="none" />
     );
-    // 텍스트 — 중앙 정렬
-    const txOff = (textOffsetX || 0) * needW;
+    // 텍스트 — 줄 단위 div + nowrap, 가운데 정렬 (round와 동일 방식)
     const tyOff = (textOffsetY || 0) * needH;
-    const textX = cx - textBlockW / 2 - PADDING_X + txOff;
-    const textY = cy - textBlockH / 2 + tyOff;
     elements.push(
-      <foreignObject key="text" x={textX} y={textY}
-        width={textBlockW + PADDING_X * 2} height={textBlockH + lineHeight}>
+      <foreignObject key="text" x={bx} y={cy - textBlockH / 2 + tyOff}
+        width={needW} height={textBlockH}>
         <div xmlns="http://www.w3.org/1999/xhtml"
           style={{
+            width: '100%',
             color: cfg.textColor,
             fontSize: `${fontSize}px`,
             lineHeight: `${lineHeight}px`,
             fontFamily: "'Pretendard', 'Nanum Gothic', sans-serif",
             fontWeight: 400,
             textAlign: 'center',
-            wordBreak: 'keep-all',
-            overflowWrap: 'break-word',
+            whiteSpace: 'nowrap',
+            overflow: 'visible',
             letterSpacing: '0.02em',
           }}>
-          {text}
+          {lines.map((line, i) => <div key={i}>{line}</div>)}
         </div>
       </foreignObject>
     );
@@ -846,26 +843,24 @@ export function SingleBubble({
     );
   }
 
-  // ── 텍스트 (foreignObject) — 가로·세로 중앙 정렬 + 오프셋 ──
-  const txOff = (textOffsetX || 0) * needW;
+  // ── 텍스트 (foreignObject) — 줄 단위 div + nowrap, 가로·세로 중앙 정렬 ──
   const tyOff = (textOffsetY || 0) * needH;
-  const textX = cx - textBlockW / 2 - PADDING_X + txOff;
-  const textY = cy - textBlockH / 2 + tyOff;
   elements.push(
-    <foreignObject key="text" x={textX} y={textY}
-      width={textBlockW + PADDING_X * 2} height={textBlockH + lineHeight}>
+    <foreignObject key="text" x={bx} y={cy - textBlockH / 2 + tyOff}
+      width={needW} height={textBlockH}>
       <div xmlns="http://www.w3.org/1999/xhtml"
         style={{
+          width: '100%',
           color: cfg.textColor,
           fontSize: `${fontSize}px`,
           lineHeight: `${lineHeight}px`,
           fontFamily: "'Pretendard', 'Nanum Gothic', sans-serif",
           fontWeight: style === 'shout' || style === 'angry' ? 700 : 500,
           textAlign: 'center',
-          wordBreak: 'keep-all',
-          overflowWrap: 'break-word',
+          whiteSpace: 'nowrap',
+          overflow: 'visible',
         }}>
-        {text}
+        {lines.map((line, i) => <div key={i}>{line}</div>)}
       </div>
     </foreignObject>
   );

@@ -18,6 +18,12 @@ const TEXT_CASES = [
   { label: '3줄', text: '이렇게 긴 문장을 말풍선 안에 넣으면 세 줄 이상으로 줄바꿈이 되어야 정상이다' },
 ];
 
+const NARR_TEXT_CASES = [
+  { label: '1줄', text: '짧다' },
+  { label: '2줄', text: '오늘 날씨가 정말 좋아서 기분이 너무 좋다고 말했다. 그래서 우리는 밖으로 나가기로 했다.' },
+  { label: '3줄', text: '이렇게 긴 문장을 나레이션 바 안에 넣으면 세 줄 이상으로 줄바꿈이 되어야 정상이다. 줄바꿈이 안 되면 바가 늘어나야 한다. 이것은 매우 긴 테스트 문장이다.' },
+];
+
 const CELL_W = 260;
 const CELL_H = 200;
 const BUBBLE_W = 200;
@@ -44,6 +50,35 @@ export default function BubbleTestPage() {
         </select>
       </div>
 
+      {/* ── 나레이션 바 테스트 (방향·flip 불필요) ── */}
+      <h3 style={{ marginTop: 24, marginBottom: 8 }}>나레이션 바 (narration)</h3>
+      <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
+        {NARR_TEXT_CASES.map(tc => (
+          <div key={`narr-${tc.label}`} style={{ border: '1px solid #ccc', background: '#fff', padding: 4 }}>
+            <div style={{ fontSize: 9, color: '#666', marginBottom: 2 }}>narration / {tc.label}</div>
+            <div style={{ position: 'relative', width: 320, height: 160, background: '#888' }}>
+              <svg width={320} height={160} viewBox="0 0 320 160"
+                style={{ position: 'absolute', top: 0, left: 0, overflow: 'visible' }}>
+                <SingleBubble
+                  style="narration"
+                  text={tc.text}
+                  bubbleX={0}
+                  bubbleY={20}
+                  bubbleW={320}
+                  bubbleH={0}
+                  tailDirection="none"
+                  flipTail={false}
+                  fontScale={1.0}
+                  fixedWidth={true}
+                  viewW={320}
+                />
+              </svg>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── 메인 그리드 (선택된 스타일) ── */}
       <table style={{ borderCollapse: 'collapse' }}>
         <thead>
           <tr>

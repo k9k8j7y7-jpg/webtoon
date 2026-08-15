@@ -14,7 +14,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const outDir = resolve(__dirname, '..', 'test-shots');
 
 const style = process.argv[2] || 'round';
-const devUrl = `http://localhost:5173/WEBTOON/bubble-test?style=${style}`;
+const port = process.env.VITE_PORT || '5173';
+const devUrl = `http://localhost:${port}/WEBTOON/bubble-test?style=${style}`;
 
 if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
 
