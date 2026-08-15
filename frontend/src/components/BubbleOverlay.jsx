@@ -23,7 +23,6 @@ const BUBBLE_CONFIGS = {
     isOval: true,
     position: 'top',
     insetX: 0.12, insetY: 0.14,
-    tail: { type: 'A', baseSpread: 0.22, length: 0.35, skewDeg: 22, curveAmount: 0.40 },
   },
   narration: {
     fill: 'rgba(0,0,0,0.65)',
@@ -338,6 +337,44 @@ function buildTailD(cx, cy, rx, ry, needH, tailDir, flip, params, cfg) {
     <circle key="tail-dot2" cx={smallCx} cy={smallCy} r={smallR}
       fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} />,
   ];
+}
+
+// ── round 전용 꼬리 — 4점 접힌 갈고리 (문서 A-2 실측값) ──
+function buildRoundTail(cx, cy, rx, ry, needH, tailDir, flip) {
+  const SKEW = 18;        // 치우침(도)
+  const SPREAD = 11;      // 부착점 벌림(도)
+  const TIP_SWEEP = 39;   // 끝점이 중심각에서 더 휘는 각도(도)
+  const TIP_LEN = 0.34;   // needH 대비 꼬리 길이
+
+  const sign = flip ? -1 : 1;
+
+  let base;
+  switch (tailDir) {
+    case 'up':    base = -90; break;
+    case 'left':  base = 180; break;
+    case 'right': base = 0;   break;
+    default:      base = 90;
+  }
+
+  const thetaC = base + SKEW * sign;
+  const rad = d => d * Math.PI / 180;
+  const onEllipse = d => ({
+    x: cx + rx * Math.cos(rad(d)),
+    y: cy + ry * Math.sin(rad(d)),
+  });
+
+  const P1 = onEllipse(thetaC - SPREAD * sign);  // 오른쪽 부착점
+  const P2 = onEllipse(thetaC + SPREAD * sign);  // 왼쪽 부착점
+  const K  = onEllipse(thetaC);                   // 꺾임점 (타원 위)
+
+  const tipAngle = thetaC + TIP_SWEEP * sign;
+  const tipLen = needH * TIP_LEN;
+  const T = {
+    x: K.x + Math.cos(rad(tipAngle)) * tipLen,
+    y: K.y + Math.sin(rad(tipAngle)) * tipLen,
+  };
+
+  return { P1, P2, K, T };
 }
 
 // ── 큰 스파이크 path (surprised) — 골이 둥글게 파임 ──
@@ -717,11 +754,12 @@ export function SingleBubble({
       );
     }
   } else if (cfg.isOval) {
-    // 타원 + 꼬리(타입A/B)를 하나의 path로
-    if (tailData) {
-      const [p1x, p1y] = tailData.p1;
-      const [p2x, p2y] = tailData.p2;
-      const d = `M${p1x},${p1y} A${rxE},${ryE} 0 1,0 ${p2x},${p2y} ${tailData.pathSuffix} Z`;
+    // round 타원 + 4점 접힌 갈고리 꼬리
+    if (dir !== 'none') {
+      const rt = buildRoundTail(cx, cy, rxE, ryE, needH, dir, flip);
+      // flip 시 P1↔P2 각도 순서가 반전 → sweep-flag를 뒤집어야 긴 호를 유지
+      const sweep = flip ? 1 : 0;
+      const d = `M${rt.P1.x},${rt.P1.y} A${rxE},${ryE} 0 1,${sweep} ${rt.P2.x},${rt.P2.y} L${rt.T.x},${rt.T.y} L${rt.K.x},${rt.K.y} Z`;
       elements.push(
         <path key="shape" d={d}
           fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth}
