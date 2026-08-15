@@ -22,7 +22,6 @@ const BUBBLE_CONFIGS = {
     textColor: '#1a1a1a',
     isOval: true,
     position: 'top',
-    insetX: 0.12, insetY: 0.14,
   },
   narration: {
     fill: 'rgba(0,0,0,0.65)',
@@ -157,10 +156,17 @@ const BUBBLE_CONFIGS = {
 
 // ── 하드코딩 상수 (bubbleSpec.json 사용 금지 — 0.72 charWidth가 버그 원인) ──
 const CHAR_WIDTH = 0.93;
-const BASE_FONT_SIZE = 14;
+const REF_WIDTH = 800;          // 기준 렌더 폭 (미리보기 모달 기준)
+const BASE_FONT_SIZE = 14;      // REF_WIDTH 기준 폰트 크기
 const LINE_HEIGHT_RATIO = 1.45;
-const PADDING_X = 14;
-const PADDING_Y = 10;
+const BASE_PADDING_X = 14;      // REF_WIDTH 기준 가로 패딩
+const BASE_PADDING_Y = 10;      // REF_WIDTH 기준 세로 패딩
+const TEXT_WIDTH_RATIO = 0.72;   // fixedWidth 타원: 가로의 72%만 텍스트 영역으로 사용
+
+// 렌더 폭에 비례하는 스케일 계산
+function getScale(viewW) {
+  return (viewW || REF_WIDTH) / REF_WIDTH;
+}
 
 // ── 텍스트 줄바꿈 헬퍼 ──
 
@@ -580,10 +586,50 @@ function BubbleIcon({ type, x, y, size = 16 }) {
 }
 
 // ══════════════════════════════════════════════════════
-// needW / needH 계산 — inset 방식 (ovalScale 대체)
+// needW / needH 계산 — 타원은 방정식, 나머지는 inset
 // ══════════════════════════════════════════════════════
 
-function computeBubbleSize(cfg, textBlockW, textBlockH, bubbleW, fixedWidth, minHeightPx) {
+function computeBubbleSize(cfg, textBlockW, textBlockH, bubbleW, fixedWidth, minHeightPx, padX, padY) {
+  const PADDING_X = padX || BASE_PADDING_X;
+  const PADDING_Y = padY || BASE_PADDING_Y;
+  // ── 타원(isOval) 전용: 타원 방정식으로 계산 ──
+  if (cfg.isOval) {
+    // 패딩 포함 반쪽 크기
+    const a = textBlockW / 2 + PADDING_X;
+    const b = textBlockH / 2 + PADDING_Y;
+
+    if (fixedWidth || cfg.isCaption) {
+      // fixedWidth: 폭 고정, 높이를 타원 방정식으로 역산
+      const needW = bubbleW;
+      const rx = needW / 2;
+      const ratio = a / rx;
+
+      // ratio가 크면 ry가 발산하므로 0.85 상한
+      const safeRatio = Math.min(ratio, 0.85);
+      const ry = b / Math.sqrt(1 - safeRatio * safeRatio);
+      let needH = ry * 2;
+      needH = Math.max(needH, minHeightPx || 0);
+      return { needW, needH };
+    } else {
+      // 자동 크기: √2 배율로 두 축 동일 비율
+      const rx = a * Math.SQRT2;
+      const ry = b * Math.SQRT2;
+      let needW = rx * 2;
+      let needH = ry * 2;
+      needW = Math.min(bubbleW, Math.max(60, needW));
+
+      // 폭이 잘렸으면 fixedWidth 방식으로 높이 재계산
+      if (needW < rx * 2) {
+        const rxClamp = needW / 2;
+        const safeRatioC = Math.min(a / rxClamp, 0.85);
+        needH = (b / Math.sqrt(1 - safeRatioC * safeRatioC)) * 2;
+      }
+      needH = Math.max(needH, minHeightPx || 0);
+      return { needW, needH };
+    }
+  }
+
+  // ── 비타원(사각형/구름/스파이크 등): 기존 inset 방식 ──
   const ix = cfg.insetX || 0;
   const iy = cfg.insetY || 0;
 
@@ -591,7 +637,6 @@ function computeBubbleSize(cfg, textBlockW, textBlockH, bubbleW, fixedWidth, min
   if (cfg.isCaption || fixedWidth) {
     needW = bubbleW;
   } else {
-    // 텍스트 블록 + padding → inset 역산
     const rawW = textBlockW + PADDING_X * 2;
     needW = ix > 0 ? rawW / (1 - ix * 2) : rawW;
     needW = Math.min(bubbleW, Math.max(60, needW));
@@ -606,18 +651,21 @@ function computeBubbleSize(cfg, textBlockW, textBlockH, bubbleW, fixedWidth, min
 
 // ── 말풍선 기하학 계산 (CutEditor 편집 모드에서 선택 박스·히트 영역에 사용) ──
 
-export function computeSingleBubbleGeo(style, text, bubbleX, bubbleY, bubbleW, minHeightPx, fontScale, tailDirection, flipTail, fixedWidth) {
+export function computeSingleBubbleGeo(style, text, bubbleX, bubbleY, bubbleW, minHeightPx, fontScale, tailDirection, flipTail, fixedWidth, viewW) {
   const cfg = BUBBLE_CONFIGS[style] || BUBBLE_CONFIGS.round;
+  const s = getScale(viewW);
   const fs = fontScale || 1.0;
-  const fontSize = BASE_FONT_SIZE * (cfg.fontSize || 1) * fs;
+  const fontSize = BASE_FONT_SIZE * s * (cfg.fontSize || 1) * fs;
   const lineHeight = fontSize * LINE_HEIGHT_RATIO;
-  const maxChars = Math.max(4, Math.floor((bubbleW - PADDING_X * 2) / (fontSize * CHAR_WIDTH)));
+  const padX = BASE_PADDING_X * s;
+  const padY = BASE_PADDING_Y * s;
+  const maxChars = Math.max(4, Math.floor((bubbleW - padX * 2) / (fontSize * CHAR_WIDTH)));
   const lines = wrapText(text, maxChars);
   const longestLine = Math.max(...lines.map(l => l.length), 1);
   const textBlockW = longestLine * fontSize * CHAR_WIDTH;
   const textBlockH = lines.length * lineHeight;
 
-  const { needW, needH } = computeBubbleSize(cfg, textBlockW, textBlockH, bubbleW, fixedWidth, minHeightPx);
+  const { needW, needH } = computeBubbleSize(cfg, textBlockW, textBlockH, bubbleW, fixedWidth, minHeightPx, padX, padY);
 
   const bx = bubbleX + (bubbleW - needW) / 2;
   const by = bubbleY;
@@ -633,16 +681,19 @@ export function SingleBubble({
   textOffsetX, textOffsetY,
 }) {
   const cfg = BUBBLE_CONFIGS[style] || BUBBLE_CONFIGS.round;
+  const s = getScale(viewW);
   const fs = fontScale || 1.0;
-  const fontSize = BASE_FONT_SIZE * (cfg.fontSize || 1) * fs;
+  const fontSize = BASE_FONT_SIZE * s * (cfg.fontSize || 1) * fs;
   const lineHeight = fontSize * LINE_HEIGHT_RATIO;
-  const maxChars = Math.max(4, Math.floor((bubbleW - PADDING_X * 2) / (fontSize * CHAR_WIDTH)));
+  const padX = BASE_PADDING_X * s;
+  const padY = BASE_PADDING_Y * s;
+  const maxChars = Math.max(4, Math.floor((bubbleW - padX * 2) / (fontSize * CHAR_WIDTH)));
   const lines = wrapText(text, maxChars);
   const longestLine = Math.max(...lines.map(l => l.length), 1);
   const textBlockW = longestLine * fontSize * CHAR_WIDTH;
   const textBlockH = lines.length * lineHeight;
 
-  const { needW, needH } = computeBubbleSize(cfg, textBlockW, textBlockH, bubbleW, fixedWidth, bubbleH);
+  const { needW, needH } = computeBubbleSize(cfg, textBlockW, textBlockH, bubbleW, fixedWidth, bubbleH, padX, padY);
 
   const bx = bubbleX + (bubbleW - needW) / 2;
   const by = bubbleY;
@@ -985,6 +1036,9 @@ export default function BubbleOverlay({ dialogue, characters, width, height }) {
     if (!dialogue || dialogue.length === 0 || !width || !height) return [];
 
     const sorted = [...dialogue].sort((a, b) => (a.order || 0) - (b.order || 0));
+    const s = getScale(width);
+    const padX = BASE_PADDING_X * s;
+    const padY = BASE_PADDING_Y * s;
     const maxBubbleW = width * 0.78;
     const margin = width * 0.04;
     const gap = height * 0.015;
@@ -1012,13 +1066,13 @@ export default function BubbleOverlay({ dialogue, characters, width, height }) {
         const txOff = bl.text_offset_x || 0;
         const tyOff = bl.text_offset_y || 0;
 
-        const fontSize = BASE_FONT_SIZE * (cfg.fontSize || 1) * fs;
+        const fontSize = BASE_FONT_SIZE * s * (cfg.fontSize || 1) * fs;
         const lineHeight = fontSize * LINE_HEIGHT_RATIO;
-        const maxChars = Math.max(4, Math.floor((bw - PADDING_X * 2) / (fontSize * CHAR_WIDTH)));
+        const maxChars = Math.max(4, Math.floor((bw - padX * 2) / (fontSize * CHAR_WIDTH)));
         const lines = wrapText(item.text || '', maxChars);
         const textBlockW = Math.max(...lines.map(l => l.length), 1) * fontSize * CHAR_WIDTH;
         const textH = lines.length * lineHeight;
-        const { needW: w2, needH: h2 } = computeBubbleSize(cfg, textBlockW, textH, bw, true, minH);
+        const { needW: w2, needH: h2 } = computeBubbleSize(cfg, textBlockW, textH, bw, true, minH, padX, padY);
 
         result.push({
           style, text: item.text,
@@ -1031,13 +1085,13 @@ export default function BubbleOverlay({ dialogue, characters, width, height }) {
       }
 
       // 기본 자동 배치
-      const fontSize = BASE_FONT_SIZE * (cfg.fontSize || 1);
+      const fontSize = BASE_FONT_SIZE * s * (cfg.fontSize || 1);
       const lineHeight = fontSize * LINE_HEIGHT_RATIO;
-      const maxChars = Math.max(4, Math.floor((maxBubbleW - PADDING_X * 2) / (fontSize * CHAR_WIDTH)));
+      const maxChars = Math.max(4, Math.floor((maxBubbleW - padX * 2) / (fontSize * CHAR_WIDTH)));
       const lines = wrapText(item.text || '', maxChars);
       const textBlockW = Math.max(...lines.map(l => l.length), 1) * fontSize * CHAR_WIDTH;
       const textH = lines.length * lineHeight;
-      const { needW: autoW, needH: autoH } = computeBubbleSize(cfg, textBlockW, textH, maxBubbleW, false, 0);
+      const { needW: autoW, needH: autoH } = computeBubbleSize(cfg, textBlockW, textH, maxBubbleW, false, 0, padX, padY);
 
       if (isBottom) {
         bottomY -= autoH;

@@ -78,6 +78,49 @@ export default function BubbleTestPage() {
         ))}
       </div>
 
+      {/* ── fixedWidth=true 테스트 (실제 에피소드 경로) ── */}
+      <h3 style={{ marginTop: 24, marginBottom: 8 }}>fixedWidth=true (에피소드 경로)</h3>
+      {[
+        { label: '60%', viewW: 400, ratio: 0.60 },
+        { label: '92%', viewW: 400, ratio: 0.92 },
+      ].map(({ label, viewW, ratio }) => {
+        const bw = viewW * ratio;
+        return (
+          <div key={label} style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 'bold', marginBottom: 4 }}>
+              뷰폭 {viewW}px × {label} = bubbleW {Math.round(bw)}px (fixedWidth=true)
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {TEXT_CASES.map(tc => (
+                <div key={`fw-${label}-${tc.label}`} style={{ border: '1px solid #ccc', background: '#fff', padding: 4 }}>
+                  <div style={{ fontSize: 9, color: '#666', marginBottom: 2 }}>
+                    fixedW:{label} / {tc.label}
+                  </div>
+                  <div style={{ position: 'relative', width: viewW, height: 250, background: '#888' }}>
+                    <svg width={viewW} height={250} viewBox={`0 0 ${viewW} 250`}
+                      style={{ position: 'absolute', top: 0, left: 0, overflow: 'visible' }}>
+                      <SingleBubble
+                        style={style}
+                        text={tc.text}
+                        bubbleX={(viewW - bw) / 2}
+                        bubbleY={10}
+                        bubbleW={bw}
+                        bubbleH={0}
+                        tailDirection="down"
+                        flipTail={false}
+                        fontScale={1.0}
+                        fixedWidth={true}
+                        viewW={viewW}
+                      />
+                    </svg>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+
       {/* ── 메인 그리드 (선택된 스타일) ── */}
       <table style={{ borderCollapse: 'collapse' }}>
         <thead>
