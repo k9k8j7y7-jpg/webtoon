@@ -121,6 +121,51 @@ export default function BubbleTestPage() {
         );
       })}
 
+      {/* ── 스케일 비교 (동일 텍스트, 다른 뷰 폭) ── */}
+      <h3 style={{ marginTop: 24, marginBottom: 8 }}>스케일 비교 (viewW 변화 → 비율 동일해야 함)</h3>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap', marginBottom: 24 }}>
+        {[800, 400, 280, 150].map(vw => {
+          const h = vw * 0.75;
+          const bw = vw * 0.6;
+          return (
+            <div key={`scale-${vw}`} style={{ border: '1px solid #ccc', background: '#fff', padding: 4 }}>
+              <div style={{ fontSize: 10, color: '#666', marginBottom: 2 }}>viewW={vw}px</div>
+              <div style={{ position: 'relative', width: vw, height: h, background: '#888' }}>
+                <svg width={vw} height={h} viewBox={`0 0 ${vw} ${h}`}
+                  style={{ position: 'absolute', top: 0, left: 0, overflow: 'visible' }}>
+                  <SingleBubble
+                    style={style}
+                    text="오늘 날씨가 정말 좋아서 기분이 너무 좋다"
+                    bubbleX={(vw - bw) / 2}
+                    bubbleY={vw * 0.04}
+                    bubbleW={bw}
+                    bubbleH={0}
+                    tailDirection="down"
+                    flipTail={false}
+                    fontScale={1.0}
+                    fixedWidth={true}
+                    viewW={vw}
+                  />
+                  <SingleBubble
+                    style="narration"
+                    text="나레이션 바도 같은 비율로 보여야 한다"
+                    bubbleX={0}
+                    bubbleY={h * 0.65}
+                    bubbleW={vw}
+                    bubbleH={0}
+                    tailDirection="none"
+                    flipTail={false}
+                    fontScale={1.0}
+                    fixedWidth={true}
+                    viewW={vw}
+                  />
+                </svg>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
       {/* ── 메인 그리드 (선택된 스타일) ── */}
       <table style={{ borderCollapse: 'collapse' }}>
         <thead>

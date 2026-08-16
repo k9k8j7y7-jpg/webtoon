@@ -224,7 +224,7 @@ function pointOnEllipse(cx, cy, rx, ry, theta) {
 // ── 타입 A — 낫형 (갈고리) ──
 // 바깥쪽 변은 직선, 안쪽 변은 곡선으로 휘어 들어옴
 // 반환: { pathSuffix, p1, p2 } — pathSuffix는 "L tip Q ctrl p2" 형태
-function buildTailA(cx, cy, rx, ry, needH, tailDir, flip, params) {
+function buildTailA(cx, cy, rx, ry, needH, tailDir, flip, params, scale) {
   const { baseSpread, length: lenRatio, skewDeg, curveAmount } = params;
   const base = tailBaseAngle(tailDir);
   const skew = (flip ? -skewDeg : skewDeg) * Math.PI / 180;
@@ -232,10 +232,10 @@ function buildTailA(cx, cy, rx, ry, needH, tailDir, flip, params) {
   const a1 = center - baseSpread;
   const a2 = center + baseSpread;
 
-  // 밑변 두 점 (타원 위, 안쪽으로 3px 당김)
+  // 밑변 두 점 (타원 위, 안쪽으로 당김)
   const [raw1x, raw1y] = pointOnEllipse(cx, cy, rx, ry, a1);
   const [raw2x, raw2y] = pointOnEllipse(cx, cy, rx, ry, a2);
-  const inset = 3;
+  const inset = 3 * (scale || 1);
   const d1 = Math.sqrt((raw1x - cx) ** 2 + (raw1y - cy) ** 2);
   const d2 = Math.sqrt((raw2x - cx) ** 2 + (raw2y - cy) ** 2);
   const p1x = raw1x - (raw1x - cx) / d1 * inset;
@@ -262,7 +262,7 @@ function buildTailA(cx, cy, rx, ry, needH, tailDir, flip, params) {
 }
 
 // ── 타입 B — 직선 침형 ──
-function buildTailB(cx, cy, rx, ry, needH, tailDir, flip, params) {
+function buildTailB(cx, cy, rx, ry, needH, tailDir, flip, params, scale) {
   const { baseSpread, length: lenRatio, skewDeg } = params;
   const base = tailBaseAngle(tailDir);
   const skew = (flip ? -skewDeg : skewDeg) * Math.PI / 180;
@@ -272,7 +272,7 @@ function buildTailB(cx, cy, rx, ry, needH, tailDir, flip, params) {
 
   const [raw1x, raw1y] = pointOnEllipse(cx, cy, rx, ry, a1);
   const [raw2x, raw2y] = pointOnEllipse(cx, cy, rx, ry, a2);
-  const inset = 3;
+  const inset = 3 * (scale || 1);
   const d1 = Math.sqrt((raw1x - cx) ** 2 + (raw1y - cy) ** 2);
   const d2 = Math.sqrt((raw2x - cx) ** 2 + (raw2y - cy) ** 2);
   const p1x = raw1x - (raw1x - cx) / d1 * inset;
@@ -589,9 +589,10 @@ function BubbleIcon({ type, x, y, size = 16 }) {
 // needW / needH 계산 — 타원은 방정식, 나머지는 inset
 // ══════════════════════════════════════════════════════
 
-function computeBubbleSize(cfg, textBlockW, textBlockH, bubbleW, fixedWidth, minHeightPx, padX, padY) {
+function computeBubbleSize(cfg, textBlockW, textBlockH, bubbleW, fixedWidth, minHeightPx, padX, padY, scale) {
   const PADDING_X = padX || BASE_PADDING_X;
   const PADDING_Y = padY || BASE_PADDING_Y;
+  const sc = scale || 1;
   // ── 타원(isOval) 전용: 타원 방정식으로 계산 ──
   if (cfg.isOval) {
     // 패딩 포함 반쪽 크기
@@ -616,7 +617,7 @@ function computeBubbleSize(cfg, textBlockW, textBlockH, bubbleW, fixedWidth, min
       const ry = b * Math.SQRT2;
       let needW = rx * 2;
       let needH = ry * 2;
-      needW = Math.min(bubbleW, Math.max(60, needW));
+      needW = Math.min(bubbleW, Math.max(60 * sc, needW));
 
       // 폭이 잘렸으면 fixedWidth 방식으로 높이 재계산
       if (needW < rx * 2) {
@@ -639,7 +640,7 @@ function computeBubbleSize(cfg, textBlockW, textBlockH, bubbleW, fixedWidth, min
   } else {
     const rawW = textBlockW + PADDING_X * 2;
     needW = ix > 0 ? rawW / (1 - ix * 2) : rawW;
-    needW = Math.min(bubbleW, Math.max(60, needW));
+    needW = Math.min(bubbleW, Math.max(60 * sc, needW));
   }
 
   const rawH = textBlockH + PADDING_Y * 2;
@@ -665,7 +666,7 @@ export function computeSingleBubbleGeo(style, text, bubbleX, bubbleY, bubbleW, m
   const textBlockW = longestLine * fontSize * CHAR_WIDTH;
   const textBlockH = lines.length * lineHeight;
 
-  const { needW, needH } = computeBubbleSize(cfg, textBlockW, textBlockH, bubbleW, fixedWidth, minHeightPx, padX, padY);
+  const { needW, needH } = computeBubbleSize(cfg, textBlockW, textBlockH, bubbleW, fixedWidth, minHeightPx, padX, padY, s);
 
   const bx = bubbleX + (bubbleW - needW) / 2;
   const by = bubbleY;
@@ -693,7 +694,7 @@ export function SingleBubble({
   const textBlockW = longestLine * fontSize * CHAR_WIDTH;
   const textBlockH = lines.length * lineHeight;
 
-  const { needW, needH } = computeBubbleSize(cfg, textBlockW, textBlockH, bubbleW, fixedWidth, bubbleH, padX, padY);
+  const { needW, needH } = computeBubbleSize(cfg, textBlockW, textBlockH, bubbleW, fixedWidth, bubbleH, padX, padY, s);
 
   const bx = bubbleX + (bubbleW - needW) / 2;
   const by = bubbleY;
@@ -701,6 +702,7 @@ export function SingleBubble({
   const cy = by + needH / 2;
   const rxE = needW / 2;
   const ryE = needH / 2;
+  const sw = Math.max(1, (cfg.strokeWidth || 2) * s); // 스케일된 선 두께
 
   const elements = [];
   const dir = tailDirection || 'down';
@@ -745,52 +747,47 @@ export function SingleBubble({
   let tailDots = null; // 타입D용
   if (tailCfg && dir !== 'none') {
     if (tailCfg.type === 'A') {
-      tailData = buildTailA(cx, cy, rxE, ryE, needH, dir, flip, tailCfg);
+      tailData = buildTailA(cx, cy, rxE, ryE, needH, dir, flip, tailCfg, s);
     } else if (tailCfg.type === 'B') {
-      tailData = buildTailB(cx, cy, rxE, ryE, needH, dir, flip, tailCfg);
+      tailData = buildTailB(cx, cy, rxE, ryE, needH, dir, flip, tailCfg, s);
     } else if (tailCfg.type === 'D') {
-      tailDots = buildTailD(cx, cy, rxE, ryE, needH, dir, flip, tailCfg, cfg);
+      tailDots = buildTailD(cx, cy, rxE, ryE, needH, dir, flip, tailCfg, {...cfg, strokeWidth: sw});
     }
   }
 
   if (cfg.isSpiky) {
-    const margin = 8;
+    const margin = 8 * s;
     const path = spikyPath(cx, cy, needW / 2 + margin, needH / 2 + margin, cfg.spikeCount, cfg.spikeDepth);
-    // 스파이크 + 타입B 꼬리 합침: 꼬리 밑변은 innerR 기준
     if (tailData) {
-      // 스파이크 본체는 그대로 그리고, 꼬리는 별도 polygon으로 위에 겹침
-      // (스파이크 path에 꼬리를 삽입하면 복잡도가 너무 높으므로 fill로 겹침 가림)
       elements.push(
-        <path key="shape" d={path} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} strokeLinejoin="round" />
+        <path key="shape" d={path} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} strokeLinejoin="round" />
       );
       const [p1x, p1y] = tailData.p1;
       const [p2x, p2y] = tailData.p2;
       const tailPath = `M${p1x},${p1y} ${tailData.pathSuffix} Z`;
       elements.push(
-        <path key="tail" d={tailPath} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} strokeLinejoin="round" />
+        <path key="tail" d={tailPath} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} strokeLinejoin="round" />
       );
-      // 스파이크 내부 fill로 꼬리 밑변 stroke 가림
       const innerPath = spikyPath(cx, cy, (needW / 2 + margin) * 0.97, (needH / 2 + margin) * 0.97, cfg.spikeCount, cfg.spikeDepth);
       elements.push(
         <path key="tail-cover" d={innerPath} fill={cfg.fill} stroke="none" />
       );
     } else {
       elements.push(
-        <path key="shape" d={path} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} strokeLinejoin="round" />
+        <path key="shape" d={path} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} strokeLinejoin="round" />
       );
     }
   } else if (cfg.isBigSpiky) {
-    // surprised — 큰 스파이크, 골이 둥글게 파임
-    const margin = 8;
+    const margin = 8 * s;
     const path = bigSpikyPath(cx, cy, needW / 2 + margin, needH / 2 + margin, cfg.spikeCount, cfg.spikeDepth);
     if (tailData) {
       elements.push(
-        <path key="shape" d={path} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} strokeLinejoin="round" />
+        <path key="shape" d={path} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} strokeLinejoin="round" />
       );
       const [p1x, p1y] = tailData.p1;
       const tailPath = `M${p1x},${p1y} ${tailData.pathSuffix} Z`;
       elements.push(
-        <path key="tail" d={tailPath} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} strokeLinejoin="round" />
+        <path key="tail" d={tailPath} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} strokeLinejoin="round" />
       );
       const innerPath = bigSpikyPath(cx, cy, (needW / 2 + margin) * 0.97, (needH / 2 + margin) * 0.97, cfg.spikeCount, cfg.spikeDepth);
       elements.push(
@@ -798,36 +795,32 @@ export function SingleBubble({
       );
     } else {
       elements.push(
-        <path key="shape" d={path} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} strokeLinejoin="round" />
+        <path key="shape" d={path} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} strokeLinejoin="round" />
       );
     }
   } else if (cfg.isOval) {
-    // round 타원 + 4점 접힌 갈고리 꼬리
     if (dir !== 'none') {
       const rt = buildRoundTail(cx, cy, rxE, ryE, needH, dir, flip);
-      // flip 시 P1↔P2 각도 순서가 반전 → sweep-flag를 뒤집어야 긴 호를 유지
       const sweep = flip ? 1 : 0;
       const d = `M${rt.P1.x},${rt.P1.y} A${rxE},${ryE} 0 1,${sweep} ${rt.P2.x},${rt.P2.y} L${rt.T.x},${rt.T.y} L${rt.K.x},${rt.K.y} Z`;
       elements.push(
         <path key="shape" d={d}
-          fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth}
+          fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw}
           strokeLinejoin="round" />
       );
     } else {
       elements.push(
         <ellipse key="shape" cx={cx} cy={cy} rx={rxE} ry={ryE}
-          fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} />
+          fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} />
       );
     }
   } else if (cfg.isEllipse) {
-    // whisper 등 — 타원 + 별도 꼬리(타입D)
     elements.push(
       <ellipse key="shape" cx={cx} cy={cy} rx={rxE} ry={ryE}
-        fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth}
+        fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw}
         strokeDasharray={cfg.strokeDash || 'none'} />
     );
   } else if (cfg.isCloud) {
-    // 구름 계열 (thought, happy, sad, realize)
     const preset = CLOUD_PRESETS[cfg.cloudPreset] || CLOUD_PRESETS.thought;
     const scaledBumps = preset.map(b => ({
       angle: b.angle,
@@ -835,47 +828,45 @@ export function SingleBubble({
     }));
     const d = cloudPath(cx, cy, rxE * 0.82, ryE * 0.82, scaledBumps);
     elements.push(
-      <path key="shape" d={d} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} strokeLinejoin="round" />
+      <path key="shape" d={d} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} strokeLinejoin="round" />
     );
     if (tailData) {
       const [p1x, p1y] = tailData.p1;
       const tailPath = `M${p1x},${p1y} ${tailData.pathSuffix} Z`;
       elements.push(
-        <path key="tail" d={tailPath} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} strokeLinejoin="round" />
+        <path key="tail" d={tailPath} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} strokeLinejoin="round" />
       );
     }
   } else if (cfg.isTrapezoidal) {
-    // shy — 비대칭 사다리꼴
     const d = trapezoidPath(bx, by, needW, needH);
     elements.push(
-      <path key="shape" d={d} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} strokeLinejoin="round" />
+      <path key="shape" d={d} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} strokeLinejoin="round" />
     );
     if (tailData) {
       const [p1x, p1y] = tailData.p1;
       const tailPath = `M${p1x},${p1y} ${tailData.pathSuffix} Z`;
       elements.push(
-        <path key="tail" d={tailPath} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} strokeLinejoin="round" />
+        <path key="tail" d={tailPath} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} strokeLinejoin="round" />
       );
     }
   } else {
-    // 사각형 계열 (flustered 등) — 둥근 사각형
-    const radius = cfg.cornerRadius ? Math.max(4, needW * cfg.cornerRadius) : Math.max(4, needW * 0.08);
+    const radius = cfg.cornerRadius ? Math.max(4 * s, needW * cfg.cornerRadius) : Math.max(4 * s, needW * 0.08);
     if (tailData) {
       elements.push(
         <rect key="shape" x={bx} y={by} width={needW} height={needH}
           rx={radius} ry={radius}
-          fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} />
+          fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} />
       );
       const [p1x, p1y] = tailData.p1;
       const tailPath = `M${p1x},${p1y} ${tailData.pathSuffix} Z`;
       elements.push(
-        <path key="tail" d={tailPath} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} strokeLinejoin="round" />
+        <path key="tail" d={tailPath} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} strokeLinejoin="round" />
       );
     } else {
       elements.push(
         <rect key="shape" x={bx} y={by} width={needW} height={needH}
           rx={radius} ry={radius}
-          fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} />
+          fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} />
       );
     }
   }
@@ -887,10 +878,11 @@ export function SingleBubble({
 
   // ── 아이콘 ──
   if (cfg.icon) {
-    const iconX = bx + needW - 2;
-    const iconY = by - 2;
+    const iconSize = Math.round(18 * s);
+    const iconX = bx + needW - 2 * s;
+    const iconY = by - 2 * s;
     elements.push(
-      <BubbleIcon key="icon" type={cfg.icon} x={iconX} y={iconY} size={18} />
+      <BubbleIcon key="icon" type={cfg.icon} x={iconX} y={iconY} size={iconSize} />
     );
   }
 
@@ -1072,7 +1064,7 @@ export default function BubbleOverlay({ dialogue, characters, width, height }) {
         const lines = wrapText(item.text || '', maxChars);
         const textBlockW = Math.max(...lines.map(l => l.length), 1) * fontSize * CHAR_WIDTH;
         const textH = lines.length * lineHeight;
-        const { needW: w2, needH: h2 } = computeBubbleSize(cfg, textBlockW, textH, bw, true, minH, padX, padY);
+        const { needW: w2, needH: h2 } = computeBubbleSize(cfg, textBlockW, textH, bw, true, minH, padX, padY, s);
 
         result.push({
           style, text: item.text,
@@ -1091,7 +1083,7 @@ export default function BubbleOverlay({ dialogue, characters, width, height }) {
       const lines = wrapText(item.text || '', maxChars);
       const textBlockW = Math.max(...lines.map(l => l.length), 1) * fontSize * CHAR_WIDTH;
       const textH = lines.length * lineHeight;
-      const { needW: autoW, needH: autoH } = computeBubbleSize(cfg, textBlockW, textH, maxBubbleW, false, 0, padX, padY);
+      const { needW: autoW, needH: autoH } = computeBubbleSize(cfg, textBlockW, textH, maxBubbleW, false, 0, padX, padY, s);
 
       if (isBottom) {
         bottomY -= autoH;
