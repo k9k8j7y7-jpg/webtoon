@@ -126,7 +126,7 @@ const BUBBLE_CONFIGS = {
     isTrapezoidal: true,
     position: 'top',
     insetX: 0.10, insetY: 0.12,
-    tail: { type: 'B', baseSpread: 0.11, length: 0.24, skewDeg: 14 },
+    tail: { type: 'B', skewRatio: -0.14 },
   },
   flustered: {
     fill: 'rgba(255,230,238,0.86)',
@@ -134,11 +134,9 @@ const BUBBLE_CONFIGS = {
     strokeWidth: 2,
     textColor: '#8c3250',
     isRoundedRect: true,
-    cornerRadius: 0.12,
     position: 'top',
-    icon: 'swirl',
     insetX: 0.08, insetY: 0.10,
-    tail: { type: 'A', baseSpread: 0.16, length: 0.20, skewDeg: -18, curveAmount: 0.35 },
+    tail: { type: 'A', skewRatio: 0.18, curveAmount: 0.35 },
   },
   realize: {
     fill: 'rgba(255,255,220,0.90)',
@@ -162,6 +160,10 @@ const LINE_HEIGHT_RATIO = 1.45;
 const BASE_PADDING_X = 14;      // REF_WIDTH 기준 가로 패딩
 const BASE_PADDING_Y = 10;      // REF_WIDTH 기준 세로 패딩
 const TEXT_WIDTH_RATIO = 0.72;   // fixedWidth 타원: 가로의 72%만 텍스트 영역으로 사용
+
+// ── 꼬리 고정 크기 (REF_WIDTH 기준 px, scale 곱해서 사용) ──
+const TAIL_BASE = 18;            // 밑변 폭 px
+const TAIL_LEN = 26;             // 꼬리 길이 px
 
 // 렌더 폭에 비례하는 스케일 계산
 function getScale(viewW) {
@@ -219,6 +221,192 @@ function lerpPt(ax, ay, bx, by, t) {
 // 타원 윤곽선 위의 점
 function pointOnEllipse(cx, cy, rx, ry, theta) {
   return [cx + rx * Math.cos(theta), cy + ry * Math.sin(theta)];
+}
+
+// ══════════════════════════════════════════════════════
+// flustered: 둥근 사각형 + 타입A 꼬리 — 단일 path, 고정 크기
+// ══════════════════════════════════════════════════════
+function buildRoundedRectWithTailA(bx, by, w, h, r, tailDir, flip, params, scale) {
+  const sc = scale || 1;
+  const { skewRatio } = params;
+
+  // 꼬리 고정 크기
+  const isHoriz = tailDir === 'up' || tailDir === 'down';
+  const straightLen = isHoriz ? (w - 2 * r) : (h - 2 * r);
+  const tailBase = Math.min(TAIL_BASE * sc, straightLen * 0.6);
+  const tailLen = TAIL_LEN * sc;
+
+  // 부착 위치: 직선 구간의 0~1 비율 (레퍼런스처럼 우하단 쪽)
+  const sk = flip ? -skewRatio : skewRatio;
+  const attachT = Math.max(0.1, Math.min(0.9, 0.5 + sk));
+
+  // 부착 변의 직선 구간 시작/끝점과 바깥 법선
+  let segStart, segEnd, normalX, normalY;
+  switch (tailDir) {
+    case 'up':
+      segStart = { x: bx + r, y: by }; segEnd = { x: bx + w - r, y: by };
+      normalX = 0; normalY = -1; break;
+    case 'right':
+      segStart = { x: bx + w, y: by + r }; segEnd = { x: bx + w, y: by + h - r };
+      normalX = 1; normalY = 0; break;
+    case 'left':
+      segStart = { x: bx, y: by + h - r }; segEnd = { x: bx, y: by + r };
+      normalX = -1; normalY = 0; break;
+    default: // down
+      segStart = { x: bx + w - r, y: by + h }; segEnd = { x: bx + r, y: by + h };
+      normalX = 0; normalY = 1; break;
+  }
+
+  // 부착점 (직선 위)
+  const attachX = lerp(segStart.x, segEnd.x, attachT);
+  const attachY = lerp(segStart.y, segEnd.y, attachT);
+
+  // 변 방향 단위벡터
+  const eDx = segEnd.x - segStart.x;
+  const eDy = segEnd.y - segStart.y;
+  const eLen = Math.sqrt(eDx * eDx + eDy * eDy) || 1;
+  const eUx = eDx / eLen;
+  const eUy = eDy / eLen;
+
+  // 밑변 두 점 (변 위에서)
+  const p1x = attachX - eUx * tailBase / 2;
+  const p1y = attachY - eUy * tailBase / 2;
+  const p2x = attachX + eUx * tailBase / 2;
+  const p2y = attachY + eUy * tailBase / 2;
+
+  // 꼬리 끝점: 레퍼런스(당황.jpg)처럼 단순 삼각형
+  // 법선 방향으로 뻗되, p2 쪽으로 치우침 (비대칭 삼각형)
+  const tipX = p2x + normalX * tailLen;
+  const tipY = p2y + normalY * tailLen;
+
+  // 둥근 사각형 path (시계방향) + 꼬리 삽입
+  const tl = { x: bx + r, y: by };
+  const tr = { x: bx + w - r, y: by };
+  const rt = { x: bx + w, y: by + r };
+  const rb = { x: bx + w, y: by + h - r };
+  const br = { x: bx + w - r, y: by + h };
+  const bl = { x: bx + r, y: by + h };
+  const lb = { x: bx, y: by + h - r };
+  const lt = { x: bx, y: by + r };
+
+  // 단순 삼각형 꼬리: p1 → tip → p2 (직선 2개)
+  const tailSeg = `L${p1x},${p1y} L${tipX},${tipY} L${p2x},${p2y}`;
+
+  function edge(from, to, dir) {
+    if (dir === tailDir) return `${tailSeg} L${to.x},${to.y}`;
+    return `L${to.x},${to.y}`;
+  }
+
+  let d = `M${tl.x},${tl.y}`;
+  d += edge(tl, tr, 'up');
+  d += ` A${r},${r} 0 0,1 ${rt.x},${rt.y}`;
+  d += edge(rt, rb, 'right');
+  d += ` A${r},${r} 0 0,1 ${br.x},${br.y}`;
+  d += edge(br, bl, 'down');
+  d += ` A${r},${r} 0 0,1 ${lb.x},${lb.y}`;
+  d += edge(lb, lt, 'left');
+  d += ` A${r},${r} 0 0,1 ${tl.x},${tl.y}`;
+  d += ' Z';
+
+  return d;
+}
+
+// ══════════════════════════════════════════════════════
+// shy: 사다리꼴 + 타입B 꼬리 — 단일 path, 고정 크기
+// ══════════════════════════════════════════════════════
+function buildTrapezoidWithTailB(bx, by, w, h, r, tailDir, flip, params, scale) {
+  const sc = scale || 1;
+  const { skewRatio } = params;
+
+  // 사다리꼴 4 꼭짓점
+  const corners = {
+    tl: { x: bx + w * 0.03, y: by + h * 0.12 },
+    tr: { x: bx + w * 0.97, y: by },
+    br: { x: bx + w * 0.95, y: by + h },
+    bl: { x: bx, y: by + h * 0.90 },
+  };
+  const { tl, tr, br, bl } = corners;
+
+  // 변 정보 (path 진행 방향: tl→tr→br→bl→tl)
+  function getEdge(dir) {
+    switch (dir) {
+      case 'up':    return { from: tl, to: tr };
+      case 'right': return { from: tr, to: br };
+      case 'down':  return { from: br, to: bl };
+      case 'left':  return { from: bl, to: tl };
+    }
+  }
+
+  const edge = getEdge(tailDir || 'down');
+  const eDx = edge.to.x - edge.from.x;
+  const eDy = edge.to.y - edge.from.y;
+  const eLen = Math.sqrt(eDx * eDx + eDy * eDy) || 1;
+  const eUx = eDx / eLen;
+  const eUy = eDy / eLen;
+
+  // 바깥 법선 (반시계 회전 후 중심에서 멀어지는 방향)
+  const ccx = (tl.x + tr.x + br.x + bl.x) / 4;
+  const ccy = (tl.y + tr.y + br.y + bl.y) / 4;
+  let nX = -eUy, nY = eUx;
+  if ((edge.from.x + eDx / 2 - ccx) * nX + (edge.from.y + eDy / 2 - ccy) * nY < 0) {
+    nX = -nX; nY = -nY;
+  }
+
+  // 꼬리 고정 크기 (직선 구간 60% 상한)
+  const tailBase = Math.min(TAIL_BASE * sc, (eLen - 2 * r) * 0.6);
+  const tailLen = TAIL_LEN * sc;
+
+  // 부착 위치 (변 위 0~1 비율)
+  const sk = flip ? -skewRatio : skewRatio;
+  const attachT = Math.max(0.15, Math.min(0.85, 0.5 + sk));
+  const attachX = lerp(edge.from.x, edge.to.x, attachT);
+  const attachY = lerp(edge.from.y, edge.to.y, attachT);
+
+  // 밑변 두 점 (변 직선 위에서)
+  const p1x = attachX - eUx * tailBase / 2;
+  const p1y = attachY - eUy * tailBase / 2;
+  const p2x = attachX + eUx * tailBase / 2;
+  const p2y = attachY + eUy * tailBase / 2;
+
+  // 끝점: 법선 방향 + 약간의 치우침
+  const skewAngle = (flip ? -1 : 1) * Math.atan2(sk, 1) * 0.5;
+  const tipDirX = nX * Math.cos(skewAngle) - nY * Math.sin(skewAngle);
+  const tipDirY = nX * Math.sin(skewAngle) + nY * Math.cos(skewAngle);
+  const tipX = attachX + tipDirX * tailLen;
+  const tipY = attachY + tipDirY * tailLen;
+
+  // 사다리꼴 path + 꼬리 삽입
+  function towards(from, to, dist) {
+    const dx = to.x - from.x, dy = to.y - from.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    const t = Math.min(dist / len, 0.4);
+    return { x: from.x + dx * t, y: from.y + dy * t };
+  }
+
+  const p = [
+    towards(tl, tr, r), towards(tr, tl, r),
+    towards(tr, br, r), towards(br, tr, r),
+    towards(br, bl, r), towards(bl, br, r),
+    towards(bl, tl, r), towards(tl, bl, r),
+  ];
+
+  function edgeSeg(segEnd, dir) {
+    if (dir !== tailDir) return `L${segEnd.x},${segEnd.y}`;
+    return `L${p1x},${p1y} L${tipX},${tipY} L${p2x},${p2y} L${segEnd.x},${segEnd.y}`;
+  }
+
+  let d = `M${p[0].x},${p[0].y}`;
+  d += edgeSeg(p[1], 'up');
+  d += ` Q${tr.x},${tr.y} ${p[2].x},${p[2].y}`;
+  d += edgeSeg(p[3], 'right');
+  d += ` Q${br.x},${br.y} ${p[4].x},${p[4].y}`;
+  d += edgeSeg(p[5], 'down');
+  d += ` Q${bl.x},${bl.y} ${p[6].x},${p[6].y}`;
+  d += edgeSeg(p[7], 'left');
+  d += ` Q${tl.x},${tl.y} ${p[0].x},${p[0].y}`;
+  d += ' Z';
+
+  return d;
 }
 
 // ── 타입 A — 낫형 (갈고리) ──
@@ -344,12 +532,13 @@ function buildTailD(cx, cy, rx, ry, needH, tailDir, flip, params, cfg) {
   ];
 }
 
-// ── round 전용 꼬리 — 4점 접힌 갈고리 (문서 A-2 실측값) ──
-function buildRoundTail(cx, cy, rx, ry, needH, tailDir, flip) {
+// ── round 전용 꼬리 — 4점 접힌 갈고리, 고정 크기 ──
+function buildRoundTail(cx, cy, rx, ry, needH, tailDir, flip, scale) {
+  const sc = scale || 1;
+  const tailBase = TAIL_BASE * sc;   // 밑변 폭 (고정 px)
+  const tailLen = TAIL_LEN * sc;     // 꼬리 길이 (고정 px)
   const SKEW = 18;        // 치우침(도)
-  const SPREAD = 11;      // 부착점 벌림(도)
   const TIP_SWEEP = 39;   // 끝점이 중심각에서 더 휘는 각도(도)
-  const TIP_LEN = 0.34;   // needH 대비 꼬리 길이
 
   const sign = flip ? -1 : 1;
 
@@ -368,15 +557,21 @@ function buildRoundTail(cx, cy, rx, ry, needH, tailDir, flip) {
     y: cy + ry * Math.sin(rad(d)),
   });
 
-  const P1 = onEllipse(thetaC - SPREAD * sign);  // 오른쪽 부착점
-  const P2 = onEllipse(thetaC + SPREAD * sign);  // 왼쪽 부착점
-  const K  = onEllipse(thetaC);                   // 꺾임점 (타원 위)
+  // 타원 위 호 속도로 tailBase → 각도 변환
+  const thetaRad = rad(thetaC);
+  const dxdt = -rx * Math.sin(thetaRad);
+  const dydt = ry * Math.cos(thetaRad);
+  const speed = Math.sqrt(dxdt * dxdt + dydt * dydt);
+  const halfSpreadDeg = Math.min((tailBase / 2 / speed) * 180 / Math.PI, 20);
+
+  const P1 = onEllipse(thetaC - halfSpreadDeg * sign);
+  const P2 = onEllipse(thetaC + halfSpreadDeg * sign);
+  const K  = onEllipse(thetaC);
 
   const tipAngle = thetaC + TIP_SWEEP * sign;
-  const tipLen = needH * TIP_LEN;
   const T = {
-    x: K.x + Math.cos(rad(tipAngle)) * tipLen,
-    y: K.y + Math.sin(rad(tipAngle)) * tipLen,
+    x: K.x + Math.cos(rad(tipAngle)) * tailLen,
+    y: K.y + Math.sin(rad(tipAngle)) * tailLen,
   };
 
   return { P1, P2, K, T };
@@ -745,7 +940,8 @@ export function SingleBubble({
   // 꼬리 데이터 계산
   let tailData = null;
   let tailDots = null; // 타입D용
-  if (tailCfg && dir !== 'none') {
+  // 사각형 계열(flustered, shy)은 본체+꼬리 단일 path로 별도 처리
+  if (tailCfg && dir !== 'none' && !cfg.isRoundedRect && !cfg.isTrapezoidal) {
     if (tailCfg.type === 'A') {
       tailData = buildTailA(cx, cy, rxE, ryE, needH, dir, flip, tailCfg, s);
     } else if (tailCfg.type === 'B') {
@@ -800,7 +996,7 @@ export function SingleBubble({
     }
   } else if (cfg.isOval) {
     if (dir !== 'none') {
-      const rt = buildRoundTail(cx, cy, rxE, ryE, needH, dir, flip);
+      const rt = buildRoundTail(cx, cy, rxE, ryE, needH, dir, flip, s);
       const sweep = flip ? 1 : 0;
       const d = `M${rt.P1.x},${rt.P1.y} A${rxE},${ryE} 0 1,${sweep} ${rt.P2.x},${rt.P2.y} L${rt.T.x},${rt.T.y} L${rt.K.x},${rt.K.y} Z`;
       elements.push(
@@ -838,18 +1034,39 @@ export function SingleBubble({
       );
     }
   } else if (cfg.isTrapezoidal) {
-    const d = trapezoidPath(bx, by, needW, needH);
-    elements.push(
-      <path key="shape" d={d} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} strokeLinejoin="round" />
-    );
-    if (tailData) {
-      const [p1x, p1y] = tailData.p1;
-      const tailPath = `M${p1x},${p1y} ${tailData.pathSuffix} Z`;
+    // shy — 사다리꼴 + 꼬리 단일 path
+    const cornerR = Math.max(4 * s, needW * 0.06);
+    if (tailCfg && dir !== 'none') {
+      const d = buildTrapezoidWithTailB(bx, by, needW, needH, cornerR, dir, flip, tailCfg, s);
       elements.push(
-        <path key="tail" d={tailPath} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} strokeLinejoin="round" />
+        <path key="shape" d={d} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} strokeLinejoin="round" />
+      );
+    } else {
+      const d = trapezoidPath(bx, by, needW, needH);
+      elements.push(
+        <path key="shape" d={d} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} strokeLinejoin="round" />
+      );
+    }
+  } else if (cfg.isRoundedRect) {
+    // flustered — 둥근 사각형 + 꼬리 단일 path
+    // 반경: min(W,H)*0.25, 상한 H*0.35 — 알약 방지, 직선 구간 보장
+    const rawR = Math.min(needW, needH) * 0.25;
+    const radius = Math.min(rawR, needH * 0.35);
+    if (tailCfg && dir !== 'none') {
+      const d = buildRoundedRectWithTailA(bx, by, needW, needH, radius, dir, flip, tailCfg, s);
+      elements.push(
+        <path key="shape" d={d} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} strokeLinejoin="round" />
+      );
+    } else {
+      // 꼬리 없는 둥근 사각형
+      elements.push(
+        <rect key="shape" x={bx} y={by} width={needW} height={needH}
+          rx={radius} ry={radius}
+          fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} />
       );
     }
   } else {
+    // 기타 사각형 계열
     const radius = cfg.cornerRadius ? Math.max(4 * s, needW * cfg.cornerRadius) : Math.max(4 * s, needW * 0.08);
     if (tailData) {
       elements.push(
