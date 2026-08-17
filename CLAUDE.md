@@ -473,14 +473,37 @@ LINE_HEIGHT_RATIO = 1.45, BASE_PADDING_X = 14, BASE_PADDING_Y = 10
 - 꼬리: buildRoundTail을 innerR 타원에 부착, 본체가 위에 덮어 base 은폐
 - 데드 코드 정리: buildTailA/B/C/D, lerpPt, pointOnEllipse, tailBaseAngle 등 삭제
 
-**12종 완료 현황:** 11/12종 통과. surprised만 조정 필요.
+**12종 완료 현황:** 12/12종 본체 통과. surprised 스파이크 재구현(돌기 10, innerRatio 0.78) 완료. realize 전구 제거 완료.
+
+### Gate5Review 재작성 3단계 (CutEditor 연동) (2026-08-17)
+
+설계 문서: `docs/Gate5Review-Rebuild-v1.0.md`
+
+**B단계 — 편집 진입 (커밋 971a406):**
+- Gate5Review에 CutEditor 모달 연동: 각 컷 카드에 "편집" 버튼 추가
+- CutEditor props: cut, imageUrl, characters, charNameMap, onClose, onSave, onPrev, onNext, cutIndex, totalCuts
+- JS ResizeObserver 기반 이미지 크기 계산 (CSS % 체인 실패 → JS pixel 방식)
+- 플로팅 좌우 화살표 (라이트박스 스타일 통일)
+- Fixed position 종류 팔레트 드롭다운 (overflow:hidden 탈출)
+- 하단 패널 max-h-[40vh] overflow-y-auto
+
+**C단계 — 저장 왕복 (커밋 3ada0c6):**
+- CutEditor handleSave → `PUT /cuts/{cut_id}/dialogue` → Gate5 cacheBuster + loadCuts
+- 드래그·종류변경 저장 → 새로고침 후 유지 확인
+- spec 필드 보존: 백엔드가 dialogue만 갱신, 나머지 spec 필드 보존
+
+**D단계 — SfxLayer 배선 (커밋 3ada0c6):**
+- CutImageWithBubbles, LightboxImageWithBubbles에 SfxLayer 추가
+- 백엔드 `PUT /cuts/{cut_id}/dialogue`에 sfx_items 저장 추가
+- ep13 #8 "쾅!" SFX 썸네일+미리보기 표시 확인
+
+**말풍선 추가 수정:**
+- surprised: spikeCount 8→10, roundedValleys 제거 (표준 spikyPath 사용)
+- realize: `icon: 'lightbulb'` 제거
+- 나머지 아이콘: angry(lightning), sad(teardrop), surprised(star) 유지
 
 **진행 중 (다음 세션 시작점):**
-- surprised 형태 조정: fixedWidth=true 92%에서 가로 과대 + 본체 납작. spikeCount 8이 원인. 후보: spikeCount 10~12 상향 / innerRatio 0.82~0.85 / 둘 조합. 사용자와 화면 보며 결정 예정.
-
-**그 다음 대기 작업:**
-- 3단계: Gate5Review.jsx 재작성 (CutEditor 연동, 편집 진입). 첫 작업은 CutEditor.jsx가 요구하는 props 조사부터.
-- 4단계: 편집 모드 (텍스트 위치 조절 UI 포함)
+- 스파이크 3종(shout/angry/surprised) 꼬리: 여러 차례 시도 후 마지막 지시는 "buildRoundTail을 innerR 타원 인자로 그대로 재사용 + 꼬리 먼저/본체 나중 순서 + tailBaseWidth/bubbleW < 0.15 수치 판정". 현재 코드는 이 지시대로 구현되어 있으나 사용자 실사용 확인 미완료. bubble-test 스크린샷에서는 낫형 꼬리가 보이나, 실제 에피소드에서 스파이크 돌기에 가려 짧아 보일 수 있음. 그 경우 유일하게 허용된 조정은 TAIL_LEN에 스파이크 한정 배수 1.3~1.6을 곱하는 것뿐.
 
 **알려진 사항:**
 - ep13 #7 `dialogue=[]` — 데이터 비어있음, 코드 문제 아님
@@ -515,7 +538,8 @@ LINE_HEIGHT_RATIO = 1.45, BASE_PADDING_X = 14, BASE_PADDING_Y = 10
 ## 남은 작업 (향후)
 
 ### 설계 문서 기반 미완료 번들
-- [ ] **말풍선 12종 구현 (11/12 완료):** surprised 형태 조정 남음 (fixedW 92% 가로 과대). 설계: `docs/Bubble-12-Styles-v1.0.md`, `docs/Bubble-Round-Narration-Fix-v2.0.md`
+- [x] **말풍선 12종 본체 구현 (12/12 완료).** 스파이크 3종 꼬리 형태만 미해결 (본체는 통과)
+- [ ] **Gate5Review CutEditor 연동 (3단계 B+C+D 완료).** 스파이크 꼬리 실사용 확인 남음
 - [ ] Character Consistency — Part B: 그림 속 한글 텍스트 처리 (긴 문장 억제, 짧은 단어 명시)
 - [x] Gate3 Asset Revision — Bundle B: 캐릭터 조건 폼 (2026-08-11 완료)
 - [x] Gate3 Asset Revision — Bundle C: 장소 AI 제안·편집 + mood_notes (2026-08-11 완료)
