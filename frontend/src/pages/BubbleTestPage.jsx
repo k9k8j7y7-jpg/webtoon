@@ -166,6 +166,54 @@ export default function BubbleTestPage() {
         })}
       </div>
 
+      {/* ── min_height 비교 (0% / 25% / 50%) ── */}
+      <h3 style={{ marginTop: 24, marginBottom: 8 }} id="min-height-section">min_height 비교 (0% / 25% / 50%)</h3>
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 24 }}>
+        {[
+          { key: 'round', label: '타원(round)' },
+          { key: 'narration', label: '사각(narration)' },
+          { key: 'shout', label: '스파이크(shout)' },
+        ].map(({ key: st, label }) => (
+          <div key={st}>
+            <div style={{ fontSize: 11, fontWeight: 'bold', marginBottom: 4 }}>{label}</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[0, 0.25, 0.50].map(mh => {
+                const vw = 400;
+                const vh = 300;
+                const bw = vw * 0.6;
+                const minHPx = mh * vh;
+                return (
+                  <div key={`mh-${st}-${mh}`} style={{ border: '1px solid #ccc', background: '#fff', padding: 4 }}
+                    data-testid={`mh-${st}-${Math.round(mh * 100)}`}>
+                    <div style={{ fontSize: 9, color: '#666', marginBottom: 2 }}>
+                      min_height={Math.round(mh * 100)}% ({Math.round(minHPx)}px)
+                    </div>
+                    <div style={{ position: 'relative', width: vw, height: vh, background: '#888' }}>
+                      <svg width={vw} height={vh} viewBox={`0 0 ${vw} ${vh}`}
+                        style={{ position: 'absolute', top: 0, left: 0, overflow: 'visible' }}>
+                        <SingleBubble
+                          style={st}
+                          text="오늘 날씨가 좋다"
+                          bubbleX={st === 'narration' ? 0 : (vw - bw) / 2}
+                          bubbleY={10}
+                          bubbleW={st === 'narration' ? vw : bw}
+                          bubbleH={minHPx}
+                          tailDirection={st === 'narration' ? 'none' : 'down'}
+                          flipTail={false}
+                          fontScale={1.0}
+                          fixedWidth={true}
+                          viewW={vw}
+                        />
+                      </svg>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
       {/* ── 메인 그리드 (선택된 스타일) ── */}
       <table style={{ borderCollapse: 'collapse' }}>
         <thead>

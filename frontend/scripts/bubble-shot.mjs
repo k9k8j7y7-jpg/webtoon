@@ -46,6 +46,51 @@ async function main() {
   await page.screenshot({ path: outPath, fullPage: true });
   console.log(`Screenshot saved: ${outPath}`);
 
+  // ── min_height 수치 판정 ──
+  const mhSection = await page.$('#min-height-section');
+  if (mhSection) {
+    console.log('\n=== min_height 수치 판정 ===');
+    const styles = ['round', 'narration', 'shout'];
+    const ratios = [0, 25, 50];
+    const containerH = 300;
+
+    for (const st of styles) {
+      for (const r of ratios) {
+        const testId = `mh-${st}-${r}`;
+        const cell = await page.$(`[data-testid="${testId}"]`);
+        if (!cell) { console.log(`  [SKIP] ${testId} not found`); continue; }
+
+        // 말풍선 shape의 bounding box
+        const shapeBB = await cell.evaluate(el => {
+          const shape = el.querySelector('svg path[fill], svg rect[fill], svg ellipse[fill]');
+          if (!shape) return null;
+          const bb = shape.getBBox();
+          return { x: bb.x, y: bb.y, w: bb.width, h: bb.height };
+        });
+
+        // 텍스트 bounding box
+        const textBB = await cell.evaluate(el => {
+          const fo = el.querySelector('foreignObject');
+          if (!fo) return null;
+          return { x: +fo.getAttribute('x'), y: +fo.getAttribute('y'),
+                   w: +fo.getAttribute('width'), h: +fo.getAttribute('height') };
+        });
+
+        if (!shapeBB) { console.log(`  [SKIP] ${testId} no shape`); continue; }
+
+        const minReq = (r / 100) * containerH;
+        const hOk = shapeBB.h >= minReq - 2;
+        const textInside = textBB
+          ? (textBB.y >= shapeBB.y - 1 && textBB.y + textBB.h <= shapeBB.y + shapeBB.h + 1)
+          : 'N/A';
+
+        console.log(`  ${testId}: shape=${Math.round(shapeBB.w)}x${Math.round(shapeBB.h)} ` +
+          `minReq=${Math.round(minReq)} h≥min:${hOk ? 'OK' : 'FAIL'} ` +
+          `textInside:${textInside === 'N/A' ? 'N/A' : textInside ? 'OK' : 'FAIL'}`);
+      }
+    }
+  }
+
   await browser.close();
 }
 
