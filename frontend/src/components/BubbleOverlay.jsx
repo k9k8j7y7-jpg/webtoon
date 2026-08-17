@@ -133,6 +133,9 @@ const BUBBLE_CONFIGS = {
   },
 };
 
+// ── 꼬리 없는 스타일 목록 ──
+export const NO_TAIL_STYLES = ['narration', 'shout', 'angry', 'surprised'];
+
 // ── 하드코딩 상수 (bubbleSpec.json 사용 금지 — 0.72 charWidth가 버그 원인) ──
 const CHAR_WIDTH = 0.93;
 const REF_WIDTH = 800;          // 기준 렌더 폭 (미리보기 모달 기준)
@@ -741,15 +744,7 @@ export function SingleBubble({
     const path = cfg.angryVariation
       ? spikyPath(cx, cy, rxE, ryE, cfg.spikeCount, depth, true)
       : pathFn(cx, cy, rxE, ryE, cfg.spikeCount, depth);
-    // 꼬리: round와 동일한 buildRoundTail을 골(innerR) 타원에 호출
-    // 꼬리 먼저 → 본체 나중 (밑동이 본체에 덮임)
-    if (dir !== 'none') {
-      const rt = buildRoundTail(cx, cy, innerRx, innerRy, needH, dir, flip, s);
-      const tailD = `M${rt.P1.x},${rt.P1.y} L${rt.T.x},${rt.T.y} L${rt.K.x},${rt.K.y} Z`;
-      elements.push(
-        <path key="tail" d={tailD} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} strokeLinejoin="round" />
-      );
-    }
+    // 스파이크 3종은 꼬리 없음 (디자인 확정)
     elements.push(
       <path key="shape" d={path} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} strokeLinejoin="round" />
     );

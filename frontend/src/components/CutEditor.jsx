@@ -828,8 +828,8 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                   </div>
                 )}
 
-                {/* 꼬리 방향 + 좌우 반전 (나레이션 제외) */}
-                {selectedBubble.type !== 'narration' && (
+                {/* 꼬리 방향 + 좌우 반전 (꼬리 없는 스타일 제외) */}
+                {!['narration', 'shout', 'angry', 'surprised'].includes(selectedBubble.type) && (
                   <div className="shrink-0">
                     <p className="text-[10px] text-zinc-500 font-bold mb-1">꼬리 방향</p>
                     <div className="flex gap-1">
