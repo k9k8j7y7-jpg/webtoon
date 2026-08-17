@@ -131,8 +131,196 @@ async function main() {
     await page.waitForTimeout(500);
   }
 
+  // ── 수치 검증 + 스크린샷 (복수 해상도) ──
+  const resolutions = [
+    { w: 1920, h: 950, label: '1920x950' },
+    { w: 1366, h: 650, label: '1366x650' },
+  ];
+
+  const results = [];
+
+  // 닫기 헬퍼
+  async function closeCutEditor() {
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+    try {
+      const xBtn = await page.$('.fixed.inset-0.z-50.bg-black .shrink-0 button:has(svg.lucide-x)');
+      if (xBtn) await xBtn.click({ force: true, timeout: 2000 });
+    } catch {}
+    await page.waitForTimeout(300);
+    const still = await page.$('.fixed.inset-0.z-50.bg-black');
+    if (still) {
+      await page.goto(episodeUrl, { waitUntil: 'networkidle', timeout: 30000 });
+      await page.waitForTimeout(2000);
+      const g5 = await page.$('button:has-text("이미지"), button:has-text("5단계"), [data-gate="5"]');
+      if (g5) { await g5.click(); await page.waitForTimeout(2000); }
+      try { await page.waitForSelector('.aspect-square img', { timeout: 10000 }); } catch {}
+      await page.waitForTimeout(2000);
+    }
+  }
+
+  for (const res of resolutions) {
+    console.log(`\n=== ${res.label} ===`);
+    await page.setViewportSize({ width: res.w, height: res.h });
+    await page.waitForTimeout(500);
+
+    const cards = await page.$$('.grid .border-2.rounded-2xl');
+    const target = cards[9];
+    if (!target) { console.log('Cut #10 not found'); continue; }
+    await target.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(300);
+    const eBtn = await target.$('button:has-text("편집")');
+    if (!eBtn) { console.log('Edit button not found'); continue; }
+    await eBtn.click();
+    await page.waitForTimeout(2000);
+
+    // ── 보기 모드 수치 ──
+    const topBar = await page.locator('.fixed.inset-0.z-50.bg-black > .shrink-0').first().boundingBox();
+    const img = await page.locator('.fixed.inset-0.z-50.bg-black .flex-1 img').boundingBox();
+    const vpH = res.h;
+
+    const viewResult = {
+      res: res.label, mode: 'view',
+      topBar: topBar ? `y=${topBar.y} h=${topBar.height} bottom=${Math.round(topBar.y + topBar.height)}` : 'N/A',
+      img: img ? `y=${Math.round(img.y)} h=${Math.round(img.height)} bottom=${Math.round(img.y + img.height)}` : 'N/A',
+      vpH,
+      pass_top: img && topBar ? img.y >= topBar.y + topBar.height - 1 : false,
+      pass_bottom: img ? Math.round(img.y + img.height) <= vpH + 1 : false,
+    };
+    console.log(`VIEW: topBar bottom=${Math.round(topBar?.y + topBar?.height)}, img y=${Math.round(img?.y)} bottom=${Math.round(img?.y + img?.height)}, vpH=${vpH}`);
+    console.log(`  top ok: ${viewResult.pass_top}, bottom ok: ${viewResult.pass_bottom}`);
+    results.push(viewResult);
+
+    await page.screenshot({ path: resolve(outDir, `ep13-cuteditor-${res.label}-view.png`) });
+
+    // ── 편집 모드 전환 ──
+    try {
+      const emBtn = await page.$('.bg-purple-600:has-text("편집")');
+      if (emBtn) {
+        await emBtn.click({ timeout: 5000 });
+        await page.waitForTimeout(1500);
+
+        const topBar2 = await page.locator('.fixed.inset-0.z-50.bg-black > .shrink-0').first().boundingBox();
+        const img2 = await page.locator('.fixed.inset-0.z-50.bg-black .flex-1 img').boundingBox();
+        // 하단 패널: 편집 모드에서만 존재하는 마지막 shrink-0
+        const panels = await page.locator('.fixed.inset-0.z-50.bg-black > .shrink-0').all();
+        const panelBox = panels.length > 1 ? await panels[panels.length - 1].boundingBox() : null;
+
+        const editResult = {
+          res: res.label, mode: 'edit',
+          topBar: topBar2 ? `bottom=${Math.round(topBar2.y + topBar2.height)}` : 'N/A',
+          img: img2 ? `y=${Math.round(img2.y)} h=${Math.round(img2.height)} bottom=${Math.round(img2.y + img2.height)}` : 'N/A',
+          panel: panelBox ? `y=${Math.round(panelBox.y)} h=${Math.round(panelBox.height)}` : 'N/A',
+          pass_top: img2 && topBar2 ? img2.y >= topBar2.y + topBar2.height - 1 : false,
+          pass_bottom: img2 && panelBox ? Math.round(img2.y + img2.height) <= Math.round(panelBox.y) + 1 : false,
+        };
+        console.log(`EDIT: topBar bottom=${Math.round(topBar2?.y + topBar2?.height)}, img y=${Math.round(img2?.y)} bottom=${Math.round(img2?.y + img2?.height)}, panel y=${Math.round(panelBox?.y)}`);
+        console.log(`  top ok: ${editResult.pass_top}, bottom ok: ${editResult.pass_bottom}`);
+        results.push(editResult);
+
+        await page.screenshot({ path: resolve(outDir, `ep13-cuteditor-${res.label}-edit.png`) });
+      }
+    } catch (e) {
+      console.log('Edit mode failed:', e.message.split('\n')[0]);
+    }
+
+    await closeCutEditor();
+  }
+
+  // ── 팔레트 드롭다운 검증 (1920x950) ──
+  console.log('\n=== Palette dropdown test (1920x950) ===');
+  await page.setViewportSize({ width: 1920, height: 950 });
+  await page.waitForTimeout(500);
+
+  // Gate5로 돌아가서 편집 열기
+  {
+    const cards = await page.$$('.grid .border-2.rounded-2xl');
+    const target = cards[9];
+    if (target) {
+      await target.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(300);
+      const eBtn = await target.$('button:has-text("편집")');
+      if (eBtn) await eBtn.click();
+      await page.waitForTimeout(2000);
+
+      // 편집 모드 전환
+      const emBtn = await page.$('.bg-purple-600:has-text("편집")');
+      if (emBtn) {
+        await emBtn.click({ timeout: 5000 });
+        await page.waitForTimeout(1000);
+
+        // 말풍선 클릭
+        const bubbleHit = await page.$('svg rect[style*="cursor: grab"]');
+        if (bubbleHit) {
+          await bubbleHit.click({ force: true, timeout: 3000 });
+          await page.waitForTimeout(500);
+
+          // "종류" 버튼 클릭 → 팔레트 열기
+          const kindBtn = await page.$('button:has-text("자동"), button:has-text("round"), button:has-text("shout"), button:has-text("shy")');
+          if (kindBtn) {
+            await kindBtn.click({ timeout: 3000 });
+            await page.waitForTimeout(500);
+
+            // 팔레트 메뉴 boundingBox
+            const menu = await page.locator('[style*="position: fixed"][style*="z-index: 60"]').boundingBox();
+            if (menu) {
+              console.log(`Palette menu: x=${Math.round(menu.x)} y=${Math.round(menu.y)} w=${Math.round(menu.width)} h=${Math.round(menu.height)} bottom=${Math.round(menu.y + menu.height)}`);
+              console.log(`  menu.y >= 0: ${menu.y >= 0 ? 'PASS' : 'FAIL'}`);
+              console.log(`  menu.bottom <= vpH: ${Math.round(menu.y + menu.height) <= 950 ? 'PASS' : 'FAIL'}`);
+            } else {
+              console.log('Palette menu not found!');
+            }
+
+            // 모든 BubbleMiniIcon 항목 수 확인
+            const icons = await page.$$('[style*="position: fixed"][style*="z-index: 60"] svg');
+            console.log(`  Bubble icons visible: ${icons.length} (expected: 11 = 4 basic + 7 emotion)`);
+
+            await page.screenshot({ path: resolve(outDir, 'ep13-palette-open.png') });
+            console.log('Saved: ep13-palette-open.png');
+
+            // 스타일 변경 테스트: round → shy → shout
+            const testStyles = ['shy', 'shout', 'round'];
+            for (const sk of testStyles) {
+              // 팔레트가 닫혔으면 다시 열기
+              const menuCheck = await page.$('[style*="position: fixed"][style*="z-index: 60"]');
+              if (!menuCheck) {
+                const kb = await page.$('button:has-text("자동"), button:has-text("round"), button:has-text("shout"), button:has-text("shy")');
+                if (kb) { await kb.click({ timeout: 3000 }); await page.waitForTimeout(300); }
+              }
+              // 아이콘 클릭 (title 속성 사용)
+              const icon = await page.$(`[style*="position: fixed"][style*="z-index: 60"] svg[data-style="${sk}"]`);
+              if (icon) {
+                await icon.click({ force: true });
+                await page.waitForTimeout(300);
+                console.log(`  Changed to ${sk}: OK`);
+              } else {
+                // fallback: BubbleMiniIcon은 div 래퍼일 수 있음
+                const allIcons = await page.$$('[style*="position: fixed"][style*="z-index: 60"] [role="button"], [style*="position: fixed"][style*="z-index: 60"] svg');
+                console.log(`  ${sk}: icon not found by data-style, ${allIcons.length} clickable elements`);
+              }
+            }
+          } else {
+            console.log('Kind button not found');
+          }
+        }
+      }
+    }
+  }
+
+  // ── 결과 요약 ──
+  console.log('\n========== LAYOUT RESULTS ==========');
+  let allPass = true;
+  for (const r of results) {
+    const pass = r.pass_top && r.pass_bottom;
+    if (!pass) allPass = false;
+    console.log(`${r.res} ${r.mode}: top=${r.pass_top} bottom=${r.pass_bottom} ${pass ? 'PASS' : 'FAIL'}`);
+  }
+  console.log(`Overall: ${allPass ? 'ALL PASS' : 'SOME FAILED'}`);
+
   await browser.close();
-  console.log(`Done. Screenshots saved to test-shots/`);
+  console.log(`\nDone. Screenshots saved to test-shots/`);
 }
 
 main();

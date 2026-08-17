@@ -3,7 +3,8 @@ import api, { pollJob } from '../../api/client';
 import JobProgress from '../JobProgress';
 import BubbleOverlay, { BubbleMiniIcon, STYLE_ORDER, STYLE_LABELS } from '../BubbleOverlay';
 import { resolveBubbleStyle } from '../../utils/bubbleMapping';
-import { Image, RefreshCw, RotateCcw, Download, Check, AlertTriangle, MessageSquare, Save, X, ZoomIn, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Image, RefreshCw, RotateCcw, Download, Check, AlertTriangle, MessageSquare, Save, X, ZoomIn, ChevronLeft, ChevronRight, Pencil } from 'lucide-react';
+import CutEditor from '../CutEditor';
 
 // ── 그리드 컷 카드: 이미지 + SVG 말풍선 오버레이 ──
 function CutImageWithBubbles({ cut, imageUrl, onZoom }) {
@@ -104,6 +105,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
   const [cacheBuster, setCacheBuster] = useState(Date.now());
   const [partialResult, setPartialResult] = useState(null); // { done, total, failed: [cut_id...] }
   const [previewIndex, setPreviewIndex] = useState(null); // 라이트박스 미리보기 인덱스
+  const [editCutIndex, setEditCutIndex] = useState(null); // CutEditor 편집 인덱스
 
   const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
 
@@ -390,11 +392,18 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
                     >
                       <RotateCcw size={11} />
                     </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setEditCutIndex(cuts.indexOf(cut)); }}
+                      title="컷 편집"
+                      className="flex items-center gap-1 px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-full font-bold shadow-sm hover:bg-purple-200 dark:hover:bg-purple-900/50 text-[11px] transition-colors"
+                    >
+                      <Pencil size={11} /> 편집
+                    </button>
                     {cut.dialogue && cut.dialogue.length > 0 && (
                       <button
                         onClick={(e) => { e.stopPropagation(); openDialogueEditor(cut); }}
                         title="대사 편집"
-                        className="flex items-center gap-1 px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-full font-bold shadow-sm hover:bg-purple-200 dark:hover:bg-purple-900/50 text-[11px] transition-colors"
+                        className="flex items-center gap-1 px-2 py-1 bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-300 rounded-full font-bold shadow-sm hover:bg-gray-200 dark:hover:bg-zinc-700 text-[11px] transition-colors"
                       >
                         <MessageSquare size={11} /> 대사
                       </button>
@@ -599,6 +608,30 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
           </div>
         </div>
       )}
+
+      {/* CutEditor 전체화면 편집 모달 */}
+      {editCutIndex !== null && cuts[editCutIndex] && (() => {
+        const cut = cuts[editCutIndex];
+        const hasPrev = editCutIndex > 0 && cuts[editCutIndex - 1]?.image_url;
+        const hasNext = editCutIndex < cuts.length - 1 && cuts[editCutIndex + 1]?.image_url;
+        return (
+          <CutEditor
+            cut={{ ...cut, dialogue: cut.dialogue || [], sfx_items: cut.sfx_items || [] }}
+            imageUrl={imageUrl(getCutImageUrl(cut))}
+            characters={cut.characters || []}
+            charNameMap={charNameMap}
+            onClose={() => setEditCutIndex(null)}
+            onSave={async () => {
+              setCacheBuster(Date.now());
+              await loadCuts();
+            }}
+            onPrev={hasPrev ? () => setEditCutIndex(editCutIndex - 1) : null}
+            onNext={hasNext ? () => setEditCutIndex(editCutIndex + 1) : null}
+            cutIndex={editCutIndex + 1}
+            totalCuts={cuts.length}
+          />
+        );
+      })()}
     </div>
   );
 }

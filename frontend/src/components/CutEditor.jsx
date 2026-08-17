@@ -87,11 +87,16 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [openPalette, setOpenPalette] = useState(false);
+  const paletteBtnRef = useRef(null);
+  const [palettePos, setPalettePos] = useState({ x: 0, y: 0 });
 
-  // 이미지 실제 렌더 크기
+  // 이미지 실제 렌더 크기 — JS 실측 방식
   const imgRef = useRef(null);
+  const containerRef = useRef(null);
   const imgSizeRef = useRef({ w: 0, h: 0 });
   const [imgSizeState, setImgSizeState] = useState({ w: 0, h: 0 });
+  const [naturalSize, setNaturalSize] = useState({ w: 0, h: 0 });
+  const [dispSize, setDispSize] = useState({ w: 0, h: 0 });
 
   // 드래그/리사이즈/회전 ref
   const DRAG_THRESHOLD = 5;
@@ -101,17 +106,46 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
   const sfxDragRef   = useRef(null); // 효과음 드래그
   const rotateRef    = useRef(null); // 효과음 회전
 
+  // 컨테이너 실측 → 이미지 표시 크기 계산
+  const recalcSize = useCallback(() => {
+    const el = containerRef.current;
+    const ns = naturalSize;
+    if (!el || !ns.w || !ns.h) return;
+    const availW = el.clientWidth * 0.92; // 좌우 여백
+    const availH = el.clientHeight;
+    const ratio = Math.min(availW / ns.w, availH / ns.h);
+    const w = Math.floor(ns.w * ratio);
+    const h = Math.floor(ns.h * ratio);
+    setDispSize({ w, h });
+    imgSizeRef.current = { w, h };
+    setImgSizeState({ w, h });
+  }, [naturalSize]);
+
   const measureImg = useCallback(() => {
     const img = imgRef.current;
     if (!img) return;
+    // clientWidth/Height 기반 폴백 (dispSize 계산 전)
     const { clientWidth: w, clientHeight: h } = img;
     if (w > 0 && h > 0) { imgSizeRef.current = { w, h }; setImgSizeState({ w, h }); }
   }, []);
 
+  // 이미지 onLoad → 원본 크기 저장
+  const handleImgLoad = useCallback((e) => {
+    const img = e.target;
+    setNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
+  }, []);
+
+  // naturalSize 변경 → 표시 크기 재계산
+  useEffect(() => { recalcSize(); }, [recalcSize]);
+
+  // ResizeObserver로 컨테이너 크기 변화 감지 (모드 전환, 창 리사이즈)
   useEffect(() => {
-    window.addEventListener('resize', measureImg);
-    return () => window.removeEventListener('resize', measureImg);
-  }, [measureImg]);
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => recalcSize());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [recalcSize]);
 
   // ── 모드 전환 ────────────────────────────────────────────
 
@@ -121,6 +155,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
     setSelectedIdx(null);
     setSelectedSfxIdx(null);
     setMode('edit');
+
   };
 
   const cancelEdit = () => {
@@ -130,6 +165,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
     setSelectedSfxIdx(null);
     setOpenPalette(false);
     setMode('view');
+
   };
 
   // ── 저장 ─────────────────────────────────────────────────
@@ -144,6 +180,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
       });
       if (onSave) await onSave();
       setMode('view');
+  
     } catch (err) {
       setError(err.response?.data?.detail || '저장에 실패했습니다. 다시 시도해주세요.');
     } finally {
@@ -439,45 +476,23 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center gap-2">
-          {/* 이전 컷 버튼 */}
-          <button
-            onClick={onPrev}
-            disabled={!onPrev || mode === 'edit'}
-            title="이전 컷 (←)"
-            className="p-1 rounded-full text-zinc-400 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            <ChevronLeft size={18} />
-          </button>
-
           {/* 컷 번호 / 총 컷 수 */}
-          <div className="flex items-center gap-2">
-            <span className="text-white font-bold text-sm">
-              컷 #{cut.cut_number}
-              {totalCuts > 0 && (
-                <span className="text-zinc-400 font-normal text-xs ml-1">({cutIndex}/{totalCuts})</span>
-              )}
+          <span className="text-white font-bold text-sm">
+            컷 #{cut.cut_number}
+            {totalCuts > 0 && (
+              <span className="text-zinc-400 font-normal text-xs ml-1">({cutIndex}/{totalCuts})</span>
+            )}
+          </span>
+          {mode === 'view' && (
+            <span className="text-xs text-zinc-400 font-bold flex items-center gap-1">
+              <Eye size={12} /> 보기 모드
             </span>
-            {mode === 'view' && (
-              <span className="text-xs text-zinc-400 font-bold flex items-center gap-1">
-                <Eye size={12} /> 보기 모드
-              </span>
-            )}
-            {mode === 'edit' && (
-              <span className="text-xs text-purple-400 font-bold flex items-center gap-1">
-                <Pencil size={12} /> 편집 모드
-              </span>
-            )}
-          </div>
-
-          {/* 다음 컷 버튼 */}
-          <button
-            onClick={onNext}
-            disabled={!onNext || mode === 'edit'}
-            title="다음 컷 (→)"
-            className="p-1 rounded-full text-zinc-400 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            <ChevronRight size={18} />
-          </button>
+          )}
+          {mode === 'edit' && (
+            <span className="text-xs text-purple-400 font-bold flex items-center gap-1">
+              <Pencil size={12} /> 편집 모드
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -524,16 +539,18 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
 
       {/* ── 이미지 영역 ── */}
       <div
-        className="flex-1 flex items-center justify-center overflow-visible"
+        ref={containerRef}
+        className="flex-1 flex items-center justify-center overflow-hidden min-h-0 relative"
         onClick={e => e.stopPropagation()}
       >
-        <div className="relative inline-block">
+        <div className="relative" style={dispSize.w > 0 ? { width: dispSize.w, height: dispSize.h } : undefined}>
           <img
             ref={imgRef}
             src={imageUrl}
             alt={`컷 ${cut.cut_number}`}
-            className="max-h-[calc(100vh-130px)] max-w-[92vw] object-contain select-none block"
-            onLoad={measureImg}
+            className="select-none block"
+            style={dispSize.w > 0 ? { width: dispSize.w, height: dispSize.h } : { maxWidth: '92vw', maxHeight: '100%', objectFit: 'contain' }}
+            onLoad={handleImgLoad}
             draggable={false}
           />
 
@@ -713,6 +730,26 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
             </svg>
           )}
         </div>
+
+        {/* ── 이전/다음 컷 화살표 (라이트박스 스타일) ── */}
+        {onPrev && (
+          <button
+            onClick={e => { e.stopPropagation(); onPrev(); }}
+            disabled={mode === 'edit'}
+            className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-black/50 hover:bg-black/70 text-white rounded-full transition-colors z-10 disabled:opacity-20 disabled:cursor-not-allowed disabled:hover:bg-black/50"
+          >
+            <ChevronLeft size={28} />
+          </button>
+        )}
+        {onNext && (
+          <button
+            onClick={e => { e.stopPropagation(); onNext(); }}
+            disabled={mode === 'edit'}
+            className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-black/50 hover:bg-black/70 text-white rounded-full transition-colors z-10 disabled:opacity-20 disabled:cursor-not-allowed disabled:hover:bg-black/50"
+          >
+            <ChevronRight size={28} />
+          </button>
+        )}
       </div>
 
       {/* ── 에러 ── */}
@@ -726,7 +763,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
       {/* ── 하단 컨트롤 패널 (편집 모드) ── */}
       {mode === 'edit' && (
         <div
-          className="shrink-0 bg-zinc-900 border-t border-zinc-800"
+          className="shrink-0 bg-zinc-900 border-t border-zinc-800 max-h-[40vh] overflow-y-auto"
           onClick={e => e.stopPropagation()}
         >
           {/* 말풍선 선택 패널 */}
@@ -837,40 +874,23 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
 
                 {/* 종류 팔레트 (나레이션 제외) */}
                 {selectedBubble.type !== 'narration' && (
-                  <div className="relative shrink-0">
+                  <div className="shrink-0">
                     <p className="text-[10px] text-zinc-500 font-bold mb-1">종류</p>
                     <button
-                      onClick={e => { e.stopPropagation(); setOpenPalette(p => !p); }}
+                      ref={paletteBtnRef}
+                      onClick={e => {
+                        e.stopPropagation();
+                        if (!openPalette && paletteBtnRef.current) {
+                          const r = paletteBtnRef.current.getBoundingClientRect();
+                          setPalettePos({ x: r.left, y: r.top });
+                        }
+                        setOpenPalette(p => !p);
+                      }}
                       className="flex items-center gap-1.5 px-2.5 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-xs font-bold transition-colors"
                     >
                       <BubbleMiniIcon styleKey={selectedBubble.bubble_style || resolveBubbleStyle(selectedBubble, characters)} size={20} />
                       {selectedBubble.bubble_style ? selectedBubble.bubble_style : '자동'}
                     </button>
-                    {openPalette && (
-                      <div className="absolute bottom-full mb-2 left-0 bg-zinc-800 border border-zinc-700 rounded-2xl p-3 shadow-2xl z-30 w-72"
-                        onClick={e => e.stopPropagation()}>
-                        <p className="text-[10px] font-bold text-zinc-400 mb-1.5">기본</p>
-                        <div className="flex gap-1 flex-wrap mb-2">
-                          {['round','thought','whisper','shout'].map(sk => (
-                            <BubbleMiniIcon key={sk} styleKey={sk} size={26}
-                              selected={(selectedBubble.bubble_style || resolveBubbleStyle(selectedBubble, characters)) === sk}
-                              onClick={() => { updateBubble(selectedIdx, { bubble_style: sk }); setOpenPalette(false); }} />
-                          ))}
-                        </div>
-                        <p className="text-[10px] font-bold text-zinc-400 mb-1.5">감정</p>
-                        <div className="flex gap-1 flex-wrap mb-2">
-                          {['angry','happy','sad','surprised','shy','flustered','realize'].map(sk => (
-                            <BubbleMiniIcon key={sk} styleKey={sk} size={26}
-                              selected={(selectedBubble.bubble_style || resolveBubbleStyle(selectedBubble, characters)) === sk}
-                              onClick={() => { updateBubble(selectedIdx, { bubble_style: sk }); setOpenPalette(false); }} />
-                          ))}
-                        </div>
-                        <button onClick={() => { updateBubble(selectedIdx, { bubble_style: null }); setOpenPalette(false); }}
-                          className="w-full text-[10px] font-bold text-zinc-400 hover:text-zinc-200 py-1 text-center border border-zinc-700 rounded-lg">
-                          자동 (감정 기반)
-                        </button>
-                      </div>
-                    )}
                   </div>
                 )}
 
@@ -973,6 +993,43 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
               말풍선 또는 효과음을 클릭하면 편집할 수 있습니다
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── 종류 팔레트 (fixed, overflow 부모 무시) ── */}
+      {openPalette && selectedBubble && selectedBubble.type !== 'narration' && (
+        <div
+          className="bg-zinc-800 border border-zinc-700 rounded-2xl p-3 shadow-2xl w-72"
+          style={{
+            position: 'fixed',
+            left: Math.min(palettePos.x, window.innerWidth - 300),
+            bottom: window.innerHeight - palettePos.y + 8,
+            zIndex: 60,
+            maxHeight: '60vh',
+            overflowY: 'auto',
+          }}
+          onClick={e => e.stopPropagation()}
+        >
+          <p className="text-[10px] font-bold text-zinc-400 mb-1.5">기본</p>
+          <div className="flex gap-1 flex-wrap mb-2">
+            {['round','thought','whisper','shout'].map(sk => (
+              <BubbleMiniIcon key={sk} styleKey={sk} size={26}
+                selected={(selectedBubble.bubble_style || resolveBubbleStyle(selectedBubble, characters)) === sk}
+                onClick={() => { updateBubble(selectedIdx, { bubble_style: sk }); setOpenPalette(false); }} />
+            ))}
+          </div>
+          <p className="text-[10px] font-bold text-zinc-400 mb-1.5">감정</p>
+          <div className="flex gap-1 flex-wrap mb-2">
+            {['angry','happy','sad','surprised','shy','flustered','realize'].map(sk => (
+              <BubbleMiniIcon key={sk} styleKey={sk} size={26}
+                selected={(selectedBubble.bubble_style || resolveBubbleStyle(selectedBubble, characters)) === sk}
+                onClick={() => { updateBubble(selectedIdx, { bubble_style: sk }); setOpenPalette(false); }} />
+            ))}
+          </div>
+          <button onClick={() => { updateBubble(selectedIdx, { bubble_style: null }); setOpenPalette(false); }}
+            className="w-full text-[10px] font-bold text-zinc-400 hover:text-zinc-200 py-1 text-center border border-zinc-700 rounded-lg">
+            자동 (감정 기반)
+          </button>
         </div>
       )}
     </div>
