@@ -455,13 +455,31 @@ LINE_HEIGHT_RATIO = 1.45, BASE_PADDING_X = 14, BASE_PADDING_Y = 10
 - `scripts/episode-shot.mjs`: 실제 에피소드 모달 컷별 스크린샷 (JWT로 로그인 → Gate5 라이트박스 순회)
 - 작업 방식: 코드 수정 → 스크린샷 셀프 검증 → 통과 시에만 보고
 
+**8-2: flustered·shy 구현 (커밋 12abebf)**
+- 고정 크기 낫형 꼬리 시스템: TAIL_BASE=18, TAIL_LEN=26 (viewW/REF_WIDTH 비례 스케일)
+- flustered(당황), shy(수줌) 3종 꼬리 방향 적용
+
+**8-3: whisper/thought/happy/sad/realize — 타원 통일 (커밋 7e0e38f 이전)**
+- 구름 윤곽 접근 폐기 → 5종 모두 isOval (round와 동일 타원형)
+- thought, whisper: strokeDash '6,4' 점선으로 구분
+- 색·선 스타일만으로 감정 구분 (happy=노란, sad=파란, realize=초록 등)
+
+**8-4: shout/angry/surprised — spiky 구현 (커밋 7c92ef9)**
+- spikyPath: 교대 외곽/내곽 반경 타원 기반 돌기 생성
+- isSpiky + innerRatio 기반 텍스트 크기 계산 (텍스트가 골 안쪽에 맞춤)
+- shout: 돌기 13, innerRatio 0.80 — 통과
+- angry: 돌기 15, innerRatio 0.72, i%3 변주 — 통과
+- surprised: 돌기 8, innerRatio 0.78, roundedValleys(Q곡선) — WIP
+- 꼬리: buildRoundTail을 innerR 타원에 부착, 본체가 위에 덮어 base 은폐
+- 데드 코드 정리: buildTailA/B/C/D, lerpPt, pointOnEllipse, tailBaseAngle 등 삭제
+
+**12종 완료 현황:** 11/12종 통과. surprised만 조정 필요.
+
 **진행 중 (다음 세션 시작점):**
-- 썸네일 스케일링 수정: 픽셀 상수에 `scale = width/REF_WIDTH` 곱하기는 구현됨. 원인 규명 완료, 추가 조정 필요 시 다음 세션
-- 주의: `CHAR_WIDTH` 등 비율 상수는 건드리지 않는다
+- surprised 형태 조정: fixedWidth=true 92%에서 가로 과대 + 본체 납작. spikeCount 8이 원인. 후보: spikeCount 10~12 상향 / innerRatio 0.82~0.85 / 둘 조합. 사용자와 화면 보며 결정 예정.
 
 **그 다음 대기 작업:**
-- 나머지 10종 말풍선 본체 (8-2~8-4절, `docs/Bubble-12-Styles-v1.0.md`)
-- 3단계: Gate5Review.jsx 재작성
+- 3단계: Gate5Review.jsx 재작성 (CutEditor 연동, 편집 진입). 첫 작업은 CutEditor.jsx가 요구하는 props 조사부터.
 - 4단계: 편집 모드 (텍스트 위치 조절 UI 포함)
 
 **알려진 사항:**
@@ -497,7 +515,7 @@ LINE_HEIGHT_RATIO = 1.45, BASE_PADDING_X = 14, BASE_PADDING_Y = 10
 ## 남은 작업 (향후)
 
 ### 설계 문서 기반 미완료 번들
-- [ ] **말풍선 12종 구현 (진행 중):** round+narration 본체 완료 (A-1~B-2). 나머지 10종 본체(8-2~8-4) + BubbleMiniIcon(8-5) 미착수. 설계: `docs/Bubble-12-Styles-v1.0.md`, `docs/Bubble-Round-Narration-Fix-v2.0.md`
+- [ ] **말풍선 12종 구현 (11/12 완료):** surprised 형태 조정 남음 (fixedW 92% 가로 과대). 설계: `docs/Bubble-12-Styles-v1.0.md`, `docs/Bubble-Round-Narration-Fix-v2.0.md`
 - [ ] Character Consistency — Part B: 그림 속 한글 텍스트 처리 (긴 문장 억제, 짧은 단어 명시)
 - [x] Gate3 Asset Revision — Bundle B: 캐릭터 조건 폼 (2026-08-11 완료)
 - [x] Gate3 Asset Revision — Bundle C: 장소 AI 제안·편집 + mood_notes (2026-08-11 완료)
