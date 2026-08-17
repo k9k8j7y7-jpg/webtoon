@@ -36,12 +36,10 @@ const BUBBLE_CONFIGS = {
     fill: 'rgba(255,255,255,0.78)',
     stroke: '#969696',
     strokeWidth: 2,
+    strokeDash: '6,4',
     textColor: '#505050',
-    isCloud: true,
-    cloudPreset: 'thought',
+    isOval: true,
     position: 'top',
-    insetX: 0.16, insetY: 0.18,
-    tail: { type: 'D', r1: 0.09, r2Ratio: 0.58, gap1: 0.07, gap2: 0.10, skewDeg: 24 },
   },
   whisper: {
     fill: 'rgba(255,255,255,0.71)',
@@ -49,11 +47,9 @@ const BUBBLE_CONFIGS = {
     strokeWidth: 2,
     strokeDash: '6,4',
     textColor: '#787878',
-    isEllipse: true,
+    isOval: true,
     position: 'top',
     fontSize: 0.85,
-    insetX: 0.12, insetY: 0.14,
-    tail: { type: 'D', r1: 0.07, r2Ratio: 0.62, gap1: 0.09, gap2: 0.11, skewDeg: -26 },
   },
   shout: {
     fill: 'rgba(255,255,255,0.95)',
@@ -87,23 +83,17 @@ const BUBBLE_CONFIGS = {
     stroke: '#e06090',
     strokeWidth: 2,
     textColor: '#aa3264',
-    isCloud: true,
-    cloudPreset: 'happy',
+    isOval: true,
     position: 'top',
-    insetX: 0.16, insetY: 0.18,
-    tail: { type: 'B', baseSpread: 0.10, length: 0.22, skewDeg: 16 },
   },
   sad: {
     fill: 'rgba(225,235,255,0.90)',
     stroke: '#506eb4',
     strokeWidth: 2,
     textColor: '#324678',
-    isCloud: true,
-    cloudPreset: 'sad',
+    isOval: true,
     position: 'top',
     icon: 'teardrop',
-    insetX: 0.16, insetY: 0.18,
-    tail: { type: 'B', baseSpread: 0.10, length: 0.22, skewDeg: -16 },
   },
   surprised: {
     fill: 'rgba(255,248,220,0.95)',
@@ -143,12 +133,9 @@ const BUBBLE_CONFIGS = {
     stroke: '#b0a030',
     strokeWidth: 2,
     textColor: '#5a5014',
-    isCloud: true,
-    cloudPreset: 'realize',
+    isOval: true,
     position: 'top',
     icon: 'lightbulb',
-    insetX: 0.14, insetY: 0.16,
-    tail: { type: 'B', baseSpread: 0.09, length: 0.18, skewDeg: 6 },
   },
 };
 
@@ -648,87 +635,6 @@ function trapezoidPath(bx, by, w, h) {
   return `M${p[0].x},${p[0].y} L${p[1].x},${p[1].y} Q${tr.x},${tr.y} ${p[2].x},${p[2].y} L${p[3].x},${p[3].y} Q${br.x},${br.y} ${p[4].x},${p[4].y} L${p[5].x},${p[5].y} Q${bl.x},${bl.y} ${p[6].x},${p[6].y} L${p[7].x},${p[7].y} Q${tl.x},${tl.y} ${p[0].x},${p[0].y} Z`;
 }
 
-// ── 구름 path 생성기 ──
-// bumps: [{angle, radius}] — 각도(라디안)와 범프 반지름 비율의 배열
-// 하나의 path에 A(호) 명령을 이어붙여 매끄러운 구름 윤곽 생성
-function cloudPath(cx, cy, rx, ry, bumps) {
-  // bumps를 angle 순으로 정렬
-  const sorted = [...bumps].sort((a, b) => a.angle - b.angle);
-  const pts = [];
-
-  for (let i = 0; i < sorted.length; i++) {
-    const bump = sorted[i];
-    const next = sorted[(i + 1) % sorted.length];
-
-    // 범프 정점 (타원 바깥으로 튀어나온 점)
-    const peakR = bump.radius;
-    const peakX = cx + (rx + peakR) * Math.cos(bump.angle);
-    const peakY = cy + (ry + peakR) * Math.sin(bump.angle);
-
-    // 범프 사이 골짜기 (타원 윤곽 안쪽)
-    const midAngle = bump.angle + (next.angle - bump.angle + (next.angle < bump.angle ? Math.PI * 2 : 0)) / 2;
-    const valleyX = cx + rx * 0.92 * Math.cos(midAngle);
-    const valleyY = cy + ry * 0.92 * Math.sin(midAngle);
-
-    pts.push({ x: peakX, y: peakY, r: peakR });
-    pts.push({ x: valleyX, y: valleyY, r: peakR * 0.3, isValley: true });
-  }
-
-  if (pts.length < 2) return '';
-
-  // 시작점
-  let d = `M${pts[0].x},${pts[0].y}`;
-
-  for (let i = 0; i < pts.length; i++) {
-    const curr = pts[i];
-    const next = pts[(i + 1) % pts.length];
-    const r = curr.isValley ? curr.r * 2 : curr.r;
-    d += ` A${r},${r} 0 0,1 ${next.x},${next.y}`;
-  }
-
-  d += ' Z';
-  return d;
-}
-
-// 프리셋 구름 범프 설정
-const CLOUD_PRESETS = {
-  // thought: 위 3개 큰 범프, 좌우 중간, 아래 완만
-  thought: [
-    { angle: -Math.PI * 0.75, radius: 0.28 },  // 좌상
-    { angle: -Math.PI * 0.5,  radius: 0.35 },  // 상단 중앙
-    { angle: -Math.PI * 0.25, radius: 0.28 },  // 우상
-    { angle: 0,               radius: 0.18 },  // 우
-    { angle: Math.PI * 0.35,  radius: 0.15 },  // 우하
-    { angle: Math.PI * 0.65,  radius: 0.15 },  // 좌하
-    { angle: Math.PI,         radius: 0.18 },  // 좌
-  ],
-  // happy: 뭉게구름 6개 범프, 전체적으로 폭신
-  happy: [
-    { angle: -Math.PI * 0.8,  radius: 0.22 },
-    { angle: -Math.PI * 0.5,  radius: 0.30 },
-    { angle: -Math.PI * 0.2,  radius: 0.25 },
-    { angle: Math.PI * 0.15,  radius: 0.20 },
-    { angle: Math.PI * 0.5,   radius: 0.22 },
-    { angle: Math.PI * 0.85,  radius: 0.20 },
-  ],
-  // sad: 5개 범프, 아래쪽 완만 (처진 느낌)
-  sad: [
-    { angle: -Math.PI * 0.75, radius: 0.25 },
-    { angle: -Math.PI * 0.4,  radius: 0.30 },
-    { angle: -Math.PI * 0.05, radius: 0.22 },
-    { angle: Math.PI * 0.4,   radius: 0.12 },  // 아래쪽 작게
-    { angle: Math.PI * 0.85,  radius: 0.14 },  // 아래쪽 작게
-  ],
-  // realize: 위 3개 범프, 아래는 평평
-  realize: [
-    { angle: -Math.PI * 0.7,  radius: 0.24 },
-    { angle: -Math.PI * 0.4,  radius: 0.28 },
-    { angle: -Math.PI * 0.1,  radius: 0.22 },
-    { angle: Math.PI * 0.2,   radius: 0.08 },  // 우하 거의 평평
-    { angle: Math.PI * 0.5,   radius: 0.06 },  // 하단 거의 평평
-    { angle: Math.PI * 0.8,   radius: 0.08 },  // 좌하 거의 평평
-  ],
-};
 
 // ── 아이콘 렌더러 ──
 
@@ -825,7 +731,7 @@ function computeBubbleSize(cfg, textBlockW, textBlockH, bubbleW, fixedWidth, min
     }
   }
 
-  // ── 비타원(사각형/구름/스파이크 등): 기존 inset 방식 ──
+  // ── 비타원(사각형/스파이크 등): 기존 inset 방식 ──
   const ix = cfg.insetX || 0;
   const iy = cfg.insetY || 0;
 
@@ -1002,12 +908,14 @@ export function SingleBubble({
       elements.push(
         <path key="shape" d={d}
           fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw}
+          strokeDasharray={cfg.strokeDash || 'none'}
           strokeLinejoin="round" />
       );
     } else {
       elements.push(
         <ellipse key="shape" cx={cx} cy={cy} rx={rxE} ry={ryE}
-          fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} />
+          fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw}
+          strokeDasharray={cfg.strokeDash || 'none'} />
       );
     }
   } else if (cfg.isEllipse) {
@@ -1016,23 +924,6 @@ export function SingleBubble({
         fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw}
         strokeDasharray={cfg.strokeDash || 'none'} />
     );
-  } else if (cfg.isCloud) {
-    const preset = CLOUD_PRESETS[cfg.cloudPreset] || CLOUD_PRESETS.thought;
-    const scaledBumps = preset.map(b => ({
-      angle: b.angle,
-      radius: b.radius * Math.min(rxE, ryE),
-    }));
-    const d = cloudPath(cx, cy, rxE * 0.82, ryE * 0.82, scaledBumps);
-    elements.push(
-      <path key="shape" d={d} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} strokeLinejoin="round" />
-    );
-    if (tailData) {
-      const [p1x, p1y] = tailData.p1;
-      const tailPath = `M${p1x},${p1y} ${tailData.pathSuffix} Z`;
-      elements.push(
-        <path key="tail" d={tailPath} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} strokeLinejoin="round" />
-      );
-    }
   } else if (cfg.isTrapezoidal) {
     // shy — 사다리꼴 + 꼬리 단일 path
     const cornerR = Math.max(4 * s, needW * 0.06);
@@ -1162,15 +1053,6 @@ export function BubbleMiniIcon({ styleKey, size = 32, selected = false, onClick 
   } else if (cfg.isOval) {
     shape = <ellipse cx={mcx} cy={mcy} rx={mcx - pad} ry={mcy - pad}
       fill={cfg.fill} stroke={cfg.stroke} strokeWidth={1.5} />;
-  } else if (cfg.isCloud) {
-    const miniRx = mcx - pad - 2, miniRy = mcy - pad - 2;
-    const preset = CLOUD_PRESETS[cfg.cloudPreset] || CLOUD_PRESETS.thought;
-    const scaledBumps = preset.map(b => ({
-      angle: b.angle,
-      radius: b.radius * Math.min(miniRx, miniRy) * 0.7,
-    }));
-    const d = cloudPath(mcx, mcy, miniRx * 0.75, miniRy * 0.75, scaledBumps);
-    shape = <path d={d} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={1.5} strokeLinejoin="round" />;
   } else if (cfg.isCaption) {
     shape = <rect x={pad} y={pad} width={w - pad * 2} height={h - pad * 2}
       rx={2} fill={cfg.fill} stroke={cfg.stroke || '#444'} strokeWidth={1} />;
