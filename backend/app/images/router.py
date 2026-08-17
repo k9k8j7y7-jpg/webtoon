@@ -156,6 +156,9 @@ async def update_dialogue(
     spec = dict(cut.spec)
     dialogue = body.get("dialogue", [])
     spec["dialogue"] = dialogue
+    sfx_items = body.get("sfx_items")
+    if sfx_items is not None:
+        spec["sfx_items"] = sfx_items
     cut.spec = spec
 
     # 원본 이미지 위에 재조판 (12종 말풍선 자동 매핑)

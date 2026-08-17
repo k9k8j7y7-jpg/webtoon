@@ -98,9 +98,8 @@ const BUBBLE_CONFIGS = {
     strokeWidth: 2,
     textColor: '#a06414',
     isSpiky: true,
-    spikeCount: 8,
+    spikeCount: 10,
     innerRatio: 0.78,
-    roundedValleys: true,
     position: 'top',
     icon: 'star',
   },
@@ -131,7 +130,6 @@ const BUBBLE_CONFIGS = {
     textColor: '#5a5014',
     isOval: true,
     position: 'top',
-    icon: 'lightbulb',
   },
 };
 
@@ -743,12 +741,13 @@ export function SingleBubble({
     const path = cfg.angryVariation
       ? spikyPath(cx, cy, rxE, ryE, cfg.spikeCount, depth, true)
       : pathFn(cx, cy, rxE, ryE, cfg.spikeCount, depth);
-    // 꼬리: innerR 기준 타원에 낫형 부착 → 꼬리 먼저, 본체 나중 (밑동 덮기)
+    // 꼬리: round와 동일한 buildRoundTail을 골(innerR) 타원에 호출
+    // 꼬리 먼저 → 본체 나중 (밑동이 본체에 덮임)
     if (dir !== 'none') {
       const rt = buildRoundTail(cx, cy, innerRx, innerRy, needH, dir, flip, s);
-      const tailPath = `M${rt.P1.x},${rt.P1.y} L${rt.T.x},${rt.T.y} L${rt.K.x},${rt.K.y} Z`;
+      const tailD = `M${rt.P1.x},${rt.P1.y} L${rt.T.x},${rt.T.y} L${rt.K.x},${rt.K.y} Z`;
       elements.push(
-        <path key="tail" d={tailPath} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} strokeLinejoin="round" />
+        <path key="tail" d={tailD} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} strokeLinejoin="round" />
       );
     }
     elements.push(

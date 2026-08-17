@@ -5,6 +5,7 @@ import BubbleOverlay, { BubbleMiniIcon, STYLE_ORDER, STYLE_LABELS } from '../Bub
 import { resolveBubbleStyle } from '../../utils/bubbleMapping';
 import { Image, RefreshCw, RotateCcw, Download, Check, AlertTriangle, MessageSquare, Save, X, ZoomIn, ChevronLeft, ChevronRight, Pencil } from 'lucide-react';
 import CutEditor from '../CutEditor';
+import SfxLayer from '../SfxLayer';
 
 // ── 그리드 컷 카드: 이미지 + SVG 말풍선 오버레이 ──
 function CutImageWithBubbles({ cut, imageUrl, onZoom }) {
@@ -37,6 +38,10 @@ function CutImageWithBubbles({ cut, imageUrl, onZoom }) {
           width={dims.w}
           height={dims.h}
         />
+      )}
+      {/* SVG 효과음 오버레이 */}
+      {dims.w > 0 && (
+        <SfxLayer sfxItems={cut.sfx_items} width={dims.w} height={dims.h} />
       )}
       {/* 확대 미리보기 오버레이 */}
       <button
@@ -89,6 +94,9 @@ function LightboxImageWithBubbles({ cut, imgSrc }) {
           width={dims.w}
           height={dims.h}
         />
+      )}
+      {dims.w > 0 && (
+        <SfxLayer sfxItems={cut.sfx_items} width={dims.w} height={dims.h} />
       )}
     </div>
   );

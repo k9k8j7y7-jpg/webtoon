@@ -309,6 +309,105 @@ async function main() {
     }
   }
 
+  // ── C단계: 저장 왕복 검증 ──
+  console.log('\n=== C: Save round-trip test (#10) ===');
+  // Gate5로 복귀
+  await page.goto(episodeUrl, { waitUntil: 'networkidle', timeout: 30000 });
+  await page.waitForTimeout(2000);
+  {
+    const g5 = await page.$('button:has-text("이미지"), button:has-text("5단계"), [data-gate="5"]');
+    if (g5) { await g5.click(); await page.waitForTimeout(2000); }
+    try { await page.waitForSelector('.aspect-square img', { timeout: 10000 }); } catch {}
+    await page.waitForTimeout(2000);
+  }
+
+  // #10 편집 열기
+  {
+    const cards = await page.$$('.grid .border-2.rounded-2xl');
+    const target = cards[9];
+    if (target) {
+      await target.scrollIntoViewIfNeeded();
+      const eBtn = await target.$('button:has-text("편집")');
+      if (eBtn) await eBtn.click();
+      await page.waitForTimeout(2000);
+
+      // 편집 모드
+      const emBtn = await page.$('.bg-purple-600:has-text("편집")');
+      if (emBtn) {
+        await emBtn.click({ timeout: 5000 });
+        await page.waitForTimeout(1000);
+
+        // 말풍선 드래그: 첫 말풍선의 위치를 읽고 50px 오른쪽으로 이동
+        const bubbleHit = await page.$('svg rect[style*="cursor: grab"]');
+        if (bubbleHit) {
+          const box = await bubbleHit.boundingBox();
+          const fromX = box.x + box.width / 2;
+          const fromY = box.y + box.height / 2;
+          await page.mouse.move(fromX, fromY);
+          await page.mouse.down();
+          await page.mouse.move(fromX + 50, fromY, { steps: 10 });
+          await page.mouse.up();
+          await page.waitForTimeout(300);
+          console.log(`  Dragged bubble from x=${Math.round(fromX)} to x=${Math.round(fromX + 50)}`);
+        }
+
+        // 저장 버튼 클릭
+        const saveBtn = await page.$('button:has-text("저장")');
+        if (saveBtn) {
+          await saveBtn.click({ timeout: 5000 });
+          await page.waitForTimeout(3000); // API + loadCuts 대기
+          console.log('  Save clicked, waiting for reload...');
+        }
+
+        // 저장 후 보기 모드로 전환되었는지 확인
+        const modeLabel = await page.$('text=보기 모드');
+        console.log(`  After save, view mode: ${modeLabel ? 'YES' : 'NO'}`);
+
+        // 스크린샷
+        await page.screenshot({ path: resolve(outDir, 'ep13-c-after-save.png') });
+        console.log('Saved: ep13-c-after-save.png');
+
+        // CutEditor 닫기
+        try {
+          const xBtn = await page.$('.fixed.inset-0.z-50.bg-black .shrink-0 button:has(svg.lucide-x)');
+          if (xBtn) await xBtn.click({ force: true, timeout: 2000 });
+        } catch {}
+        await page.waitForTimeout(500);
+      }
+
+      // 페이지 새로고침 후 유지 확인
+      console.log('  Refreshing page...');
+      await page.goto(episodeUrl, { waitUntil: 'networkidle', timeout: 30000 });
+      await page.waitForTimeout(2000);
+      {
+        const g5 = await page.$('button:has-text("이미지"), button:has-text("5단계"), [data-gate="5"]');
+        if (g5) { await g5.click(); await page.waitForTimeout(2000); }
+        try { await page.waitForSelector('.aspect-square img', { timeout: 10000 }); } catch {}
+        await page.waitForTimeout(2000);
+      }
+
+      // #10 다시 편집 열기 → 위치 유지 확인
+      const cards2 = await page.$$('.grid .border-2.rounded-2xl');
+      const target2 = cards2[9];
+      if (target2) {
+        await target2.scrollIntoViewIfNeeded();
+        const eBtn2 = await target2.$('button:has-text("편집")');
+        if (eBtn2) await eBtn2.click();
+        await page.waitForTimeout(2000);
+        await page.screenshot({ path: resolve(outDir, 'ep13-c-after-refresh.png') });
+        console.log('Saved: ep13-c-after-refresh.png');
+        console.log('  Round-trip: check screenshots for position persistence');
+
+        // CutEditor 닫기
+        try {
+          const xBtn = await page.$('.fixed.inset-0.z-50.bg-black .shrink-0 button:has(svg.lucide-x)');
+          if (xBtn) await xBtn.click({ force: true, timeout: 2000 });
+        } catch {}
+        await page.waitForTimeout(500);
+      }
+    }
+  }
+
   // ── 결과 요약 ──
   console.log('\n========== LAYOUT RESULTS ==========');
   let allPass = true;
