@@ -58,11 +58,9 @@ const BUBBLE_CONFIGS = {
     textColor: '#141414',
     isSpiky: true,
     spikeCount: 13,
-    spikeDepth: 0.22,
+    innerRatio: 0.80,
     position: 'top',
     fontSize: 1.15,
-    insetX: 0.20, insetY: 0.22,
-    tail: { type: 'B', baseSpread: 0.08, length: 0.48, skewDeg: 26 },
   },
   angry: {
     fill: 'rgba(255,230,230,0.95)',
@@ -71,12 +69,11 @@ const BUBBLE_CONFIGS = {
     textColor: '#aa1e1e',
     isSpiky: true,
     spikeCount: 15,
-    spikeDepth: 0.30,
+    innerRatio: 0.72,
+    angryVariation: true,
     position: 'top',
     fontSize: 1.15,
     icon: 'lightning',
-    insetX: 0.20, insetY: 0.22,
-    tail: { type: 'B', baseSpread: 0.08, length: 0.40, skewDeg: 26 },
   },
   happy: {
     fill: 'rgba(255,230,242,0.95)',
@@ -100,13 +97,12 @@ const BUBBLE_CONFIGS = {
     stroke: '#c88800',
     strokeWidth: 2,
     textColor: '#a06414',
-    isBigSpiky: true,
+    isSpiky: true,
     spikeCount: 8,
-    spikeDepth: 0.18,
+    innerRatio: 0.78,
+    roundedValleys: true,
     position: 'top',
     icon: 'star',
-    insetX: 0.18, insetY: 0.20,
-    tail: { type: 'A', baseSpread: 0.20, length: 0.42, skewDeg: -28, curveAmount: 0.62 },
   },
   shy: {
     fill: 'rgba(255,220,235,0.86)',
@@ -146,8 +142,6 @@ const BASE_FONT_SIZE = 14;      // REF_WIDTH 기준 폰트 크기
 const LINE_HEIGHT_RATIO = 1.45;
 const BASE_PADDING_X = 14;      // REF_WIDTH 기준 가로 패딩
 const BASE_PADDING_Y = 10;      // REF_WIDTH 기준 세로 패딩
-const TEXT_WIDTH_RATIO = 0.72;   // fixedWidth 타원: 가로의 72%만 텍스트 영역으로 사용
-
 // ── 꼬리 고정 크기 (REF_WIDTH 기준 px, scale 곱해서 사용) ──
 const TAIL_BASE = 18;            // 밑변 폭 px
 const TAIL_LEN = 26;             // 꼬리 길이 px
@@ -173,14 +167,20 @@ export function wrapText(text, maxCharsPerLine) {
 
 // ── 스파이크 다각형 경로 생성 ──
 
-function spikyPath(cx, cy, rx, ry, count, depth) {
+function spikyPath(cx, cy, rx, ry, count, depth, variation) {
   const points = [];
   const total = count * 2;
   for (let i = 0; i < total; i++) {
     const angle = (2 * Math.PI / total) * i - Math.PI / 2;
     const isOuter = i % 2 === 0;
-    const rxi = isOuter ? rx : rx * (1 - depth);
-    const ryi = isOuter ? ry : ry * (1 - depth);
+    let mult = 1;
+    if (variation && isOuter) {
+      // angry: i%3 기반 결정적 변주 (±5%)
+      const mod = (i / 2) % 3;
+      mult = mod === 0 ? 1.05 : mod === 1 ? 0.95 : 1.0;
+    }
+    const rxi = isOuter ? rx * mult : rx * (1 - depth);
+    const ryi = isOuter ? ry * mult : ry * (1 - depth);
     points.push(`${cx + rxi * Math.cos(angle)},${cy + ryi * Math.sin(angle)}`);
   }
   return `M${points.join('L')}Z`;
@@ -190,25 +190,8 @@ function spikyPath(cx, cy, rx, ry, count, depth) {
 // 꼬리 공통 헬퍼
 // ══════════════════════════════════════════════════════
 
-function tailBaseAngle(tailDirection) {
-  switch (tailDirection) {
-    case 'up': return -Math.PI / 2;
-    case 'left': return Math.PI;
-    case 'right': return 0;
-    default: return Math.PI / 2; // down
-  }
-}
-
 function lerp(a, b, t) { return a + (b - a) * t; }
 
-function lerpPt(ax, ay, bx, by, t) {
-  return [lerp(ax, bx, t), lerp(ay, by, t)];
-}
-
-// 타원 윤곽선 위의 점
-function pointOnEllipse(cx, cy, rx, ry, theta) {
-  return [cx + rx * Math.cos(theta), cy + ry * Math.sin(theta)];
-}
 
 // ══════════════════════════════════════════════════════
 // flustered: 둥근 사각형 + 타입A 꼬리 — 단일 path, 고정 크기
@@ -396,128 +379,6 @@ function buildTrapezoidWithTailB(bx, by, w, h, r, tailDir, flip, params, scale) 
   return d;
 }
 
-// ── 타입 A — 낫형 (갈고리) ──
-// 바깥쪽 변은 직선, 안쪽 변은 곡선으로 휘어 들어옴
-// 반환: { pathSuffix, p1, p2 } — pathSuffix는 "L tip Q ctrl p2" 형태
-function buildTailA(cx, cy, rx, ry, needH, tailDir, flip, params, scale) {
-  const { baseSpread, length: lenRatio, skewDeg, curveAmount } = params;
-  const base = tailBaseAngle(tailDir);
-  const skew = (flip ? -skewDeg : skewDeg) * Math.PI / 180;
-  const center = base + skew;
-  const a1 = center - baseSpread;
-  const a2 = center + baseSpread;
-
-  // 밑변 두 점 (타원 위, 안쪽으로 당김)
-  const [raw1x, raw1y] = pointOnEllipse(cx, cy, rx, ry, a1);
-  const [raw2x, raw2y] = pointOnEllipse(cx, cy, rx, ry, a2);
-  const inset = 3 * (scale || 1);
-  const d1 = Math.sqrt((raw1x - cx) ** 2 + (raw1y - cy) ** 2);
-  const d2 = Math.sqrt((raw2x - cx) ** 2 + (raw2y - cy) ** 2);
-  const p1x = raw1x - (raw1x - cx) / d1 * inset;
-  const p1y = raw1y - (raw1y - cy) / d1 * inset;
-  const p2x = raw2x - (raw2x - cx) / d2 * inset;
-  const p2y = raw2y - (raw2y - cy) / d2 * inset;
-
-  // 꼬리 끝점: 밑변 중점에서 진행 방향으로 length만큼
-  const tailLen = needH * lenRatio;
-  const midX = (p1x + p2x) / 2;
-  const midY = (p1y + p2y) / 2;
-  const tipX = midX + tailLen * Math.cos(center);
-  const tipY = midY + tailLen * Math.sin(center);
-
-  // 안쪽 변 곡선 제어점: tip→p2 중점에서 본체 중심 쪽으로 당김
-  const [qMidX, qMidY] = lerpPt(tipX, tipY, p2x, p2y, 0.5);
-  const [ctrlX, ctrlY] = lerpPt(qMidX, qMidY, cx, cy, curveAmount);
-
-  return {
-    p1: [p1x, p1y],
-    p2: [p2x, p2y],
-    pathSuffix: `L${tipX},${tipY} Q${ctrlX},${ctrlY} ${p2x},${p2y}`,
-  };
-}
-
-// ── 타입 B — 직선 침형 ──
-function buildTailB(cx, cy, rx, ry, needH, tailDir, flip, params, scale) {
-  const { baseSpread, length: lenRatio, skewDeg } = params;
-  const base = tailBaseAngle(tailDir);
-  const skew = (flip ? -skewDeg : skewDeg) * Math.PI / 180;
-  const center = base + skew;
-  const a1 = center - baseSpread;
-  const a2 = center + baseSpread;
-
-  const [raw1x, raw1y] = pointOnEllipse(cx, cy, rx, ry, a1);
-  const [raw2x, raw2y] = pointOnEllipse(cx, cy, rx, ry, a2);
-  const inset = 3 * (scale || 1);
-  const d1 = Math.sqrt((raw1x - cx) ** 2 + (raw1y - cy) ** 2);
-  const d2 = Math.sqrt((raw2x - cx) ** 2 + (raw2y - cy) ** 2);
-  const p1x = raw1x - (raw1x - cx) / d1 * inset;
-  const p1y = raw1y - (raw1y - cy) / d1 * inset;
-  const p2x = raw2x - (raw2x - cx) / d2 * inset;
-  const p2y = raw2y - (raw2y - cy) / d2 * inset;
-
-  const tailLen = needH * lenRatio;
-  const midX = (p1x + p2x) / 2;
-  const midY = (p1y + p2y) / 2;
-  const tipX = midX + tailLen * Math.cos(center);
-  const tipY = midY + tailLen * Math.sin(center);
-
-  return {
-    p1: [p1x, p1y],
-    p2: [p2x, p2y],
-    pathSuffix: `L${tipX},${tipY} L${p2x},${p2y}`,
-  };
-}
-
-// ── 타입 C — 대칭 삼각형 (narration) ──
-// 사각형 하단 중앙에서 아래로 뻗음. flipTail 무시.
-function buildTailC(bx, by, needW, needH, params) {
-  const { baseWidthRatio, length: lenRatio } = params;
-  const halfBase = needW * baseWidthRatio / 2;
-  const tailLen = needH * lenRatio;
-  const centerX = bx + needW / 2;
-  const bottomY = by + needH;
-
-  const p1x = centerX - halfBase;
-  const p2x = centerX + halfBase;
-  const tipX = centerX;
-  const tipY = bottomY + tailLen;
-
-  return {
-    p1: [p1x, bottomY],
-    p2: [p2x, bottomY],
-    pathSuffix: `L${tipX},${tipY} L${p2x},${bottomY}`,
-    // 사각형 path에 삽입: 하단 변을 p1→tip→p2로 끊음
-    insertAtBottom: true,
-  };
-}
-
-// ── 타입 D — 원 2개 (별도 JSX) ──
-function buildTailD(cx, cy, rx, ry, needH, tailDir, flip, params, cfg) {
-  const { r1, r2Ratio, gap1, gap2, skewDeg } = params;
-  const base = tailBaseAngle(tailDir);
-  const skew = (flip ? -skewDeg : skewDeg) * Math.PI / 180;
-  const center = base + skew;
-
-  // 본체 윤곽선 위의 점
-  const [edgeX, edgeY] = pointOnEllipse(cx, cy, rx, ry, center);
-
-  // 큰 원
-  const bigR = needH * r1;
-  const bigCx = edgeX + (gap1 * needH + bigR) * Math.cos(center);
-  const bigCy = edgeY + (gap1 * needH + bigR) * Math.sin(center);
-
-  // 작은 원
-  const smallR = bigR * r2Ratio;
-  const smallCx = bigCx + (gap2 * needH + smallR) * Math.cos(center);
-  const smallCy = bigCy + (gap2 * needH + smallR) * Math.sin(center);
-
-  return [
-    <circle key="tail-dot1" cx={bigCx} cy={bigCy} r={bigR}
-      fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} />,
-    <circle key="tail-dot2" cx={smallCx} cy={smallCy} r={smallR}
-      fill={cfg.fill} stroke={cfg.stroke} strokeWidth={cfg.strokeWidth} />,
-  ];
-}
 
 // ── round 전용 꼬리 — 4점 접힌 갈고리, 고정 크기 ──
 function buildRoundTail(cx, cy, rx, ry, needH, tailDir, flip, scale) {
@@ -731,7 +592,37 @@ function computeBubbleSize(cfg, textBlockW, textBlockH, bubbleW, fixedWidth, min
     }
   }
 
-  // ── 비타원(사각형/스파이크 등): 기존 inset 방식 ──
+  // ── 스파이크(isSpiky): 골(innerR) 기준 타원 방정식 ──
+  if (cfg.isSpiky) {
+    const ir = cfg.innerRatio || 0.80;
+    const a = textBlockW / 2 + PADDING_X;
+    const b = textBlockH / 2 + PADDING_Y;
+
+    if (fixedWidth || cfg.isCaption) {
+      const needW = bubbleW;
+      const innerRx = needW / 2 * ir;
+      const safeRatio = Math.min(a / innerRx, 0.85);
+      const innerRy = b / Math.sqrt(1 - safeRatio * safeRatio);
+      let needH = (innerRy / ir) * 2;
+      needH = Math.max(needH, minHeightPx || 0);
+      return { needW, needH };
+    } else {
+      const innerRx = a * Math.SQRT2;
+      const innerRy = b * Math.SQRT2;
+      let needW = (innerRx / ir) * 2;
+      let needH = (innerRy / ir) * 2;
+      needW = Math.min(bubbleW, Math.max(60 * sc, needW));
+      if (needW < (innerRx / ir) * 2) {
+        const clampedInnerRx = needW / 2 * ir;
+        const safeRatioC = Math.min(a / clampedInnerRx, 0.85);
+        needH = ((b / Math.sqrt(1 - safeRatioC * safeRatioC)) / ir) * 2;
+      }
+      needH = Math.max(needH, minHeightPx || 0);
+      return { needW, needH };
+    }
+  }
+
+  // ── 비타원(사각형 등): 기존 inset 방식 ──
   const ix = cfg.insetX || 0;
   const iy = cfg.insetY || 0;
 
@@ -808,7 +699,6 @@ export function SingleBubble({
   const elements = [];
   const dir = tailDirection || 'down';
   const flip = flipTail || false;
-  const tailCfg = cfg.tail;
 
   // ── 자막 (나레이션) — 전폭, 각진 사각형, 꼬리 없음 ──
   if (cfg.isCaption) {
@@ -841,65 +731,29 @@ export function SingleBubble({
     return <g>{elements}</g>;
   }
 
-  // ── 말풍선 모양 + 꼬리 (하나의 path로 합침) ──
-
-  // 꼬리 데이터 계산
-  let tailData = null;
-  let tailDots = null; // 타입D용
-  // 사각형 계열(flustered, shy)은 본체+꼬리 단일 path로 별도 처리
-  if (tailCfg && dir !== 'none' && !cfg.isRoundedRect && !cfg.isTrapezoidal) {
-    if (tailCfg.type === 'A') {
-      tailData = buildTailA(cx, cy, rxE, ryE, needH, dir, flip, tailCfg, s);
-    } else if (tailCfg.type === 'B') {
-      tailData = buildTailB(cx, cy, rxE, ryE, needH, dir, flip, tailCfg, s);
-    } else if (tailCfg.type === 'D') {
-      tailDots = buildTailD(cx, cy, rxE, ryE, needH, dir, flip, tailCfg, {...cfg, strokeWidth: sw});
-    }
-  }
+  // ── 말풍선 모양 + 꼬리 ──
 
   if (cfg.isSpiky) {
-    const margin = 8 * s;
-    const path = spikyPath(cx, cy, needW / 2 + margin, needH / 2 + margin, cfg.spikeCount, cfg.spikeDepth);
-    if (tailData) {
-      elements.push(
-        <path key="shape" d={path} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} strokeLinejoin="round" />
-      );
-      const [p1x, p1y] = tailData.p1;
-      const [p2x, p2y] = tailData.p2;
-      const tailPath = `M${p1x},${p1y} ${tailData.pathSuffix} Z`;
-      elements.push(
-        <path key="tail" d={tailPath} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} strokeLinejoin="round" />
-      );
-      const innerPath = spikyPath(cx, cy, (needW / 2 + margin) * 0.97, (needH / 2 + margin) * 0.97, cfg.spikeCount, cfg.spikeDepth);
-      elements.push(
-        <path key="tail-cover" d={innerPath} fill={cfg.fill} stroke="none" />
-      );
-    } else {
-      elements.push(
-        <path key="shape" d={path} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} strokeLinejoin="round" />
-      );
-    }
-  } else if (cfg.isBigSpiky) {
-    const margin = 8 * s;
-    const path = bigSpikyPath(cx, cy, needW / 2 + margin, needH / 2 + margin, cfg.spikeCount, cfg.spikeDepth);
-    if (tailData) {
-      elements.push(
-        <path key="shape" d={path} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} strokeLinejoin="round" />
-      );
-      const [p1x, p1y] = tailData.p1;
-      const tailPath = `M${p1x},${p1y} ${tailData.pathSuffix} Z`;
+    const ir = cfg.innerRatio || 0.80;
+    const depth = 1 - ir;
+    const innerRx = rxE * ir;
+    const innerRy = ryE * ir;
+    // 스파이크 path (outerR = rxE, innerR = rxE * ir)
+    const pathFn = cfg.roundedValleys ? bigSpikyPath : spikyPath;
+    const path = cfg.angryVariation
+      ? spikyPath(cx, cy, rxE, ryE, cfg.spikeCount, depth, true)
+      : pathFn(cx, cy, rxE, ryE, cfg.spikeCount, depth);
+    // 꼬리: innerR 기준 타원에 낫형 부착 → 꼬리 먼저, 본체 나중 (밑동 덮기)
+    if (dir !== 'none') {
+      const rt = buildRoundTail(cx, cy, innerRx, innerRy, needH, dir, flip, s);
+      const tailPath = `M${rt.P1.x},${rt.P1.y} L${rt.T.x},${rt.T.y} L${rt.K.x},${rt.K.y} Z`;
       elements.push(
         <path key="tail" d={tailPath} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} strokeLinejoin="round" />
       );
-      const innerPath = bigSpikyPath(cx, cy, (needW / 2 + margin) * 0.97, (needH / 2 + margin) * 0.97, cfg.spikeCount, cfg.spikeDepth);
-      elements.push(
-        <path key="tail-cover" d={innerPath} fill={cfg.fill} stroke="none" />
-      );
-    } else {
-      elements.push(
-        <path key="shape" d={path} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} strokeLinejoin="round" />
-      );
     }
+    elements.push(
+      <path key="shape" d={path} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} strokeLinejoin="round" />
+    );
   } else if (cfg.isOval) {
     if (dir !== 'none') {
       const rt = buildRoundTail(cx, cy, rxE, ryE, needH, dir, flip, s);
@@ -918,17 +772,11 @@ export function SingleBubble({
           strokeDasharray={cfg.strokeDash || 'none'} />
       );
     }
-  } else if (cfg.isEllipse) {
-    elements.push(
-      <ellipse key="shape" cx={cx} cy={cy} rx={rxE} ry={ryE}
-        fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw}
-        strokeDasharray={cfg.strokeDash || 'none'} />
-    );
   } else if (cfg.isTrapezoidal) {
     // shy — 사다리꼴 + 꼬리 단일 path
     const cornerR = Math.max(4 * s, needW * 0.06);
-    if (tailCfg && dir !== 'none') {
-      const d = buildTrapezoidWithTailB(bx, by, needW, needH, cornerR, dir, flip, tailCfg, s);
+    if (cfg.tail && dir !== 'none') {
+      const d = buildTrapezoidWithTailB(bx, by, needW, needH, cornerR, dir, flip, cfg.tail, s);
       elements.push(
         <path key="shape" d={d} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} strokeLinejoin="round" />
       );
@@ -943,8 +791,8 @@ export function SingleBubble({
     // 반경: min(W,H)*0.25, 상한 H*0.35 — 알약 방지, 직선 구간 보장
     const rawR = Math.min(needW, needH) * 0.25;
     const radius = Math.min(rawR, needH * 0.35);
-    if (tailCfg && dir !== 'none') {
-      const d = buildRoundedRectWithTailA(bx, by, needW, needH, radius, dir, flip, tailCfg, s);
+    if (cfg.tail && dir !== 'none') {
+      const d = buildRoundedRectWithTailA(bx, by, needW, needH, radius, dir, flip, cfg.tail, s);
       elements.push(
         <path key="shape" d={d} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} strokeLinejoin="round" />
       );
@@ -956,32 +804,6 @@ export function SingleBubble({
           fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} />
       );
     }
-  } else {
-    // 기타 사각형 계열
-    const radius = cfg.cornerRadius ? Math.max(4 * s, needW * cfg.cornerRadius) : Math.max(4 * s, needW * 0.08);
-    if (tailData) {
-      elements.push(
-        <rect key="shape" x={bx} y={by} width={needW} height={needH}
-          rx={radius} ry={radius}
-          fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} />
-      );
-      const [p1x, p1y] = tailData.p1;
-      const tailPath = `M${p1x},${p1y} ${tailData.pathSuffix} Z`;
-      elements.push(
-        <path key="tail" d={tailPath} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} strokeLinejoin="round" />
-      );
-    } else {
-      elements.push(
-        <rect key="shape" x={bx} y={by} width={needW} height={needH}
-          rx={radius} ry={radius}
-          fill={cfg.fill} stroke={cfg.stroke} strokeWidth={sw} />
-      );
-    }
-  }
-
-  // ── 타입D 꼬리 (별도 원 2개) ──
-  if (tailDots) {
-    elements.push(...tailDots);
   }
 
   // ── 아이콘 ──
@@ -1041,18 +863,15 @@ export function BubbleMiniIcon({ styleKey, size = 32, selected = false, onClick 
 
   let shape;
   if (cfg.isSpiky) {
-    const path = spikyPath(mcx, mcy, mcx - pad, mcy - pad, cfg.spikeCount || 12, cfg.spikeDepth || 0.15);
+    const ir = cfg.innerRatio || 0.80;
+    const depth = 1 - ir;
+    const pathFn = cfg.roundedValleys ? bigSpikyPath : spikyPath;
+    const path = pathFn(mcx, mcy, mcx - pad, mcy - pad, cfg.spikeCount || 12, depth);
     shape = <path d={path} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={1.5} strokeLinejoin="round" />;
-  } else if (cfg.isBigSpiky) {
-    const path = bigSpikyPath(mcx, mcy, mcx - pad, mcy - pad, cfg.spikeCount || 8, cfg.spikeDepth || 0.18);
-    shape = <path d={path} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={1.5} strokeLinejoin="round" />;
-  } else if (cfg.isEllipse) {
+  } else if (cfg.isOval) {
     shape = <ellipse cx={mcx} cy={mcy} rx={mcx - pad} ry={mcy - pad}
       fill={cfg.fill} stroke={cfg.stroke} strokeWidth={1.5}
       strokeDasharray={cfg.strokeDash || 'none'} />;
-  } else if (cfg.isOval) {
-    shape = <ellipse cx={mcx} cy={mcy} rx={mcx - pad} ry={mcy - pad}
-      fill={cfg.fill} stroke={cfg.stroke} strokeWidth={1.5} />;
   } else if (cfg.isCaption) {
     shape = <rect x={pad} y={pad} width={w - pad * 2} height={h - pad * 2}
       rx={2} fill={cfg.fill} stroke={cfg.stroke || '#444'} strokeWidth={1} />;
