@@ -618,6 +618,8 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                         fontScale={fontScale}
                         fixedWidth={true}
                         viewW={imgW}
+                        textOffsetX={layout.text_offset_x || 0}
+                        textOffsetY={layout.text_offset_y || 0}
                       />
                     </g>
                     {/* 선택 박스 — 실제 도형 크기(gx,gy,gw,gh) 기준 */}
@@ -871,6 +873,30 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                       className="w-28 accent-purple-500 cursor-pointer" />
                   </div>
                 )}
+
+                {/* 텍스트 가로 위치 슬라이더 */}
+                <div className="shrink-0">
+                  <p className="text-[10px] text-zinc-500 font-bold mb-1">
+                    텍스트 가로 {Math.round((selectedBubble.bubble_layout?.text_offset_x || 0) * 100)}%
+                  </p>
+                  <input type="range" min={-50} max={50} step={1}
+                    value={Math.round((selectedBubble.bubble_layout?.text_offset_x || 0) * 100)}
+                    onChange={e => updateLayout(selectedIdx, { text_offset_x: Number(e.target.value) / 100 })}
+                    onDoubleClick={() => updateLayout(selectedIdx, { text_offset_x: 0 })}
+                    className="w-28 accent-purple-500 cursor-pointer" />
+                </div>
+
+                {/* 텍스트 세로 위치 슬라이더 */}
+                <div className="shrink-0">
+                  <p className="text-[10px] text-zinc-500 font-bold mb-1">
+                    텍스트 세로 {Math.round((selectedBubble.bubble_layout?.text_offset_y || 0) * 100)}%
+                  </p>
+                  <input type="range" min={-50} max={50} step={1}
+                    value={Math.round((selectedBubble.bubble_layout?.text_offset_y || 0) * 100)}
+                    onChange={e => updateLayout(selectedIdx, { text_offset_y: Number(e.target.value) / 100 })}
+                    onDoubleClick={() => updateLayout(selectedIdx, { text_offset_y: 0 })}
+                    className="w-28 accent-purple-500 cursor-pointer" />
+                </div>
 
                 {/* 종류 팔레트 (나레이션 제외) */}
                 {selectedBubble.type !== 'narration' && (

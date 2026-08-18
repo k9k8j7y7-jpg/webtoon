@@ -214,6 +214,70 @@ export default function BubbleTestPage() {
         ))}
       </div>
 
+      {/* ── text_offset 검증 ── */}
+      <h3 style={{ marginTop: 24, marginBottom: 8 }} id="text-offset-section">text_offset 검증 (round / narration / shout)</h3>
+      {(() => {
+        const toStyles = [
+          { key: 'round', label: '타원(round)' },
+          { key: 'narration', label: '사각(narration)' },
+          { key: 'shout', label: '스파이크(shout)' },
+        ];
+        const toOffsets = [
+          { label: '0,0', ox: 0, oy: 0 },
+          { label: 'n5n5', ox: -0.5, oy: -0.5 },
+          { label: 'p5p5', ox: 0.5, oy: 0.5 },
+          { label: 'p50', ox: 0.5, oy: 0 },
+          { label: '0n5', ox: 0, oy: -0.5 },
+        ];
+        const toTexts = [
+          { label: 'short', text: '오늘 날씨가 좋다', desc: '짧은(여유O)' },
+          { label: 'full', text: '이렇게 긴 문장을 말풍선 안에 넣으면 세 줄 이상으로 줄바꿈이 되어야 정상이다', desc: '긴(여유0)' },
+        ];
+        const vw = 400;
+        const vh = 300;
+        const bw = vw * 0.6;
+        return toStyles.map(({ key: st, label: stLabel }) => (
+          <div key={st} style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 11, fontWeight: 'bold', marginBottom: 4 }}>{stLabel}</div>
+            {toTexts.map(({ label: tl, text: tt, desc }) => (
+              <div key={tl} style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 10, color: '#555', marginBottom: 4 }}>{desc}</div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {toOffsets.map(({ label: ol, ox, oy }) => (
+                    <div key={`to-${st}-${tl}-${ol}`} style={{ border: '1px solid #ccc', background: '#fff', padding: 4 }}
+                      data-testid={`to-${st}-${tl}-${ol}`}>
+                      <div style={{ fontSize: 9, color: '#666', marginBottom: 2 }}>
+                        offset({ox},{oy})
+                      </div>
+                      <div style={{ position: 'relative', width: vw, height: vh, background: '#888' }}>
+                        <svg width={vw} height={vh} viewBox={`0 0 ${vw} ${vh}`}
+                          style={{ position: 'absolute', top: 0, left: 0, overflow: 'visible' }}>
+                          <SingleBubble
+                            style={st}
+                            text={tt}
+                            bubbleX={st === 'narration' ? 0 : (vw - bw) / 2}
+                            bubbleY={10}
+                            bubbleW={st === 'narration' ? vw : bw}
+                            bubbleH={0}
+                            tailDirection={st === 'narration' ? 'none' : 'down'}
+                            flipTail={false}
+                            fontScale={1.0}
+                            fixedWidth={true}
+                            viewW={vw}
+                            textOffsetX={ox}
+                            textOffsetY={oy}
+                          />
+                        </svg>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ));
+      })()}
+
       {/* ── 메인 그리드 (선택된 스타일) ── */}
       <table style={{ borderCollapse: 'collapse' }}>
         <thead>

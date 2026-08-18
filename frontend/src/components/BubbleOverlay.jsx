@@ -643,9 +643,37 @@ function computeBubbleSize(cfg, textBlockW, textBlockH, bubbleW, fixedWidth, min
   return { needW, needH };
 }
 
+// ── 텍스트 오프셋 계산 — 가용 영역 기반, 기존 안전 영역 재사용 ──
+
+function computeTextShift(cfg, rxE, ryE, needW, needH, textBlockW, textBlockH, padX, padY, textOffsetX, textOffsetY) {
+  let availW, availH;
+  if (cfg.isOval) {
+    // safeRatio 0.85 내접 사각형 (computeBubbleSize L569 동일 기준)
+    availW = rxE * 2 * 0.85 - padX * 2;
+    availH = ryE * 2 * 0.85 - padY * 2;
+  } else if (cfg.isSpiky) {
+    // 골(inner) 타원 기준 내접 사각형 (computeBubbleSize L605 동일 기준)
+    const ir = cfg.innerRatio || 0.80;
+    availW = rxE * ir * 2 * 0.85 - padX * 2;
+    availH = ryE * ir * 2 * 0.85 - padY * 2;
+  } else {
+    // 사각형: 본체 − inset − 패딩 (computeBubbleSize L627-628 동일 기준)
+    const ix = cfg.insetX || 0;
+    const iy = cfg.insetY || 0;
+    availW = needW * (1 - ix * 2) - padX * 2;
+    availH = needH * (1 - iy * 2) - padY * 2;
+  }
+  const marginX = Math.max(0, (availW - textBlockW)) / 2;
+  const marginY = Math.max(0, (availH - textBlockH)) / 2;
+  return {
+    shiftX: (textOffsetX || 0) * 2 * marginX,
+    shiftY: (textOffsetY || 0) * 2 * marginY,
+  };
+}
+
 // ── 말풍선 기하학 계산 (CutEditor 편집 모드에서 선택 박스·히트 영역에 사용) ──
 
-export function computeSingleBubbleGeo(style, text, bubbleX, bubbleY, bubbleW, minHeightPx, fontScale, tailDirection, flipTail, fixedWidth, viewW) {
+export function computeSingleBubbleGeo(style, text, bubbleX, bubbleY, bubbleW, minHeightPx, fontScale, tailDirection, flipTail, fixedWidth, viewW, textOffsetX, textOffsetY) {
   const cfg = BUBBLE_CONFIGS[style] || BUBBLE_CONFIGS.round;
   const s = getScale(viewW);
   const fs = fontScale || 1.0;
@@ -663,8 +691,11 @@ export function computeSingleBubbleGeo(style, text, bubbleX, bubbleY, bubbleW, m
 
   const bx = bubbleX + (bubbleW - needW) / 2;
   const by = bubbleY;
+  const rxE = needW / 2;
+  const ryE = needH / 2;
+  const { shiftX, shiftY } = computeTextShift(cfg, rxE, ryE, needW, needH, textBlockW, textBlockH, padX, padY, textOffsetX, textOffsetY);
 
-  return { bx, by, needW, needH, style, cfg };
+  return { bx, by, needW, needH, style, cfg, shiftX, shiftY };
 }
 
 // ── 단일 말풍선 렌더러 ──
@@ -701,6 +732,9 @@ export function SingleBubble({
   const dir = tailDirection || 'down';
   const flip = flipTail || false;
 
+  // ── 텍스트 오프셋 계산 (caption/non-caption 공통) ──
+  const { shiftX, shiftY } = computeTextShift(cfg, rxE, ryE, needW, needH, textBlockW, textBlockH, padX, padY, textOffsetX, textOffsetY);
+
   // ── 자막 (나레이션) — 전폭, 각진 사각형, 꼬리 없음 ──
   if (cfg.isCaption) {
     elements.push(
@@ -708,9 +742,8 @@ export function SingleBubble({
         rx={0} ry={0} fill={cfg.fill} stroke="none" />
     );
     // 텍스트 — 줄 단위 div + nowrap, 가운데 정렬 (round와 동일 방식)
-    const tyOff = (textOffsetY || 0) * needH;
     elements.push(
-      <foreignObject key="text" x={bx} y={cy - textBlockH / 2 + tyOff}
+      <foreignObject key="text" x={bx + shiftX} y={cy - textBlockH / 2 + shiftY}
         width={needW} height={textBlockH}>
         <div xmlns="http://www.w3.org/1999/xhtml"
           style={{
@@ -811,9 +844,8 @@ export function SingleBubble({
   }
 
   // ── 텍스트 (foreignObject) — 줄 단위 div + nowrap, 가로·세로 중앙 정렬 ──
-  const tyOff = (textOffsetY || 0) * needH;
   elements.push(
-    <foreignObject key="text" x={bx} y={cy - textBlockH / 2 + tyOff}
+    <foreignObject key="text" x={bx + shiftX} y={cy - textBlockH / 2 + shiftY}
       width={needW} height={textBlockH}>
       <div xmlns="http://www.w3.org/1999/xhtml"
         style={{
