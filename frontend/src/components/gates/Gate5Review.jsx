@@ -7,7 +7,7 @@ import { Image, RefreshCw, RotateCcw, Download, Check, AlertTriangle, MessageSqu
 import CutEditor from '../CutEditor';
 import SfxLayer from '../SfxLayer';
 import ExportProgressModal from '../ExportProgressModal';
-import { exportAsPNGZip, exportAsVertical, exportAsInstagram } from '../../utils/exportRenderer';
+import { exportAsPNGZip, exportAsVertical, exportAsInstagram, exportAsA4Single, exportAsA4Grid } from '../../utils/exportRenderer';
 
 // ── 그리드 컷 카드: 이미지 + SVG 말풍선 오버레이 ──
 function CutImageWithBubbles({ cut, imageUrl, onZoom }) {
@@ -115,6 +115,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
   const [cacheBuster, setCacheBuster] = useState(Date.now());
   const [exportModal, setExportModal] = useState(null); // { state, done, total, format, error }
   const exportAbortRef = useRef(null);
+  const [a4Mode, setA4Mode] = useState(null); // null | 'grid' (dropdown open)
   const [partialResult, setPartialResult] = useState(null); // { done, total, failed: [cut_id...] }
   const [previewIndex, setPreviewIndex] = useState(null); // 라이트박스 미리보기 인덱스
   const [editCutIndex, setEditCutIndex] = useState(null); // CutEditor 편집 인덱스
@@ -206,7 +207,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
     }
   };
 
-  const handleExport = async (format) => {
+  const handleExport = async (format, extraArg) => {
     const abortCtrl = new AbortController();
     exportAbortRef.current = abortCtrl;
     const total = cuts.filter(c => c.image_url).length;
@@ -225,10 +226,16 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
         blob = await exportAsVertical(cuts, [], getUrl, opts);
       } else if (format === 'instagram_carousel') {
         blob = await exportAsInstagram(cuts, [], getUrl, opts);
+      } else if (format === 'a4_single') {
+        blob = await exportAsA4Single(extraArg, [], getUrl, opts);
+      } else if (format === 'a4_grid') {
+        blob = await exportAsA4Grid(cuts, [], getUrl, opts);
       }
 
       if (blob) {
-        const ext = format === 'vertical_single' ? 'png' : 'zip';
+        const ext = (format === 'vertical_single' || format === 'a4_single') ? 'png'
+          : (format === 'a4_grid' && cuts.filter(c => c.image_url).length <= 12) ? 'png'
+          : 'zip';
         const filename = `episode_${episodeId}_${format}.${ext}`;
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -372,6 +379,46 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
                 >
                   <Download size={12} /> PNG
                 </button>
+                <div className="relative">
+                  <button
+                    onClick={() => setA4Mode(a4Mode ? null : 'grid')}
+                    disabled={exporting}
+                    className="flex items-center gap-1 px-3 py-2 bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-300 rounded-full text-xs font-bold hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors shadow-sm disabled:opacity-50"
+                  >
+                    <Download size={12} /> A4
+                  </button>
+                  {a4Mode && (
+                    <div className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-zinc-800 border-2 border-border dark:border-zinc-600 rounded-xl shadow-lg p-3 w-56">
+                      <div className="text-xs font-bold text-gray-600 dark:text-gray-400 mb-2">A4 인쇄용 내보내기</div>
+                      <button
+                        onClick={() => { setA4Mode(null); handleExport('a4_grid'); }}
+                        className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-700 transition-colors"
+                      >
+                        📄 그리드 (4×3)
+                      </button>
+                      <div className="mt-1">
+                        <div className="text-xs text-gray-500 dark:text-gray-400 px-3 py-1">한 컷 크게:</div>
+                        <div className="max-h-32 overflow-y-auto">
+                          {cuts.filter(c => c.image_url).map(c => (
+                            <button
+                              key={c.cut_id}
+                              onClick={() => { setA4Mode(null); handleExport('a4_single', c); }}
+                              className="w-full text-left px-3 py-1.5 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-700 transition-colors"
+                            >
+                              #{c.cut_number}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setA4Mode(null)}
+                        className="w-full mt-2 px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                      >
+                        닫기
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>

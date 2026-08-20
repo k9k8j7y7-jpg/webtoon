@@ -296,6 +296,137 @@ export async function exportAsInstagram(
   return zip.generateAsync({ type: 'blob', compression: 'STORE' });
 }
 
+// ── A4 인쇄용 Export ──
+
+const A4_WIDTH = 2480;
+const A4_HEIGHT = 3508;
+const A4_MARGIN = 59;
+const GRID_COLS = 4;
+const GRID_ROWS = 3;
+const GRID_GAP = 20;
+
+// 모드 1 — 한 컷 크게 (지정 컷 1개를 페이지 중앙에 최대 크기)
+export async function exportAsA4Single(
+  cut,
+  characters,
+  getImageUrl,
+  { onProgress, signal } = {},
+) {
+  // processAllCuts 재사용 (단일 컷 배열)
+  const blobs = await processAllCuts(
+    [cut],
+    characters,
+    getImageUrl,
+    onProgress,
+    signal,
+  );
+
+  const blob = blobs[0];
+  if (!blob) throw new Error('컷 렌더링 실패');
+
+  const blobUrl = URL.createObjectURL(blob);
+  const img = await loadImage(blobUrl, false);
+  URL.revokeObjectURL(blobUrl);
+
+  const contentW = A4_WIDTH - A4_MARGIN * 2;
+  const contentH = A4_HEIGHT - A4_MARGIN * 2;
+
+  // 9:16 비율 유지 fit
+  const scale = Math.min(contentW / img.naturalWidth, contentH / img.naturalHeight);
+  const imgW = Math.round(img.naturalWidth * scale);
+  const imgH = Math.round(img.naturalHeight * scale);
+  const ox = A4_MARGIN + Math.floor((contentW - imgW) / 2);
+  const oy = A4_MARGIN + Math.floor((contentH - imgH) / 2);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = A4_WIDTH;
+  canvas.height = A4_HEIGHT;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, A4_WIDTH, A4_HEIGHT);
+  ctx.drawImage(img, ox, oy, imgW, imgH);
+
+  const result = await canvasToBlob(canvas);
+  canvas.width = 0;
+  canvas.height = 0;
+  return result;
+}
+
+// 모드 2 — 그리드 (4×3, 페이지 분할)
+export async function exportAsA4Grid(
+  cuts,
+  characters,
+  getImageUrl,
+  { onProgress, signal } = {},
+) {
+  const blobs = await processAllCuts(
+    cuts,
+    characters,
+    getImageUrl,
+    onProgress,
+    signal,
+  );
+
+  const validBlobs = [];
+  for (let i = 0; i < blobs.length; i++) {
+    if (blobs[i]) validBlobs.push({ blob: blobs[i], cutNumber: cuts[i].cut_number });
+  }
+
+  const perPage = GRID_COLS * GRID_ROWS;
+  const pageCount = Math.ceil(validBlobs.length / perPage);
+  const zip = new JSZip();
+
+  const contentW = A4_WIDTH - A4_MARGIN * 2;
+  const contentH = A4_HEIGHT - A4_MARGIN * 2;
+  const cellW = Math.floor((contentW - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS);
+  const cellH = Math.floor((contentH - GRID_GAP * (GRID_ROWS - 1)) / GRID_ROWS);
+
+  for (let p = 0; p < pageCount; p++) {
+    if (signal?.aborted) throw new DOMException('취소됨', 'AbortError');
+
+    const canvas = document.createElement('canvas');
+    canvas.width = A4_WIDTH;
+    canvas.height = A4_HEIGHT;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, A4_WIDTH, A4_HEIGHT);
+
+    const start = p * perPage;
+    const end = Math.min(start + perPage, validBlobs.length);
+
+    for (let idx = start; idx < end; idx++) {
+      const pos = idx - start;
+      const col = pos % GRID_COLS;
+      const row = Math.floor(pos / GRID_COLS);
+
+      const cellX = A4_MARGIN + col * (cellW + GRID_GAP);
+      const cellY = A4_MARGIN + row * (cellH + GRID_GAP);
+
+      const blobUrl = URL.createObjectURL(validBlobs[idx].blob);
+      const img = await loadImage(blobUrl, false);
+      URL.revokeObjectURL(blobUrl);
+
+      // 셀 안에 비율 유지 fit
+      const scale = Math.min(cellW / img.naturalWidth, cellH / img.naturalHeight);
+      const imgW = Math.round(img.naturalWidth * scale);
+      const imgH = Math.round(img.naturalHeight * scale);
+      const ox = cellX + Math.floor((cellW - imgW) / 2);
+      const oy = cellY + Math.floor((cellH - imgH) / 2);
+
+      ctx.drawImage(img, ox, oy, imgW, imgH);
+    }
+
+    const pageBlob = await canvasToBlob(canvas);
+    canvas.width = 0;
+    canvas.height = 0;
+
+    if (pageCount === 1) return pageBlob;
+    zip.file(`A4-${p + 1}.png`, pageBlob);
+  }
+
+  return zip.generateAsync({ type: 'blob', compression: 'STORE' });
+}
+
 // ══════════════════════════════════════════════════════════════
 // ═══ 레거시: Canvas 2D 직접 그리기 코드 (비활성화)          ═══
 // ═══ SVG 직렬화 방식 검증 완료 후 제거 예정                ═══
