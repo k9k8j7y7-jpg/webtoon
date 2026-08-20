@@ -22,10 +22,16 @@ SYSTEM_INSTRUCTION = """너는 웹툰 스토리 기획 전문가야.
       "name": "캐릭터 이름",
       "gender": "성별 (남/여/기타)",
       "age": "나이 (숫자)",
-      "description": "외모, 성격, 역할 등 상세 묘사"
+      "description": "짧은 특징 — 동물이면 품종/종, 사람이면 외형·성격·역할"
     }
   ]
-}"""
+}
+
+규칙:
+- 아이디어에 동물이 등장하면 반드시 등장인물(characters)에 포함할 것
+- 동물의 description에는 품종/종을 적을 것 (아이디어에 명시되어 있으면 그대로)
+- 동물의 나이는 해당 동물 기준의 자연스러운 나이로
+- 사람의 description에는 외형·역할을 한 줄로"""
 
 SUGGEST_CHARACTERS_INSTRUCTION = """너는 웹툰 캐릭터 기획 전문가야.
 사용자의 아이디어를 바탕으로 어울리는 등장인물을 제안해줘.
@@ -35,13 +41,19 @@ SUGGEST_CHARACTERS_INSTRUCTION = """너는 웹툰 캐릭터 기획 전문가야.
   "characters": [
     {
       "name": "캐릭터 이름",
+      "description": "짧은 특징 한 줄 (동물이면 품종/종, 사람이면 외형·역할)",
       "gender": "남 또는 여 또는 기타",
       "age": 나이(숫자)
     }
   ]
 }
 
-3~5명의 캐릭터를 제안해줘. 이름은 한국 이름으로 해줘."""
+규칙:
+- 아이디어에 동물이 등장하면 반드시 등장인물에 포함할 것
+- 동물의 description에는 품종/종을 적을 것 (아이디어에 명시되어 있으면 그대로, 예: "포메라니안")
+- 동물의 나이는 해당 동물 기준의 자연스러운 나이로
+- 사람의 description에는 외형·역할을 한 줄로 (예: "도도의 보호자, 40대 아빠")
+- 3~5명의 캐릭터를 제안해줘. 사람 이름은 한국 이름으로 해줘."""
 
 
 def _parse_json(raw: str) -> dict:
@@ -81,12 +93,14 @@ async def generate_planning(idea: str, mood: str | None = None, characters: list
         prompt += "\n\n등장인물 정보:"
         for c in characters:
             parts = [c.get("name", "이름 미정")]
+            if c.get("description"):
+                parts.append(f"추가설명: {c['description']}")
             if c.get("gender"):
                 parts.append(f"성별: {c['gender']}")
             if c.get("age"):
                 parts.append(f"나이: {c['age']}세")
             prompt += f"\n- {', '.join(parts)}"
-        prompt += "\n\n위 등장인물을 반드시 포함해서 기획안을 만들어줘. 등장인물의 ref_key, description은 네가 생성해줘."
+        prompt += "\n\n위 등장인물을 반드시 포함해서 기획안을 만들어줘. 등장인물의 ref_key는 네가 생성하고, description은 사용자가 입력한 추가설명을 반영해서 보강해줘."
     else:
         prompt += "\n\n위 아이디어로 웹툰 기획안을 만들어줘."
 
