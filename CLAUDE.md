@@ -414,9 +414,10 @@ WEBTOON/
 - **`utils/bubbleLayout.js`** (신규) — `computeInitialLayouts()` 함수를 CutEditor에서 분리. bubble_layout 없는 대사에 화자 기반 기본 좌표 할당
 - **`utils/exportRenderer.js`** — `computeInitialLayouts` import 추가, BubbleOverlay에 dialogue 전달 전 초기 레이아웃 적용
 
-**현재 미복원 상태:**
-- `Gate5Review.jsx` — c581116 상태 (CutEditor/SfxLayer/프론트엔드 Export 미연동). 라이트박스 + 백엔드 Export만 동작
-- 프론트엔드 캔버스 Export — exportRenderer.js 코드는 있으나 Gate5Review에서 호출하지 않음
+**현재 상태 (2026-08-19 기준):**
+- `Gate5Review.jsx` — CutEditor/SfxLayer 연동 완료. 프론트 Export import 추가됨 (배선 WIP)
+- 프론트엔드 Export — `exportRenderer.js` import 완료, `handleExport` 함수 본체 교체 필요
+- 백엔드 Export (`export/service.py`) — 아직 삭제하지 않음 (호출만 끊는 중)
 
 ### BubbleOverlay 말풍선 round+narration 리팩토링 (2026-08-14~16)
 
@@ -502,13 +503,96 @@ LINE_HEIGHT_RATIO = 1.45, BASE_PADDING_X = 14, BASE_PADDING_Y = 10
 - realize: `icon: 'lightbulb'` 제거
 - 나머지 아이콘: angry(lightning), sad(teardrop), surprised(star) 유지
 
-**진행 중 (다음 세션 시작점):**
-- 스파이크 3종(shout/angry/surprised) 꼬리: 여러 차례 시도 후 마지막 지시는 "buildRoundTail을 innerR 타원 인자로 그대로 재사용 + 꼬리 먼저/본체 나중 순서 + tailBaseWidth/bubbleW < 0.15 수치 판정". 현재 코드는 이 지시대로 구현되어 있으나 사용자 실사용 확인 미완료. bubble-test 스크린샷에서는 낫형 꼬리가 보이나, 실제 에피소드에서 스파이크 돌기에 가려 짧아 보일 수 있음. 그 경우 유일하게 허용된 조정은 TAIL_LEN에 스파이크 한정 배수 1.3~1.6을 곱하는 것뿐.
-
 **알려진 사항:**
 - ep13 #7 `dialogue=[]` — 데이터 비어있음, 코드 문제 아님
 - 미리보기(모달)가 판정 기준. 썸네일은 스케일링 수정 전까지 무시
 - 커밋 규칙: 단계 완료 + 사용자 확인 후에만. 파괴적 git 명령 금지
+
+### 말풍선 세로 크기 검증 인프라 — 4-A (2026-08-18)
+
+지시서: `docs/지시서-4A-세로크기.md`
+
+- **BubbleTestPage min_height 검증 섹션:** 3종(round/narration/shout) × 3비율(0%/25%/50%) 그리드, `data-testid` 속성 부여
+- **bubble-shot.mjs min_height 수치 판정:** shape BB vs minReq 비교, textInside 검증. 9케이스 전수 통과
+- **기존 min_height 로직 검증 통과:** `needH = max(computedH, bubbleH)` 구조 정상 작동 확인
+
+### 말풍선 텍스트 위치 조절 — 4-B (2026-08-18)
+
+지시서: `docs/지시서-4B-텍스트위치.md`
+
+**핵심 수식:**
+```
+marginX = max(0, (availW - textBlockW)) / 2
+marginY = max(0, (availH - textBlockH)) / 2
+shiftX = text_offset_x × 2 × marginX
+shiftY = text_offset_y × 2 × marginY
+```
+- offset ±0.5 → 텍스트 가장자리가 가용 영역 경계에 정확히 닿음
+- margin이 0이면 offset 자동 무력화 (여유 없음 = 이동 불가)
+
+**1단계 — 렌더 반영 (커밋 8813b92):**
+- `computeTextShift()` 공유 헬퍼: 스타일별(oval/spiky/rect) 가용 영역 계산 → margin → shift
+- `computeSingleBubbleGeo` 반환값에 `shiftX`, `shiftY` 추가
+- `SingleBubble` foreignObject 위치에 `shiftX`, `shiftY` 적용
+- BubbleTestPage text_offset 검증 섹션: 3종 × 5 offset × 2 텍스트 = 30케이스 전수 `inside:OK`
+- bubble-shot.mjs text_offset 판정: Range API 글리프 측정, 대칭 이동 수치 확인
+- exportRenderer 자동 반영 (SingleBubble 내부 수정이므로 별도 수정 불필요)
+
+**2단계 — CutEditor UI (커밋 8813b92):**
+- 텍스트 가로/세로 슬라이더 2개 추가 (범위 -50~50%, step 1, 더블클릭 0 리셋)
+- `updateLayout` 패턴으로 `text_offset_x`, `text_offset_y` 갱신
+- SingleBubble에 `textOffsetX`, `textOffsetY` props 전달
+- ep13 #8 실측: Y ±34.3px 대칭 이동, X는 긴 텍스트로 margin=0 (정상)
+
+**bubble_layout 스키마 확장:**
+```json
+{
+  "x": 0.30, "y": 0.10, "width": 0.45, "min_height": 0.0,
+  "tail_direction": "down", "tail_flip": false, "font_scale": 1.0,
+  "text_offset_x": 0.0, "text_offset_y": 0.0
+}
+```
+
+### 이미지 모델 현황 조사 (2026-08-19)
+
+지시서: `docs/지시서-이미지모델-현황조사.md`
+
+**조사 완료, 코드 수정 없음.** 주요 발견:
+
+- **현재 이미지 모델:** `gemini-2.5-flash-image` — `adapters/gemini_image.py:19` 하드코딩 상수
+- **텍스트 모델:** `gemini-2.5-flash` — `adapters/gemini.py:41` 리터럴
+- **모델 문자열 환경변수화 안 됨:** `config.py`에는 `GEMINI_API_KEY`만 있음
+- **호출 방식:** `google-genai` Python SDK, `client.models.generate_content()`
+- **배치:** `BATCH_SIZE=5` 순차(병렬 아님), 재시도 없음, 연속 5회 실패 시 조기 종료
+- **참조 이미지:** 캐릭터당 1장(정면 front), 장소 1장, 스타일 0장(텍스트만). 인라인 bytes + 라벨
+- **하드 제한:** 코드에 참조 개수 제한 없음. API 측 제한은 미확인
+- **어댑터 추상화:** `adapters/base.py` ABC + `gemini_image.py` 구현체 + 싱글턴 팩토리
+- **교체 용이성:** `IMAGE_MODEL` 상수 1곳 변경으로 가능 (동일 SDK 인터페이스 가정)
+- **비용 계측:** `GenerationLog` 테이블 존재, `cost_usd=0.02` 하드코딩 추정값. 토큰 수 파싱 미구현
+- **비용 조회 API/대시보드:** 없음
+
+### Export 경로 조사 + 프론트 배선 WIP (2026-08-19)
+
+지시서: `docs/지시서-Export검증-A4.md`
+
+**1단계 조사 완료.** 핵심 발견:
+
+- **현행 Export는 백엔드 Pillow 경로만 사용:** Gate5Review `handleExport` → 백엔드 API (`POST /export`) → `export/service.py` → `_ensure_composed()` → `compose_cut()` (Pillow)
+- **프론트 renderToStaticMarkup 경로(`exportRenderer.js`)는 미배선:** 코드 완성되어 있으나 Gate5Review에서 import/호출하지 않음
+- **확정 방향:** 미리보기 병합 방식(프론트 SVG)이 유일한 export 경로. 백엔드 Pillow 조합 폐기
+- **인스타 사양:** 프론트=1080×1080 fit+흰배경+PNG (확정), 백엔드=중앙크롭+JPEG (폐기 대상)
+
+**2단계 배선 작업 — 진행 중 (중단됨):**
+- Gate5Review.jsx에 import 추가 완료: `ExportProgressModal`, `exportAsPNGZip/exportAsVertical/exportAsInstagram`
+- **다음 작업:** `handleExport` 함수 본체를 백엔드 API 호출 → 프론트 exportRenderer 호출로 교체
+- export 상태관리(`exportModal`, `exportAbortRef`) + ExportProgressModal 연동 필요
+- `exportRenderer.js:298-325` 주석 레거시 코드 삭제 가능
+
+**compose_cut() 용도 확인:**
+- 이미지 생성 직후 자동 호출 (`images/service.py:166`) → `composed_image_url` 저장
+- 프론트엔드에서 `composed_image_url`을 **참조하지 않음** (Gate5Review는 `cut.image_url` 사용)
+- 백엔드 export만 `composed_image_url` 사용 → export가 프론트로 이관되면 이 합성본은 미사용
+- `compose_cut()` 자체는 건드리지 않음 (이미지 생성 직후 호출은 유지 — 향후 백엔드 전용 용도 가능)
 
 ### 발견 및 수정한 버그
 
@@ -537,14 +621,24 @@ LINE_HEIGHT_RATIO = 1.45, BASE_PADDING_X = 14, BASE_PADDING_Y = 10
 
 ## 남은 작업 (향후)
 
+### 진행 중 — Export 프론트 배선 + A4 (지시서-Export검증-A4.md)
+- [ ] **Export 프론트 배선 (2단계-수정, WIP):** handleExport → exportRenderer 호출 교체. import 추가 완료, 함수 본체 교체 필요
+- [ ] **Export 실출력 검증 (2단계):** min_height/text_offset/스파이크/효과음/나레이션/세로/인스타/#7 재생성
+- [ ] **A4 내보내기 신규 기능 (3단계):** 2480×3508, 한 컷 모드 + 4×3 그리드 모드
+- [ ] **배포 + 커밋 (4단계)**
+- [ ] (선택) IMAGE_MODEL 환경변수화
+
 ### 설계 문서 기반 미완료 번들
-- [x] **말풍선 12종 본체 구현 (12/12 완료).** 스파이크 3종 꼬리 형태만 미해결 (본체는 통과)
-- [ ] **Gate5Review CutEditor 연동 (3단계 B+C+D 완료).** 스파이크 꼬리 실사용 확인 남음
+- [x] **말풍선 12종 본체 구현 (12/12 완료).** 스파이크 3종 꼬리 제거로 확정 (2026-08-17)
+- [x] **Gate5Review CutEditor 연동 (3단계 B+C+D 완료, 2026-08-17)**
+- [x] **4-A 말풍선 세로 크기 검증 인프라 (2026-08-18)**
+- [x] **4-B 텍스트 위치 조절 text_offset_x/y (2026-08-18)**
+- [x] **이미지 모델 현황 조사 (2026-08-19, 코드 수정 없음)**
 - [ ] Character Consistency — Part B: 그림 속 한글 텍스트 처리 (긴 문장 억제, 짧은 단어 명시)
 - [x] Gate3 Asset Revision — Bundle B: 캐릭터 조건 폼 (2026-08-11 완료)
 - [x] Gate3 Asset Revision — Bundle C: 장소 AI 제안·편집 + mood_notes (2026-08-11 완료)
 - [x] Cut Editor Speech Bubble — 말풍선 편집화면 (2026-08-12 완료)
-- [ ] Cut Editor Speech Bubble — 효과음 Export 반영 (SFX는 현재 프론트 SVG 전용, Pillow 미반영)
+- [ ] Cut Editor Speech Bubble — 효과음 Export 반영 (SFX는 프론트 SVG 경로로 해결 예정 — 배선 완료 시 자동 포함)
 - [ ] Cut Editor Speech Bubble — 긴 대사 문장 단위 분할 + 세로 연결 (D단계)
 - [ ] Gate4-5 Speech-Product Revision — Bundle B: 제품 레퍼런스 업로드 (PPL)
 - [ ] 배경 효과 PNG 레이어 (별도 지시서)
@@ -581,6 +675,9 @@ LINE_HEIGHT_RATIO = 1.45, BASE_PADDING_X = 14, BASE_PADDING_Y = 10
 - **배포:** 파일별 `scp` → uvicorn `--reload` 자동 감지 (프론트는 빌드 후 dist 배포)
 - **서브 경로:** 프론트엔드 Vite `base: '/WEBTOON/'`, FastAPI `root_path="/WEBTOON"` — 새 컴포넌트 작성 시 API/라우팅에 `/WEBTOON` prefix 반영 필요
 - **디자인 작업 분담:** Antigravity에서 디자인 변경 → Claude Code에서 빌드+배포
+- **텍스트 렌더 이원 모드:** 화면은 `<foreignObject>` + HTML div / export는 SVG `<text>/<tspan>` (`renderMode='svg-text'`). 폰트·줄높이·자간 수정 시 두 모드 동시 수정 + `node scripts/bubble-shot.mjs` renderMode 비교 판정 통과 필수 (중심 좌표 ±2px, 너비 ±6px)
+- **dev 서버 백그라운드 기동:** dev 서버는 항상 백그라운드로 기동 + curl 응답 폴링 후 진행. 재시작 필요 시 묻지 않고 수행, 보고에 한 줄만
+- **다단계 지시서 진행 추적:** 다단계 지시서 작업 중 `docs/PROGRESS.md`에 현재 단계 갱신. 맥락 불확실 시 이 파일부터 읽기
 
 ## 배포 명령 참고
 

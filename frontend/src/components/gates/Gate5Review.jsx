@@ -6,6 +6,8 @@ import { resolveBubbleStyle } from '../../utils/bubbleMapping';
 import { Image, RefreshCw, RotateCcw, Download, Check, AlertTriangle, MessageSquare, Save, X, ZoomIn, ChevronLeft, ChevronRight, Pencil } from 'lucide-react';
 import CutEditor from '../CutEditor';
 import SfxLayer from '../SfxLayer';
+import ExportProgressModal from '../ExportProgressModal';
+import { exportAsPNGZip, exportAsVertical, exportAsInstagram } from '../../utils/exportRenderer';
 
 // ── 그리드 컷 카드: 이미지 + SVG 말풍선 오버레이 ──
 function CutImageWithBubbles({ cut, imageUrl, onZoom }) {
@@ -111,6 +113,8 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState('');
   const [cacheBuster, setCacheBuster] = useState(Date.now());
+  const [exportModal, setExportModal] = useState(null); // { state, done, total, format, error }
+  const exportAbortRef = useRef(null);
   const [partialResult, setPartialResult] = useState(null); // { done, total, failed: [cut_id...] }
   const [previewIndex, setPreviewIndex] = useState(null); // 라이트박스 미리보기 인덱스
   const [editCutIndex, setEditCutIndex] = useState(null); // CutEditor 편집 인덱스
@@ -203,17 +207,48 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
   };
 
   const handleExport = async (format) => {
+    const abortCtrl = new AbortController();
+    exportAbortRef.current = abortCtrl;
+    const total = cuts.filter(c => c.image_url).length;
+    setExportModal({ state: 'running', done: 0, total, format, error: null });
     setExporting(true);
+
+    const getUrl = (cut) => imageUrl(getCutImageUrl(cut));
+    const onProgress = (done) => setExportModal(prev => prev ? { ...prev, done } : prev);
+    const opts = { onProgress, signal: abortCtrl.signal };
+
     try {
-      const { data } = await api.post(`/projects/${projectId}/episodes/${episodeId}/export`, { format });
-      const result = await pollJob(data.job_id);
-      if (result?.download_url) {
-        window.open(`${API_BASE}${result.download_url}`, '_blank');
+      let blob;
+      if (format === 'png_cuts') {
+        blob = await exportAsPNGZip(cuts, [], getUrl, opts);
+      } else if (format === 'vertical_single') {
+        blob = await exportAsVertical(cuts, [], getUrl, opts);
+      } else if (format === 'instagram_carousel') {
+        blob = await exportAsInstagram(cuts, [], getUrl, opts);
+      }
+
+      if (blob) {
+        const ext = format === 'vertical_single' ? 'png' : 'zip';
+        const filename = `episode_${episodeId}_${format}.${ext}`;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+        setExportModal(prev => prev ? { ...prev, state: 'done' } : prev);
       }
     } catch (err) {
-      setError(err.message);
+      if (err.name === 'AbortError') {
+        setExportModal(prev => prev ? { ...prev, state: 'cancelled' } : prev);
+      } else {
+        setExportModal(prev => prev ? { ...prev, state: 'error', error: err.message } : prev);
+      }
     } finally {
       setExporting(false);
+      exportAbortRef.current = null;
     }
   };
 
@@ -640,6 +675,20 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
           />
         );
       })()}
+
+      {/* Export 진행 모달 */}
+      {exportModal && (
+        <ExportProgressModal
+          state={exportModal.state}
+          done={exportModal.done}
+          total={exportModal.total}
+          format={exportModal.format}
+          error={exportModal.error}
+          onCancel={() => { exportAbortRef.current?.abort(); }}
+          onRetry={() => { setExportModal(null); handleExport(exportModal.format); }}
+          onClose={() => setExportModal(null)}
+        />
+      )}
     </div>
   );
 }

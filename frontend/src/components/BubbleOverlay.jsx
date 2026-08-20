@@ -703,7 +703,7 @@ export function computeSingleBubbleGeo(style, text, bubbleX, bubbleY, bubbleW, m
 export function SingleBubble({
   style, text, bubbleX, bubbleY, bubbleW, bubbleH,
   tailDirection, flipTail, fontScale, fixedWidth, viewW,
-  textOffsetX, textOffsetY,
+  textOffsetX, textOffsetY, renderMode,
 }) {
   const cfg = BUBBLE_CONFIGS[style] || BUBBLE_CONFIGS.round;
   const s = getScale(viewW);
@@ -741,27 +741,42 @@ export function SingleBubble({
       <rect key="shape" x={bx} y={by} width={needW} height={needH}
         rx={0} ry={0} fill={cfg.fill} stroke="none" />
     );
-    // 텍스트 — 줄 단위 div + nowrap, 가운데 정렬 (round와 동일 방식)
-    elements.push(
-      <foreignObject key="text" x={bx + shiftX} y={cy - textBlockH / 2 + shiftY}
-        width={needW} height={textBlockH}>
-        <div xmlns="http://www.w3.org/1999/xhtml"
-          style={{
-            width: '100%',
-            color: cfg.textColor,
-            fontSize: `${fontSize}px`,
-            lineHeight: `${lineHeight}px`,
-            fontFamily: "'Pretendard', 'Nanum Gothic', sans-serif",
-            fontWeight: 400,
-            textAlign: 'center',
-            whiteSpace: 'nowrap',
-            overflow: 'visible',
-            letterSpacing: '0.02em',
-          }}>
-          {lines.map((line, i) => <div key={i}>{line}</div>)}
-        </div>
-      </foreignObject>
-    );
+    // 텍스트 — 줄 단위, 가운데 정렬
+    const textCenterX = bx + shiftX + needW / 2;
+    const textStartY = cy - textBlockH / 2 + shiftY;
+    if (renderMode === 'svg-text') {
+      elements.push(
+        <text key="text" textAnchor="middle" fill={cfg.textColor}
+          fontSize={fontSize} fontFamily="'Pretendard', 'Nanum Gothic', sans-serif"
+          fontWeight={400} letterSpacing="0.02em">
+          {lines.map((line, i) => (
+            <tspan key={i} x={textCenterX}
+              y={textStartY + i * lineHeight + lineHeight * 0.72}>{line}</tspan>
+          ))}
+        </text>
+      );
+    } else {
+      elements.push(
+        <foreignObject key="text" x={bx + shiftX} y={textStartY}
+          width={needW} height={textBlockH}>
+          <div xmlns="http://www.w3.org/1999/xhtml"
+            style={{
+              width: '100%',
+              color: cfg.textColor,
+              fontSize: `${fontSize}px`,
+              lineHeight: `${lineHeight}px`,
+              fontFamily: "'Pretendard', 'Nanum Gothic', sans-serif",
+              fontWeight: 400,
+              textAlign: 'center',
+              whiteSpace: 'nowrap',
+              overflow: 'visible',
+              letterSpacing: '0.02em',
+            }}>
+            {lines.map((line, i) => <div key={i}>{line}</div>)}
+          </div>
+        </foreignObject>
+      );
+    }
     return <g>{elements}</g>;
   }
 
@@ -843,26 +858,42 @@ export function SingleBubble({
     );
   }
 
-  // ── 텍스트 (foreignObject) — 줄 단위 div + nowrap, 가로·세로 중앙 정렬 ──
-  elements.push(
-    <foreignObject key="text" x={bx + shiftX} y={cy - textBlockH / 2 + shiftY}
-      width={needW} height={textBlockH}>
-      <div xmlns="http://www.w3.org/1999/xhtml"
-        style={{
-          width: '100%',
-          color: cfg.textColor,
-          fontSize: `${fontSize}px`,
-          lineHeight: `${lineHeight}px`,
-          fontFamily: "'Pretendard', 'Nanum Gothic', sans-serif",
-          fontWeight: style === 'shout' || style === 'angry' ? 700 : 500,
-          textAlign: 'center',
-          whiteSpace: 'nowrap',
-          overflow: 'visible',
-        }}>
-        {lines.map((line, i) => <div key={i}>{line}</div>)}
-      </div>
-    </foreignObject>
-  );
+  // ── 텍스트 — 줄 단위, 가로·세로 중앙 정렬 ──
+  const textCX = cx + shiftX;
+  const textSY = cy - textBlockH / 2 + shiftY;
+  const textFW = style === 'shout' || style === 'angry' ? 700 : 500;
+  if (renderMode === 'svg-text') {
+    elements.push(
+      <text key="text" textAnchor="middle" fill={cfg.textColor}
+        fontSize={fontSize} fontFamily="'Pretendard', 'Nanum Gothic', sans-serif"
+        fontWeight={textFW} letterSpacing="0.02em">
+        {lines.map((line, i) => (
+          <tspan key={i} x={textCX}
+            y={textSY + i * lineHeight + lineHeight * 0.72}>{line}</tspan>
+        ))}
+      </text>
+    );
+  } else {
+    elements.push(
+      <foreignObject key="text" x={bx + shiftX} y={textSY}
+        width={needW} height={textBlockH}>
+        <div xmlns="http://www.w3.org/1999/xhtml"
+          style={{
+            width: '100%',
+            color: cfg.textColor,
+            fontSize: `${fontSize}px`,
+            lineHeight: `${lineHeight}px`,
+            fontFamily: "'Pretendard', 'Nanum Gothic', sans-serif",
+            fontWeight: textFW,
+            textAlign: 'center',
+            whiteSpace: 'nowrap',
+            overflow: 'visible',
+          }}>
+          {lines.map((line, i) => <div key={i}>{line}</div>)}
+        </div>
+      </foreignObject>
+    );
+  }
 
   return <g>{elements}</g>;
 }
@@ -967,7 +998,7 @@ export { STYLE_ORDER, STYLE_LABELS, BUBBLE_CONFIGS };
 
 // ── 메인 오버레이 컴포넌트 ──
 
-export default function BubbleOverlay({ dialogue, characters, width, height }) {
+export default function BubbleOverlay({ dialogue, characters, width, height, renderMode }) {
   const bubbles = useMemo(() => {
     if (!dialogue || dialogue.length === 0 || !width || !height) return [];
 
@@ -1069,6 +1100,7 @@ export default function BubbleOverlay({ dialogue, characters, width, height }) {
           viewW={width}
           textOffsetX={b.textOffsetX}
           textOffsetY={b.textOffsetY}
+          renderMode={renderMode}
         />
       ))}
     </svg>

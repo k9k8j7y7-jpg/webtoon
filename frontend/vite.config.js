@@ -8,12 +8,19 @@ export default defineConfig({
   server: {
     proxy: {
       '/WEBTOON/api': {
-        target: 'http://52.79.94.122:8000',
-        rewrite: (path) => path.replace(/^\/WEBTOON/, ''),
+        target: 'https://ssagda.com',
+        secure: true,
+        changeOrigin: true,
       },
       '/WEBTOON/storage': {
-        target: 'http://52.79.94.122:8000',
-        rewrite: (path) => path.replace(/^\/WEBTOON/, ''),
+        target: 'https://ssagda.com',
+        secure: true,
+        changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('proxyRes', (proxyRes) => {
+            proxyRes.headers['access-control-allow-origin'] = '*';
+          });
+        },
       },
     },
   },

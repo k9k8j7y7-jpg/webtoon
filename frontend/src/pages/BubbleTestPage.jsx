@@ -278,6 +278,55 @@ export default function BubbleTestPage() {
         ));
       })()}
 
+      {/* ── renderMode 비교 (foreignObject vs svg-text) ── */}
+      <h3 style={{ marginTop: 24, marginBottom: 8 }} id="rendermode-section">renderMode 비교 (foreignObject vs svg-text)</h3>
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 24 }}>
+        {[
+          { key: 'round', label: '타원(round)' },
+          { key: 'narration', label: '사각(narration)' },
+          { key: 'shout', label: '스파이크(shout)' },
+        ].map(({ key: st, label }) => {
+          const vw = 400;
+          const vh = 300;
+          const bw = st === 'narration' ? vw : vw * 0.6;
+          const txt = '오늘 날씨가 정말 좋아서 기분이 너무 좋다';
+          return (
+            <div key={st}>
+              <div style={{ fontSize: 11, fontWeight: 'bold', marginBottom: 4 }}>{label}</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {['default', 'svg-text'].map(mode => (
+                  <div key={`rm-${st}-${mode}`} style={{ border: '1px solid #ccc', background: '#fff', padding: 4 }}
+                    data-testid={`rm-${st}-${mode}`}>
+                    <div style={{ fontSize: 9, color: '#666', marginBottom: 2 }}>
+                      {mode === 'default' ? 'foreignObject' : 'svg-text'}
+                    </div>
+                    <div style={{ position: 'relative', width: vw, height: vh, background: '#888' }}>
+                      <svg width={vw} height={vh} viewBox={`0 0 ${vw} ${vh}`}
+                        style={{ position: 'absolute', top: 0, left: 0, overflow: 'visible' }}>
+                        <SingleBubble
+                          style={st}
+                          text={txt}
+                          bubbleX={st === 'narration' ? 0 : (vw - bw) / 2}
+                          bubbleY={10}
+                          bubbleW={bw}
+                          bubbleH={0}
+                          tailDirection={st === 'narration' ? 'none' : 'down'}
+                          flipTail={false}
+                          fontScale={1.0}
+                          fixedWidth={true}
+                          viewW={vw}
+                          renderMode={mode === 'default' ? undefined : 'svg-text'}
+                        />
+                      </svg>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
       {/* ── 메인 그리드 (선택된 스타일) ── */}
       <table style={{ borderCollapse: 'collapse' }}>
         <thead>

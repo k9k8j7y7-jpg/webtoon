@@ -201,6 +201,86 @@ async function main() {
     }
   }
 
+  // ── renderMode 비교 판정 (foreignObject vs svg-text) ──
+  const rmSection = await page.$('#rendermode-section');
+  if (rmSection) {
+    console.log('\n=== renderMode 비교 판정 (foreignObject vs svg-text, ±2px) ===');
+    const rmStyles = ['round', 'narration', 'shout'];
+    let allPass = true;
+
+    for (const st of rmStyles) {
+      // foreignObject 모드: Range API로 텍스트 BB 측정
+      const foBB = await page.evaluate((testId) => {
+        const cell = document.querySelector(`[data-testid="${testId}"]`);
+        if (!cell) return null;
+        const svg = cell.querySelector('svg');
+        const fo = svg?.querySelector('foreignObject');
+        if (!fo) return null;
+        const svgRect = svg.getBoundingClientRect();
+        const svgW = +svg.getAttribute('width');
+        const svgH = +svg.getAttribute('height');
+        const scaleX = svgW / svgRect.width;
+        const scaleY = svgH / svgRect.height;
+        const lineDivs = fo.querySelectorAll('div > div');
+        if (lineDivs.length === 0) return null;
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const ld of lineDivs) {
+          const tn = ld.firstChild;
+          if (!tn || tn.nodeType !== 3) continue;
+          const range = document.createRange();
+          range.selectNode(tn);
+          for (const r of range.getClientRects()) {
+            minX = Math.min(minX, r.left);
+            minY = Math.min(minY, r.top);
+            maxX = Math.max(maxX, r.right);
+            maxY = Math.max(maxY, r.bottom);
+          }
+        }
+        if (minX === Infinity) return null;
+        return { x: (minX - svgRect.left) * scaleX, y: (minY - svgRect.top) * scaleY,
+                 w: (maxX - minX) * scaleX, h: (maxY - minY) * scaleY };
+      }, `rm-${st}-default`);
+
+      // svg-text 모드: SVG <text> getBBox()
+      const stBB = await page.evaluate((testId) => {
+        const cell = document.querySelector(`[data-testid="${testId}"]`);
+        if (!cell) return null;
+        const textEl = cell.querySelector('svg text');
+        if (!textEl) return null;
+        const bb = textEl.getBBox();
+        return { x: bb.x, y: bb.y, w: bb.width, h: bb.height };
+      }, `rm-${st}-svg-text`);
+
+      if (!foBB || !stBB) {
+        console.log(`  ${st}: SKIP (missing element)`);
+        continue;
+      }
+
+      // 텍스트 중심 좌표 비교 (x는 centerX 기준, SVG textAnchor=middle이므로 getBBox 좌측값+w/2)
+      const foCX = foBB.x + foBB.w / 2;
+      const stCX = stBB.x + stBB.w / 2;
+      const foCY = foBB.y + foBB.h / 2;
+      const stCY = stBB.y + stBB.h / 2;
+      const dcx = Math.abs(foCX - stCX);
+      const dcy = Math.abs(foCY - stCY);
+      const dh = Math.abs(foBB.h - stBB.h);
+      // SVG letter-spacing은 마지막 글자 뒤에도 공간을 추가해 너비가 약간 다름 (±6px 허용)
+      const dw = Math.abs(foBB.w - stBB.w);
+      const tol = 2;
+      const wTol = 6;
+      const cxOk = dcx <= tol, cyOk = dcy <= tol, hOk = dh <= tol, wOk = dw <= wTol;
+      const pass = cxOk && cyOk && hOk && wOk;
+      if (!pass) allPass = false;
+
+      console.log(`  ${st}: ${pass ? 'PASS' : 'FAIL'} ` +
+        `dcx=${dcx.toFixed(1)}${cxOk ? '' : '!'} dcy=${dcy.toFixed(1)}${cyOk ? '' : '!'} ` +
+        `dw=${dw.toFixed(1)}${wOk ? '' : '!'} dh=${dh.toFixed(1)}${hOk ? '' : '!'}`);
+      console.log(`    fo center: (${foCX.toFixed(1)},${foCY.toFixed(1)}) ${foBB.w.toFixed(1)}x${foBB.h.toFixed(1)}`);
+      console.log(`    st center: (${stCX.toFixed(1)},${stCY.toFixed(1)}) ${stBB.w.toFixed(1)}x${stBB.h.toFixed(1)}`);
+    }
+    console.log(`\n  전체: ${allPass ? 'ALL PASS' : 'FAIL detected'}`);
+  }
+
   await browser.close();
 }
 

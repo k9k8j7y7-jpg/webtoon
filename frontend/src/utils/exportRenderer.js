@@ -19,7 +19,7 @@ import { computeInitialLayouts } from './bubbleLayout';
 
 // ── 이미지 로드 헬퍼 ──
 
-function loadImage(src, useCORS = true) {
+function loadImage(src, useCORS = false) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     if (useCORS) img.crossOrigin = 'anonymous';
@@ -79,6 +79,7 @@ export async function renderCutToCanvas(cut, characters, imageUrl, fontCSS) {
           characters: characters || [],
           width: refW,
           height: refH,
+          renderMode: 'svg-text',
         }),
       );
       innerContent += extractSvgContent(bubbleSvg);
