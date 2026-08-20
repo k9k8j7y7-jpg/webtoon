@@ -16,6 +16,7 @@ router = APIRouter(tags=["gate1-planning"])
 
 class CharacterInput(BaseModel):
     name: str
+    description: str | None = None
     gender: str | None = None
     age: int | str | None = None
 

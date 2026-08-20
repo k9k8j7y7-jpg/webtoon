@@ -41,7 +41,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, initial
   };
 
   const addCharacter = () => {
-    setCharacters([...characters, { name: '', gender: '남', age: '' }]);
+    setCharacters([...characters, { name: '', description: '', gender: '남', age: '' }]);
   };
 
   const updateCharacter = (index, field, value) => {
@@ -188,6 +188,12 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, initial
                       value={c.name}
                       onChange={(e) => updateCharacter(i, 'name', e.target.value)}
                       placeholder="이름"
+                      className="w-24 min-w-0 px-3 py-1.5 border-2 border-border dark:border-zinc-600 bg-white dark:bg-zinc-800 rounded-lg text-sm font-bold text-ink-black dark:text-white focus:outline-none focus:border-comic-orange"
+                    />
+                    <input
+                      value={c.description || ''}
+                      onChange={(e) => updateCharacter(i, 'description', e.target.value)}
+                      placeholder="추가설명 (예: 포메라니안, 안경 쓴 회사원)"
                       className="flex-1 min-w-0 px-3 py-1.5 border-2 border-border dark:border-zinc-600 bg-white dark:bg-zinc-800 rounded-lg text-sm font-bold text-ink-black dark:text-white focus:outline-none focus:border-comic-orange"
                     />
                     <select
