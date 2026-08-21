@@ -1,20 +1,15 @@
 # 진행 상태 추적
 
-## 현재 작업: 지시서-Export검증-A4.md
+## 현재 작업: P1 — 단편 아이디어 입력 UI (예시 칩 + 3축 선택)
 
 | 단계 | 상태 | 비고 |
 |------|------|------|
-| 1단계 — 현행 Export 경로 조사 | **완료** | 프론트 SVG 경로 확인, Pillow 잔재 식별 |
-| 2단계-수정 — 배선 (handleExport → exportRenderer) | **완료** | CORS + foreignObject taint 수정 포함 |
-| 2단계 — 실출력 검증 7항목 | **완료** | 7/7 PASS (2026-08-20) |
-| 3단계 — A4 내보내기 (신규 기능) | **완료** | 그리드+한컷+페이지분할 검증 PASS (2026-08-20) |
-| 4단계 — 배포 + 커밋 | **배포 완료, 커밋 대기** | 2026-08-20 배포, 사용자 확인 후 커밋 |
+| 1단계 — 현황 조사 | **완료** | 수정 금지, 조사만 |
+| 2단계 — 데이터/백엔드 | **완료** | prompt_fragments.py + 스키마 확장 + 저장 |
+| 3단계 — 프론트 UI | **완료** | 칩 8개(랜덤3) + 3축 버튼 + 칩-버튼 연동 |
+| 4단계 — 검증 | **완료** | 하위호환 + 프롬프트 주입 + 빌드 PASS |
+| 5단계 — 배포 + 확인 + 커밋 | 🔄 배포 완료, 커밋 대기 | 모바일 레이아웃 수정 포함 |
 
-## 수정 파일 요약 (2단계까지)
-
-- `frontend/src/utils/exportRenderer.js` — useCORS=false, renderMode='svg-text' 전달
-- `frontend/src/components/BubbleOverlay.jsx` — renderMode prop, svg-text 텍스트 렌더링
-- `frontend/src/pages/BubbleTestPage.jsx` — renderMode 비교 섹션 추가
-- `frontend/scripts/bubble-shot.mjs` — renderMode 비교 판정 추가
-- `frontend/scripts/export-verify.mjs` — python3→python 수정
-- `CLAUDE.md` — 이원 모드 규칙 3건 추가
+## 추후 개선 후보
+- locked 게이트 탭 시인성 낮음 (opacity-50 + bg-gray-200이 흰 배경에 녹아듦)
+- Gate5Review 제목/Export 버튼 모바일 375px 세로 꺾임
