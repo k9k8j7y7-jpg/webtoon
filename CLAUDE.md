@@ -20,6 +20,7 @@ WEBTOON/
 │   │   ├── prompts/       # 프롬프트 엔진
 │   │   ├── script/        # 대본 생성 (게이트 2)
 │   │   ├── story/         # 기획 생성 (게이트 1)
+│   │   ├── series/        # 시리즈(연작) CRUD (P2 신설)
 │   │   ├── storyboard/    # 콘티 (게이트 4)
 │   │   ├── styles/        # 스타일 프리셋
 │   │   ├── workflow/      # 게이트 상태 + 무효화 전파
@@ -29,7 +30,7 @@ WEBTOON/
 │   │   ├── storage.py     # 파일 저장 (S3 → 로컬 폴백)
 │   │   └── main.py        # FastAPI 앱 + 라우터 등록 + SPA 서빙
 │   ├── frontend/dist/     # 빌드된 프론트엔드 (서버에서 서빙)
-│   ├── init_db.sql ~ step10.sql # DB 마이그레이션 스크립트
+│   ├── init_db.sql ~ step11.sql # DB 마이그레이션 스크립트 (+ stepN_down.sql 롤백)
 │   └── requirements.txt
 ├── frontend/          # React 19 + Vite + Tailwind CSS
 │   └── src/
@@ -46,14 +47,14 @@ WEBTOON/
 | 영역 | 기술 |
 |---|---|
 | 백엔드 | Python + FastAPI, SQLAlchemy ORM |
-| DB | MariaDB (AWS RDS) |
+| DB | MariaDB (Lightsail 인스턴스 내 로컬) |
 | 이미지 생성 | Gemini 2.5 Flash Image API (레퍼런스 주입) |
 | 텍스트 생성 | Gemini 2.5 Flash API |
 | 프론트엔드 | React 19 + Vite + Tailwind CSS 4 (코믹북 디자인 시스템) |
 | 파일 저장 | 로컬 FS 폴백 (`/home/bitnami/project-t/storage/`) |
 | 인증 | OAuth (Google/Kakao/Naver) + JWT (HS256) |
 | 비동기 작업 | FastAPI BackgroundTasks + 인메모리 Job 스토어 |
-| 인프라 | AWS EC2 (52.79.94.122) + RDS + S3 |
+| 인프라 | AWS Lightsail (52.79.94.122) + S3 |
 
 ## 서버 접속 정보
 
@@ -629,18 +630,21 @@ shiftY = text_offset_y × 2 × marginY
 
 ## 남은 작업 (향후)
 
-### 최근 완료 (2026-08-20)
-- [x] **Export 프론트 배선 + 실출력 검증 + A4 내보내기** — 지시서 전 단계 완료, 배포 완료
-- [x] **등장인물 추가설명(description) 필드** — Gate1 UI + 자동 생성 프롬프트 + Gate2/3 전달, 배포 완료
-- [x] **GitHub 리모트 설정** — `https://github.com/k9k8j7y7-jpg/webtoon.git` push 완료
+### 최근 완료 (2026-08-21)
+- [x] **P2 — DB 기반 공사** — series·episode_characters 신설, characters 프로젝트 소속 이전, step11 서버 적용, 무변경 판정 ALL PASS (ed3fa37)
+- [x] **P1 — 단편 아이디어 입력 UI** — 예시 칩 8개 풀 + 3축 선택(장르/분위기/전개) + 프롬프트 조각 주입 (0844047)
+- [x] **Export 프론트 배선 + A4 내보내기** — 배포 완료 (9b1a52b)
+- [x] **등장인물 추가설명(description) 필드** — Gate1 UI + 자동 생성 프롬프트 + Gate2/3 전달 (c1657af)
 
-### 사용자 테스트 대기
-- [ ] **등장인물 추가설명 브라우저 테스트:** 아이디어 "포메라이언 도도가 엄마 아빠와 같이 집앞 공원에서 보내는 즐거운 한때"로 자동 생성 시 도도(description: 포메라니안) 포함 확인. 기존 에피소드 하위 호환 확인
+### 다음 작업: P3 — 캐릭터 라이브러리
+- 결정서-연작설계-v5.md 확정 결정 3 참조
+- 피커 2단 (에피소드 캐릭터 → 프로젝트 라이브러리), 불러오기, 승격, 재생성 경고
+- characters.episode_id 제거는 P3 안정화 후 별도
 
-### 다음 작업 후보
-- [ ] **동물용 캐릭터 시트 템플릿 설계** — 현재 사람용 프롬프트("bust shot" 등)로 동물도 생성. 동물 전용 템플릿(전신/표정) 별도 설계 필요
+### 기타 후보
+- [ ] 동물용 캐릭터 시트 템플릿 설계
 - [ ] (선택) IMAGE_MODEL 환경변수화
-- [ ] Character Consistency — Part B: 그림 속 한글 텍스트 처리 (긴 문장 억제, 짧은 단어 명시)
+- [ ] Character Consistency — Part B: 그림 속 한글 텍스트 처리
 
 ### 설계 문서 기반 미완료 번들
 - [x] **말풍선 12종 본체 구현 (12/12 완료).** 스파이크 3종 꼬리 제거로 확정 (2026-08-17)
@@ -686,7 +690,10 @@ shiftY = text_offset_y × 2 × marginY
 - **Gemini API 키:** `.env` 파일의 `GEMINI_API_KEY` 사용
 - **이미지 모델:** `gemini-2.5-flash-image` (adapters/gemini_image.py)
 - **텍스트 모델:** `gemini-2.5-flash` (adapters/gemini.py)
-- **DB 스키마 변경:** `stepN.sql` 파일 작성 후 서버에서 실행
+- **DB 마이그레이션:** `stepN.sql` + `stepN_down.sql` 쌍 작성 + `schema_migrations` 테이블에 버전 기록. 서버 실행 전 리허설 DB에서 up→verify→down→재-up 사이클 통과 + mysqldump 백업 + 사용자 "실행해" 승인 필수. DB는 Lightsail 인스턴스 내 MariaDB (RDS 아님)
+- **DB 덤프/백업 .sql 커밋 금지:** `project_t_*.sql`, `server_dump.sql` 등은 절대 커밋하지 않음. `stepN.sql` 마이그레이션 파일은 예외
+- **캐릭터 이중 기록 기간:** characters 테이블은 episode_id + project_id + episode_characters 연결을 모두 기록. episode_id 컬럼 제거는 P3 안정화 후 별도 진행
+- **캐릭터 에피소드 조회:** `episode_characters` JOIN이 표준 경로. `project_id` 직접 조회는 라이브러리 기능 전용 (에피소드 범위를 넘는 결과가 반환되므로 기존 기능에 사용 금지)
 - **배포:** 파일별 `scp` → uvicorn `--reload` 자동 감지 (프론트는 빌드 후 dist 배포)
 - **서브 경로:** 프론트엔드 Vite `base: '/WEBTOON/'`, FastAPI `root_path="/WEBTOON"` — 새 컴포넌트 작성 시 API/라우팅에 `/WEBTOON` prefix 반영 필요
 - **디자인 작업 분담:** Antigravity에서 디자인 변경 → Claude Code에서 빌드+배포
