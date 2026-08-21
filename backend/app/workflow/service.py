@@ -10,7 +10,7 @@
 from sqlalchemy.orm import Session
 
 from app.projects.models import Episode
-from app.characters.models import Character
+from app.characters.models import Character, EpisodeCharacter
 from app.locations.models import Location
 from app.storyboard.models import Cut, CutAssetRef
 from app.workflow.gate import GATE_KEYS
@@ -95,8 +95,9 @@ def invalidate_from_gate(
         for char_ref in scope["characters"]:
             chars = (
                 db.query(Character)
+                .join(EpisodeCharacter, EpisodeCharacter.character_id == Character.id)
                 .filter(
-                    Character.episode_id == episode_id,
+                    EpisodeCharacter.episode_id == episode_id,
                     Character.ref_key == char_ref,
                 )
                 .all()

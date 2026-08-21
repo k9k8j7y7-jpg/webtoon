@@ -8,7 +8,7 @@ from app.database import get_db
 from app.auth.deps import get_current_user
 from app.users.models import User
 from app.projects.models import Project, Episode
-from app.characters.models import Character
+from app.characters.models import Character, EpisodeCharacter
 from app.locations.models import Location
 from app.storyboard.models import Cut
 from app.workflow.gate import approve_gate, get_gate_number, GATE_KEYS
@@ -36,8 +36,13 @@ async def approve_assets(
     if gate != 3:
         raise HTTPException(status_code=400, detail=f"Current gate is {gate}, not gate 3")
 
-    # 캐릭터·장소 전부 approved로
-    characters = db.query(Character).filter(Character.episode_id == episode_id).all()
+    # 캐릭터·장소 전부 approved로 (episode_characters JOIN)
+    characters = (
+        db.query(Character)
+        .join(EpisodeCharacter, EpisodeCharacter.character_id == Character.id)
+        .filter(EpisodeCharacter.episode_id == episode_id)
+        .all()
+    )
     for c in characters:
         c.status = "approved"
 
@@ -108,10 +113,14 @@ async def revert_to_gate(
 
     # 자산 수 (게이트3 이후가 무효화 대상이면)
     if target <= 2:
-        impact["characters_count"] = db.query(Character).filter(
-            Character.episode_id == episode_id,
-            Character.status.in_(["approved", "pending"]),
-        ).count()
+        impact["characters_count"] = (
+            db.query(Character)
+            .join(EpisodeCharacter, EpisodeCharacter.character_id == Character.id)
+            .filter(
+                EpisodeCharacter.episode_id == episode_id,
+                Character.status.in_(["approved", "pending"]),
+            ).count()
+        )
         impact["locations_count"] = db.query(Location).filter(
             Location.episode_id == episode_id,
             Location.status.in_(["approved", "pending"]),
@@ -146,10 +155,19 @@ async def revert_to_gate(
 
     # 자산 무효화 (stale 표시, 삭제 안 함)
     if target <= 2:
-        db.query(Character).filter(
-            Character.episode_id == episode_id,
-            Character.status.in_(["approved", "pending"]),
-        ).update({"status": "invalidated"}, synchronize_session="fetch")
+        char_ids_to_invalidate = [
+            r[0] for r in
+            db.query(Character.id)
+            .join(EpisodeCharacter, EpisodeCharacter.character_id == Character.id)
+            .filter(
+                EpisodeCharacter.episode_id == episode_id,
+                Character.status.in_(["approved", "pending"]),
+            ).all()
+        ]
+        if char_ids_to_invalidate:
+            db.query(Character).filter(
+                Character.id.in_(char_ids_to_invalidate),
+            ).update({"status": "invalidated"}, synchronize_session="fetch")
         db.query(Location).filter(
             Location.episode_id == episode_id,
             Location.status.in_(["approved", "pending"]),

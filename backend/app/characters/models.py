@@ -8,12 +8,22 @@ from sqlalchemy.sql import func
 from app.database import Base
 
 
+class EpisodeCharacter(Base):
+    """에피소드-캐릭터 연결 테이블 (P2 신설)."""
+    __tablename__ = "episode_characters"
+
+    episode_id = Column(BigInteger, ForeignKey("episodes.id"), primary_key=True)
+    character_id = Column(BigInteger, ForeignKey("characters.id"), primary_key=True)
+
+
 class Character(Base):
     __tablename__ = "characters"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     ref_key = Column(String(50), nullable=False)
     episode_id = Column(BigInteger, ForeignKey("episodes.id"), nullable=False, index=True)
+    project_id = Column(BigInteger, ForeignKey("projects.id"), nullable=True, index=True)
+    user_id = Column(BigInteger, nullable=True)
     name = Column(String(100), nullable=True)
     gender = Column(String(20), nullable=True)
     age_group = Column(String(20), nullable=True)

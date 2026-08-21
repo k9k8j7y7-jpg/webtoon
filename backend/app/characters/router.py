@@ -8,7 +8,7 @@ from app.database import get_db
 from app.auth.deps import get_current_user
 from app.users.models import User
 from app.projects.models import Project, Episode
-from app.characters.models import Character
+from app.characters.models import Character, EpisodeCharacter
 from app.characters.service import generate_character_sheets, build_character_description
 from app.jobs import create_job, run_job_in_background
 from app.workflow.gate import get_gate_number
@@ -62,6 +62,7 @@ async def create_characters(
             style_prompt=style_prompt,
             job_id=job.job_id,
             db=db,
+            project_id=project_id,
         ),
     )
 
@@ -120,7 +121,12 @@ async def list_characters(
     current_user: User = Depends(get_current_user),
 ):
     _get_episode_for_user(db, project_id, episode_id, current_user.id)
-    characters = db.query(Character).filter(Character.episode_id == episode_id).all()
+    characters = (
+        db.query(Character)
+        .join(EpisodeCharacter, EpisodeCharacter.character_id == Character.id)
+        .filter(EpisodeCharacter.episode_id == episode_id)
+        .all()
+    )
     return [
         {
             "id": c.id,
@@ -211,6 +217,7 @@ async def regenerate_character(
             style_prompt=style_prompt,
             job_id=job.job_id,
             db=db,
+            project_id=character.project_id,
         ),
     )
 

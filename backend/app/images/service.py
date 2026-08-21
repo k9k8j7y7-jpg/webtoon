@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from app.storyboard.models import Cut, CutAssetRef, GenerationLog
-from app.characters.models import Character, CharacterImage
+from app.characters.models import Character, CharacterImage, EpisodeCharacter
 from app.locations.models import Location, LocationImage
 from app.styles.models import Style, STYLE_PRESETS
 from app.projects.models import Episode, ProjectMemory
@@ -48,7 +48,8 @@ def _get_character_references(episode_id: int, character_ids: list[str], db: Ses
     for char_id in character_ids:
         character = (
             db.query(Character)
-            .filter(Character.episode_id == episode_id, Character.ref_key == char_id)
+            .join(EpisodeCharacter, EpisodeCharacter.character_id == Character.id)
+            .filter(EpisodeCharacter.episode_id == episode_id, Character.ref_key == char_id)
             .first()
         )
         if not character:

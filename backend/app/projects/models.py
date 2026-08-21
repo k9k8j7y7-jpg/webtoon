@@ -1,8 +1,31 @@
-from sqlalchemy import Column, BigInteger, String, Enum, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, BigInteger, String, Enum, DateTime, ForeignKey, JSON, VARCHAR
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.database import Base
+
+
+class SchemaMigration(Base):
+    """마이그레이션 버전 추적 (P2 신설)."""
+    __tablename__ = "schema_migrations"
+
+    version = Column(VARCHAR(50), primary_key=True)
+    applied_at = Column(DateTime, nullable=False, server_default=func.now())
+
+
+class Series(Base):
+    """시리즈(연작) 테이블 (P2 신설)."""
+    __tablename__ = "series"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    project_id = Column(BigInteger, ForeignKey("projects.id"), nullable=False, index=True)
+    title = Column(String(200), nullable=False)
+    bible = Column(JSON, nullable=True)
+    outline = Column(JSON, nullable=True)
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+    updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
+
+    project = relationship("Project", back_populates="series_list")
 
 
 class Project(Base):
@@ -20,6 +43,7 @@ class Project(Base):
 
     episodes = relationship("Episode", back_populates="project", lazy="dynamic")
     memory = relationship("ProjectMemory", back_populates="project", uselist=False)
+    series_list = relationship("Series", back_populates="project", lazy="dynamic")
 
 
 class ProjectMemory(Base):
@@ -38,6 +62,7 @@ class Episode(Base):
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     project_id = Column(BigInteger, ForeignKey("projects.id"), nullable=False, index=True)
+    series_id = Column(BigInteger, ForeignKey("series.id"), nullable=True)
     episode_no = Column(BigInteger, nullable=False)
     title = Column(String(200), nullable=True)
     logline = Column(String(500), nullable=True)

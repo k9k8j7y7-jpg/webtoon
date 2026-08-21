@@ -16,6 +16,7 @@ from app.storyboard.router import router as storyboard_router
 from app.images.router import router as images_router
 from app.billing.router import router as billing_router
 from app.export.router import router as export_router
+from app.series.router import router as series_router
 
 settings = get_settings()
 
@@ -48,6 +49,7 @@ app.include_router(storyboard_router, prefix=settings.API_V1_PREFIX)
 app.include_router(images_router, prefix=settings.API_V1_PREFIX)
 app.include_router(billing_router, prefix=settings.API_V1_PREFIX)
 app.include_router(export_router, prefix=settings.API_V1_PREFIX)
+app.include_router(series_router, prefix=settings.API_V1_PREFIX)
 
 
 import os

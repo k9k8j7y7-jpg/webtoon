@@ -6,7 +6,7 @@ MVP: 정면 1 + 표정 2 = 3장. 의상 default 1벌 자동.
 
 from sqlalchemy.orm import Session
 
-from app.characters.models import Character, CharacterImage, CharacterOutfit
+from app.characters.models import Character, CharacterImage, CharacterOutfit, EpisodeCharacter
 from app.adapters.gemini_image import get_image_adapter
 from app.storage import upload_image
 from app.jobs import get_job, update_job
@@ -43,10 +43,18 @@ async def generate_character_sheets(
     style_prompt: str,
     job_id: str,
     db: Session,
+    project_id: int | None = None,
 ):
     """모든 캐릭터의 시트를 생성한다. Job으로 비동기 실행."""
     # BackgroundTask는 별도 스레드에서 실행 → 자체 DB 세션 사용
     db = SessionLocal()
+
+    # project_id가 전달되지 않으면 episode에서 조회
+    if project_id is None:
+        from app.projects.models import Episode
+        ep = db.query(Episode).filter(Episode.id == episode_id).first()
+        project_id = ep.project_id if ep else None
+
     adapter = get_image_adapter()
     total = len(characters_data)
     results = []
@@ -56,22 +64,31 @@ async def generate_character_sheets(
         name = char_data.get("name", "")
         description = char_data.get("description", "")
 
-        # DB에 캐릭터 레코드 생성/조회
+        # DB에 캐릭터 레코드 생성/조회 (episode_characters JOIN 경유)
         character = (
             db.query(Character)
-            .filter(Character.episode_id == episode_id, Character.ref_key == ref_key)
+            .join(EpisodeCharacter, EpisodeCharacter.character_id == Character.id)
+            .filter(EpisodeCharacter.episode_id == episode_id, Character.ref_key == ref_key)
             .first()
         )
         if not character:
             character = Character(
                 ref_key=ref_key,
                 episode_id=episode_id,
+                project_id=project_id,
                 name=name,
                 description=description,
                 status="draft",
             )
             db.add(character)
             db.flush()
+
+            # episode_characters 연결 (이중 기록)
+            ec = EpisodeCharacter(
+                episode_id=episode_id,
+                character_id=character.id,
+            )
+            db.add(ec)
 
             # 기본 의상 생성
             outfit = CharacterOutfit(
