@@ -571,28 +571,36 @@ shiftY = text_offset_y × 2 × marginY
 - **비용 계측:** `GenerationLog` 테이블 존재, `cost_usd=0.02` 하드코딩 추정값. 토큰 수 파싱 미구현
 - **비용 조회 API/대시보드:** 없음
 
-### Export 경로 조사 + 프론트 배선 WIP (2026-08-19)
+### Export 프론트 배선 + 실출력 검증 + A4 내보내기 (2026-08-20)
 
-지시서: `docs/지시서-Export검증-A4.md`
+지시서: `docs/지시서-Export검증-A4.md` — **전 단계 완료, 배포 완료**
 
-**1단계 조사 완료.** 핵심 발견:
+**1단계 — 현행 Export 경로 조사 (2026-08-19 완료)**
+**2단계 — 프론트 배선 + 실출력 검증 (2026-08-20 완료):**
+- `exportRenderer.js`: `useCORS=false`, `renderMode='svg-text'` — foreignObject canvas taint 해결
+- `BubbleOverlay.jsx`: `renderMode` prop 추가, svg-text 모드에서 `<text>/<tspan>` 렌더링
+- `Gate5Review.jsx`: `handleExport` 본체를 백엔드 API → 프론트 exportRenderer 호출로 교체
+- 7/7 검증 항목 PASS (PNG ZIP, 세로, 인스타, min_height, shout, SFX, narration, #7 빈 대사)
+- renderMode 비교 회귀 테스트 추가 (`bubble-shot.mjs`)
 
-- **현행 Export는 백엔드 Pillow 경로만 사용:** Gate5Review `handleExport` → 백엔드 API (`POST /export`) → `export/service.py` → `_ensure_composed()` → `compose_cut()` (Pillow)
-- **프론트 renderToStaticMarkup 경로(`exportRenderer.js`)는 미배선:** 코드 완성되어 있으나 Gate5Review에서 import/호출하지 않음
-- **확정 방향:** 미리보기 병합 방식(프론트 SVG)이 유일한 export 경로. 백엔드 Pillow 조합 폐기
-- **인스타 사양:** 프론트=1080×1080 fit+흰배경+PNG (확정), 백엔드=중앙크롭+JPEG (폐기 대상)
+**3단계 — A4 내보내기 (2026-08-20 완료):**
+- `exportRenderer.js`: `exportAsA4Single()` + `exportAsA4Grid()` 추가
+- 상수: `A4_WIDTH=2480`, `A4_HEIGHT=3508`, `A4_MARGIN=59`, `GRID_COLS=4`, `GRID_ROWS=3`, `GRID_GAP=20`
+- `Gate5Review.jsx`: A4 드롭다운 버튼 (그리드 4×3 / 한 컷 선택)
+- 검증 4/4 PASS: 그리드 2480×3508, 한 컷 중앙 배치, 24컷 페이지 분할, 300DPI 텍스트 시인성
 
-**2단계 배선 작업 — 진행 중 (중단됨):**
-- Gate5Review.jsx에 import 추가 완료: `ExportProgressModal`, `exportAsPNGZip/exportAsVertical/exportAsInstagram`
-- **다음 작업:** `handleExport` 함수 본체를 백엔드 API 호출 → 프론트 exportRenderer 호출로 교체
-- export 상태관리(`exportModal`, `exportAbortRef`) + ExportProgressModal 연동 필요
-- `exportRenderer.js:298-325` 주석 레거시 코드 삭제 가능
+**4단계 — 배포 + 커밋 (2026-08-20 완료):** 커밋 `9b1a52b`
 
-**compose_cut() 용도 확인:**
-- 이미지 생성 직후 자동 호출 (`images/service.py:166`) → `composed_image_url` 저장
-- 프론트엔드에서 `composed_image_url`을 **참조하지 않음** (Gate5Review는 `cut.image_url` 사용)
-- 백엔드 export만 `composed_image_url` 사용 → export가 프론트로 이관되면 이 합성본은 미사용
-- `compose_cut()` 자체는 건드리지 않음 (이미지 생성 직후 호출은 유지 — 향후 백엔드 전용 용도 가능)
+### 등장인물 추가설명(description) 필드 추가 (2026-08-20)
+
+지시서: `docs/지시문서_등장인물_동물타입_추가.md` — **전 단계 완료, 배포 완료**
+
+- **Gate1 UI:** 캐릭터 행에 추가설명 입력란 추가 (`Gate1Planning.jsx`). placeholder: "추가설명 (예: 포메라니안, 안경 쓴 회사원)"
+- **백엔드:** `CharacterInput`에 `description: str | None` 추가 (`story/router.py`)
+- **자동 생성 프롬프트:** 동물 인식 규칙 + description 필드 지시 추가 (`story/service.py`). 사용자 입력 description도 프롬프트에 전달
+- **Gate 2/3 전달:** 수정 불필요 — Gate 2는 `json.dumps`로 전체 직렬화, Gate 3는 이미 `char_data.get("description", "")` 사용
+- **캐릭터 시트 템플릿 충돌:** 없음 (사람 전제 키워드 없음). 동물용 시트 템플릿 설계는 향후 별도 세션
+- 커밋: `24fc5d1`, `54e3751`, `c1657af`
 
 ### 발견 및 수정한 버그
 
@@ -621,12 +629,18 @@ shiftY = text_offset_y × 2 × marginY
 
 ## 남은 작업 (향후)
 
-### 진행 중 — Export 프론트 배선 + A4 (지시서-Export검증-A4.md)
-- [ ] **Export 프론트 배선 (2단계-수정, WIP):** handleExport → exportRenderer 호출 교체. import 추가 완료, 함수 본체 교체 필요
-- [ ] **Export 실출력 검증 (2단계):** min_height/text_offset/스파이크/효과음/나레이션/세로/인스타/#7 재생성
-- [ ] **A4 내보내기 신규 기능 (3단계):** 2480×3508, 한 컷 모드 + 4×3 그리드 모드
-- [ ] **배포 + 커밋 (4단계)**
+### 최근 완료 (2026-08-20)
+- [x] **Export 프론트 배선 + 실출력 검증 + A4 내보내기** — 지시서 전 단계 완료, 배포 완료
+- [x] **등장인물 추가설명(description) 필드** — Gate1 UI + 자동 생성 프롬프트 + Gate2/3 전달, 배포 완료
+- [x] **GitHub 리모트 설정** — `https://github.com/k9k8j7y7-jpg/webtoon.git` push 완료
+
+### 사용자 테스트 대기
+- [ ] **등장인물 추가설명 브라우저 테스트:** 아이디어 "포메라이언 도도가 엄마 아빠와 같이 집앞 공원에서 보내는 즐거운 한때"로 자동 생성 시 도도(description: 포메라니안) 포함 확인. 기존 에피소드 하위 호환 확인
+
+### 다음 작업 후보
+- [ ] **동물용 캐릭터 시트 템플릿 설계** — 현재 사람용 프롬프트("bust shot" 등)로 동물도 생성. 동물 전용 템플릿(전신/표정) 별도 설계 필요
 - [ ] (선택) IMAGE_MODEL 환경변수화
+- [ ] Character Consistency — Part B: 그림 속 한글 텍스트 처리 (긴 문장 억제, 짧은 단어 명시)
 
 ### 설계 문서 기반 미완료 번들
 - [x] **말풍선 12종 본체 구현 (12/12 완료).** 스파이크 3종 꼬리 제거로 확정 (2026-08-17)
@@ -634,11 +648,12 @@ shiftY = text_offset_y × 2 × marginY
 - [x] **4-A 말풍선 세로 크기 검증 인프라 (2026-08-18)**
 - [x] **4-B 텍스트 위치 조절 text_offset_x/y (2026-08-18)**
 - [x] **이미지 모델 현황 조사 (2026-08-19, 코드 수정 없음)**
-- [ ] Character Consistency — Part B: 그림 속 한글 텍스트 처리 (긴 문장 억제, 짧은 단어 명시)
+- [x] **Export 프론트 배선 + A4 (2026-08-20, 배포 완료)**
+- [x] **등장인물 description 필드 (2026-08-20, 배포 완료)**
 - [x] Gate3 Asset Revision — Bundle B: 캐릭터 조건 폼 (2026-08-11 완료)
 - [x] Gate3 Asset Revision — Bundle C: 장소 AI 제안·편집 + mood_notes (2026-08-11 완료)
 - [x] Cut Editor Speech Bubble — 말풍선 편집화면 (2026-08-12 완료)
-- [ ] Cut Editor Speech Bubble — 효과음 Export 반영 (SFX는 프론트 SVG 경로로 해결 예정 — 배선 완료 시 자동 포함)
+- [ ] Cut Editor Speech Bubble — 효과음 Export 반영 (SFX는 프론트 SVG 경로로 이미 포함 — 검증만 필요)
 - [ ] Cut Editor Speech Bubble — 긴 대사 문장 단위 분할 + 세로 연결 (D단계)
 - [ ] Gate4-5 Speech-Product Revision — Bundle B: 제품 레퍼런스 업로드 (PPL)
 - [ ] 배경 효과 PNG 레이어 (별도 지시서)
