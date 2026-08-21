@@ -27,17 +27,17 @@ export default function GateProgress({ gateStatus, onGateClick, viewingGate }) {
   const activeGate = viewingGate || currentGate;
 
   return (
-    <div className="flex items-center gap-1 w-full">
+    <div className="flex items-center gap-1 w-full overflow-x-auto scrollbar-hide">
       {GATE_KEYS.map((key, i) => {
         const gate = gateStatus.gates[key];
         const status = gate?.status || 'locked';
         const isActive = i + 1 === activeGate;
 
         return (
-          <div key={key} className="flex items-center flex-1">
+          <div key={key} className="flex items-center flex-1 min-w-0">
             <button
               onClick={() => onGateClick?.(i + 1)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all
+              className={`flex items-center gap-1 md:gap-1.5 px-2 md:px-3 py-1 md:py-1.5 rounded-full text-[11px] md:text-xs font-bold whitespace-nowrap transition-all
                 ${isActive ? 'ring-2 ring-comic-orange ring-offset-1 dark:ring-offset-surface-dark' : ''}
                 ${status === 'locked' ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:opacity-80'}
                 ${statusColor(status)} ${status === 'locked' ? 'text-gray-500 dark:text-gray-400' : 'text-white'}`}
@@ -46,7 +46,7 @@ export default function GateProgress({ gateStatus, onGateClick, viewingGate }) {
               {statusIcon(status)}
               {GATE_LABELS[i]}
             </button>
-            {i < 4 && <div className={`flex-1 h-0.5 mx-1 ${i + 1 < currentGate ? 'bg-green-300 dark:bg-green-700' : 'bg-gray-200 dark:bg-zinc-700'}`} />}
+            {i < 4 && <div className={`flex-1 h-0.5 mx-0.5 md:mx-1 min-w-1 ${i + 1 < currentGate ? 'bg-green-300 dark:bg-green-700' : 'bg-gray-200 dark:bg-zinc-700'}`} />}
           </div>
         );
       })}

@@ -15,6 +15,7 @@ export default function WorkflowPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const initialIdea = location.state?.idea || '';
+  const initialStoryOptions = location.state?.storyOptions || null;
   const [gateStatus, setGateStatus] = useState(null);
   const [job, setJob] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -149,6 +150,7 @@ export default function WorkflowPage() {
         onRefresh={loadStatus}
         runJob={runJob}
         initialIdea={displayGate === 1 && !viewingGate ? initialIdea : ''}
+        initialStoryOptions={displayGate === 1 && !viewingGate ? initialStoryOptions : null}
         readOnly={isViewingPrevious}
       />
 

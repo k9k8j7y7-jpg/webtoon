@@ -1,8 +1,37 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import api from '../../api/client';
 import { Lightbulb, Check, RefreshCw, Pencil, Save, Plus, Trash2, Sparkles, UserPlus } from 'lucide-react';
+import { pickRandomChips } from '../../constants/ideaChips';
 
-export default function Gate1Planning({ projectId, episodeId, onRefresh, initialIdea = '', readOnly = false }) {
+// --- 3축 옵션 정의 ---
+const GENRE_OPTIONS = [
+  { key: 'romance', label: '로맨스' },
+  { key: 'daily', label: '일상/힐링' },
+  { key: 'comedy', label: '코미디' },
+  { key: 'thriller', label: '스릴러' },
+  { key: 'fantasy', label: '판타지' },
+  { key: 'drama', label: '드라마' },
+];
+
+const MOOD_OPTIONS = [
+  { key: 'warm', label: '따뜻한' },
+  { key: 'cheerful', label: '유쾌한' },
+  { key: 'tense', label: '긴장감' },
+  { key: 'touching', label: '먹먹한' },
+  { key: 'dark', label: '어두운' },
+];
+
+const DEVELOPMENT_OPTIONS = [
+  { key: 'calm', label: '잔잔하게', desc: '감정선과 여운 중심' },
+  { key: 'dramatic', label: '극적으로', desc: '뚜렷한 기승전결' },
+  { key: 'twist', label: '반전 있게', desc: '마지막에 뒤집히는 결말' },
+  { key: 'hook', label: '초반 후킹', desc: '첫 컷부터 강한 사건' },
+  { key: 'growth', label: '성장·역전', desc: '바닥에서 올라가는 이야기' },
+  { key: 'mystery', label: '미스터리·떡밥', desc: '의문과 단서, 끝에 여운' },
+  { key: 'cliffhanger', label: '클리프행어', desc: '다음 화가 궁금해지는 끝맺음' },
+];
+
+export default function Gate1Planning({ projectId, episodeId, onRefresh, initialIdea = '', initialStoryOptions = null, readOnly = false }) {
   const [idea, setIdea] = useState(initialIdea);
   const [characters, setCharacters] = useState([]);
   const [planning, setPlanning] = useState(null);
@@ -15,14 +44,47 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, initial
   const [editData, setEditData] = useState(null);
   const [error, setError] = useState('');
 
+  // 3축 선택 상태 (initialStoryOptions 또는 저장된 값으로 초기화)
+  const [genre, setGenre] = useState(initialStoryOptions?.genre || null);
+  const [mood, setMood] = useState(initialStoryOptions?.mood || null);
+  const [development, setDevelopment] = useState(initialStoryOptions?.development || null);
+
+  // 랜덤 칩 3개 (컴포넌트 마운트마다 로테이션)
+  const visibleChips = useMemo(() => pickRandomChips(3), []);
+
   useEffect(() => {
     api.get(`/projects/${projectId}/episodes/${episodeId}/planning`)
       .then(({ data }) => {
-        if (data) setPlanning(data);
+        if (data) {
+          setPlanning(data);
+          // 저장된 story_options 복원
+          if (data.story_options) {
+            setGenre(data.story_options.genre || null);
+            setMood(data.story_options.mood || null);
+            setDevelopment(data.story_options.development || null);
+          }
+        }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [projectId, episodeId]);
+
+  const handleChipClick = (chip) => {
+    setIdea(chip.text);
+    // 칩-버튼 연동
+    setGenre(chip.genre);
+    setMood(chip.mood);
+    setDevelopment(chip.development);
+    // 입력칸 포커스 + 전체선택
+    setTimeout(() => {
+      const ta = document.getElementById('idea-textarea');
+      if (ta) { ta.focus(); ta.select(); }
+    }, 0);
+  };
+
+  const toggleOption = (current, setter, key) => {
+    setter(current === key ? null : key);
+  };
 
   const handleSuggestCharacters = async () => {
     if (!idea.trim()) return;
@@ -60,9 +122,13 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, initial
     setError('');
     try {
       const validChars = characters.filter((c) => c.name.trim());
+      const storyOptions = (genre || mood || development)
+        ? { genre, mood, development }
+        : undefined;
       const { data } = await api.post(`/projects/${projectId}/episodes/${episodeId}/planning`, {
         idea: idea.trim(),
         characters: validChars.length > 0 ? validChars : undefined,
+        story_options: storyOptions,
       });
       setPlanning(data);
     } catch (err) {
@@ -142,12 +208,101 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, initial
           <div>
             <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">웹툰 아이디어</label>
             <textarea
+              id="idea-textarea"
               value={idea}
               onChange={(e) => setIdea(e.target.value)}
               placeholder="예: 평범한 고등학생이 시간을 되돌릴 수 있는 회중시계를 발견하고, 시간여행 능력을 얻게 되는 이야기"
               className="w-full px-4 py-2 border-2 border-border dark:border-zinc-700 bg-transparent rounded-xl text-ink-black dark:text-white focus:outline-none focus:border-comic-orange focus:ring-4 focus:ring-comic-orange/20 transition-all font-bold text-sm resize-none"
               rows={3}
             />
+            {/* 예시 칩 */}
+            <div className="mt-3">
+              <div className="flex items-baseline gap-1.5 mb-1.5">
+                <span className="text-xs font-bold text-gray-600 dark:text-gray-400">아이디어 예시</span>
+                <span className="text-[11px] text-gray-400 dark:text-zinc-500">눌러서 채운 뒤 자유롭게 수정하세요</span>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                {visibleChips.map((chip, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => handleChipClick(chip)}
+                    className="px-3 py-1.5 text-xs font-bold text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-zinc-800 border border-border dark:border-zinc-700 rounded-xl hover:border-comic-orange hover:text-comic-orange hover:bg-comic-orange/5 transition-all text-left whitespace-normal"
+                  >
+                    💡 {chip.text}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* 3축 선택 */}
+          <div className="space-y-3">
+            {/* 장르 */}
+            <div>
+              <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5">장르 <span className="font-normal text-gray-400">(선택)</span></label>
+              <div className="flex flex-wrap gap-1.5">
+                {GENRE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => toggleOption(genre, setGenre, opt.key)}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-full border-2 transition-all ${
+                      genre === opt.key
+                        ? 'border-comic-orange bg-comic-orange text-white'
+                        : 'border-border dark:border-zinc-700 text-gray-600 dark:text-gray-400 hover:border-comic-orange/50'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 분위기 */}
+            <div>
+              <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5">분위기 <span className="font-normal text-gray-400">(선택)</span></label>
+              <div className="flex flex-wrap gap-1.5">
+                {MOOD_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => toggleOption(mood, setMood, opt.key)}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-full border-2 transition-all ${
+                      mood === opt.key
+                        ? 'border-comic-blue bg-comic-blue text-white'
+                        : 'border-border dark:border-zinc-700 text-gray-600 dark:text-gray-400 hover:border-comic-blue/50'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 이야기 전개 */}
+            <div>
+              <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5">이야기 전개 <span className="font-normal text-gray-400">(선택)</span></label>
+              <div className="flex flex-wrap gap-1.5">
+                {DEVELOPMENT_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => toggleOption(development, setDevelopment, opt.key)}
+                    className={`group flex flex-col items-start px-3 py-1.5 text-xs font-bold rounded-xl border-2 transition-all ${
+                      development === opt.key
+                        ? 'border-green-500 bg-green-500 text-white'
+                        : 'border-border dark:border-zinc-700 text-gray-600 dark:text-gray-400 hover:border-green-500/50'
+                    }`}
+                  >
+                    <span>{opt.label}</span>
+                    <span className={`text-[10px] font-normal mt-0.5 ${
+                      development === opt.key ? 'text-green-100' : 'text-gray-400 dark:text-zinc-500'
+                    }`}>{opt.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           {/* 등장인물 섹션 */}

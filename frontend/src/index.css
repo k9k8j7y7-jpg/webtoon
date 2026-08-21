@@ -35,8 +35,17 @@ body {
   body {
     background-color: var(--color-surface-dark);
     color: #ffffff;
-    background-image: 
+    background-image:
       linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px),
       linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px);
   }
+}
+
+/* 스크롤바 숨김 유틸 */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }

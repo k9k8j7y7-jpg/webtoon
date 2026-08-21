@@ -9,6 +9,7 @@ from app.auth.deps import get_current_user
 from app.users.models import User
 from app.projects.models import Project, Episode
 from app.story.service import generate_planning, suggest_characters
+from app.story.prompt_fragments import build_story_options_prompt
 from app.workflow.gate import approve_gate, get_gate_number
 
 router = APIRouter(tags=["gate1-planning"])
@@ -21,10 +22,17 @@ class CharacterInput(BaseModel):
     age: int | str | None = None
 
 
+class StoryOptions(BaseModel):
+    genre: str | None = None
+    mood: str | None = None
+    development: str | None = None
+
+
 class PlanningRequest(BaseModel):
     idea: str
-    mood: str | None = None
+    mood: str | None = None  # 하위호환 (기존 필드, story_options.mood 우선)
     characters: list[CharacterInput] | None = None
+    story_options: StoryOptions | None = None
 
 
 class SuggestCharactersRequest(BaseModel):
@@ -43,13 +51,17 @@ async def get_planning(
     current_user: User = Depends(get_current_user),
 ):
     episode = _get_episode_for_user(db, project_id, episode_id, current_user.id)
-    planning = (episode.script or {}).get("planning")
+    script = episode.script or {}
+    planning = script.get("planning")
     if not planning:
         return None
     # title/logline/synopsis는 에피소드 컬럼이 최신 (수정 반영)
     planning["title"] = episode.title or planning.get("title")
     planning["logline"] = episode.logline or planning.get("logline")
     planning["synopsis"] = episode.synopsis or planning.get("synopsis")
+    # story_options 포함 (재생성 시 재사용)
+    if script.get("story_options"):
+        planning["story_options"] = script["story_options"]
     return planning
 
 
@@ -84,7 +96,15 @@ async def create_planning(
         )
 
     chars = [c.model_dump() for c in body.characters] if body.characters else None
-    result = await generate_planning(body.idea, body.mood, chars)
+
+    # story_options → 프롬프트 조각 조립
+    so = body.story_options.model_dump() if body.story_options else None
+    # 하위호환: 기존 mood 필드 → story_options.mood로 폴백
+    if not so and body.mood:
+        so = {"genre": None, "mood": body.mood, "development": None}
+    options_prompt = build_story_options_prompt(so)
+
+    result = await generate_planning(body.idea, options_prompt, chars)
 
     # 에피소드에 기획 결과 저장 (사용자가 입력한 제목이 있으면 유지)
     if not episode.title:
@@ -94,6 +114,7 @@ async def create_planning(
     # world와 characters는 script JSON에 임시 저장 (3단계에서 script로 확장)
     episode.script = {
         "planning": result,
+        **({"story_options": so} if so else {}),
     }
     db.commit()
     db.refresh(episode)

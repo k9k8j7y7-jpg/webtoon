@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../api/client';
 import { Plus, ArrowLeft, Play, Lightbulb, FileText, Palette, LayoutGrid, ImageIcon, ChevronRight, Sparkles, X, CheckCircle, Trash2 } from 'lucide-react';
+import { pickRandomChips } from '../constants/ideaChips';
 
 export default function ProjectPage() {
   const { projectId } = useParams();
@@ -12,15 +13,22 @@ export default function ProjectPage() {
   const [showModal, setShowModal] = useState(false);
   const [modalTitle, setModalTitle] = useState('');
   const [modalIdea, setModalIdea] = useState('');
+  const [modalStoryOptions, setModalStoryOptions] = useState(null);
+  const [modalChips, setModalChips] = useState([]);
+
+  // 온보딩 예시 칩 (마운트마다 랜덤 3개)
+  const onboardingChips = useMemo(() => pickRandomChips(3), []);
 
   useEffect(() => {
     api.get(`/projects/${projectId}`).then(({ data }) => setProject(data));
     api.get(`/projects/${projectId}/episodes`).then(({ data }) => setEpisodes(data));
   }, [projectId]);
 
-  const openModal = (idea = '') => {
+  const openModal = (chip = null) => {
     setModalTitle('');
-    setModalIdea(idea);
+    setModalIdea(chip?.text || '');
+    setModalStoryOptions(chip ? { genre: chip.genre, mood: chip.mood, development: chip.development } : null);
+    setModalChips(pickRandomChips(3));
     setShowModal(true);
   };
 
@@ -35,7 +43,7 @@ export default function ProjectPage() {
       });
       setShowModal(false);
       navigate(`/projects/${projectId}/episodes/${data.id}/workflow`, {
-        state: { idea: modalIdea || '' },
+        state: { idea: modalIdea || '', storyOptions: modalStoryOptions },
       });
     } catch (e) {
       alert('에피소드 생성에 실패했습니다.');
@@ -121,18 +129,14 @@ export default function ProjectPage() {
           <div className="px-6 pb-4">
             <p className="text-sm font-bold text-gray-600 dark:text-gray-400 mb-3">이런 아이디어로 시작해보세요</p>
             <div className="space-y-2">
-              {[
-                '평범한 고등학생이 시간을 되돌리는 회중시계를 발견하는 이야기',
-                '외계인이 서울에 불시착해 치킨집을 차리는 코미디',
-                '고양이가 인간으로 변해 회사에 취직하는 일상물',
-              ].map((idea, i) => (
+              {onboardingChips.map((chip, i) => (
                 <button
                   key={i}
-                  onClick={() => openModal(idea)}
+                  onClick={() => openModal(chip)}
                   disabled={creating}
                   className="w-full text-left px-4 py-3 rounded-2xl border-2 border-border dark:border-zinc-800 hover:border-comic-orange hover:bg-comic-orange/5 dark:hover:bg-comic-orange/10 transition-all text-sm font-bold text-gray-700 dark:text-gray-300 flex items-center justify-between group disabled:opacity-50"
                 >
-                  <span>💡 {idea}</span>
+                  <span>💡 {chip.text}</span>
                   <ChevronRight size={16} className="text-gray-300 dark:text-zinc-600 group-hover:text-comic-orange transition-colors" />
                 </button>
               ))}
@@ -220,6 +224,27 @@ export default function ProjectPage() {
                   rows={3}
                   className="w-full px-4 py-2.5 border-2 border-border dark:border-zinc-700 rounded-xl bg-white dark:bg-zinc-800 text-ink-black dark:text-white placeholder-gray-400 focus:border-comic-orange focus:outline-none transition-colors font-bold resize-none"
                 />
+                <div className="mt-3">
+                  <div className="flex items-baseline gap-1.5 mb-1.5">
+                    <span className="text-xs font-bold text-gray-600 dark:text-gray-400">아이디어 예시</span>
+                    <span className="text-[11px] text-gray-400 dark:text-zinc-500">눌러서 채운 뒤 자유롭게 수정하세요</span>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    {modalChips.map((chip, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => {
+                          setModalIdea(chip.text);
+                          setModalStoryOptions({ genre: chip.genre, mood: chip.mood, development: chip.development });
+                        }}
+                        className="px-3 py-1.5 text-xs font-bold text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-zinc-800 border border-border dark:border-zinc-700 rounded-xl hover:border-comic-orange hover:text-comic-orange hover:bg-comic-orange/5 transition-all text-left whitespace-normal"
+                      >
+                        💡 {chip.text}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
 

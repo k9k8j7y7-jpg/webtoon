@@ -84,11 +84,11 @@ async def suggest_characters(idea: str) -> list[dict]:
     return result.get("characters", [])
 
 
-async def generate_planning(idea: str, mood: str | None = None, characters: list[dict] | None = None) -> dict:
+async def generate_planning(idea: str, options_prompt: str | None = None, characters: list[dict] | None = None) -> dict:
     """아이디어로부터 기획안을 생성한다."""
     prompt = f"아이디어: {idea}"
-    if mood:
-        prompt += f"\n분위기/장르: {mood}"
+    if options_prompt:
+        prompt += options_prompt
     if characters:
         prompt += "\n\n등장인물 정보:"
         for c in characters:

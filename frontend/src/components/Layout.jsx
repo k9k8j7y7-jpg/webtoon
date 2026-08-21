@@ -28,17 +28,17 @@ export default function Layout() {
             <Sparkles size={22} className="text-comic-blue" />
             Project T
           </Link>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 md:gap-4">
             {credits && (
-              <div className="flex items-center gap-1.5 text-sm font-bold text-gray-500 dark:text-gray-400">
-                <CreditCard size={16} className="text-comic-orange" />
-                <span>{credits.balance} 크레딧</span>
-                <span className="text-gray-300 dark:text-zinc-700 mx-1">|</span>
-                <span>{credits.subscription.cut_quota - credits.subscription.cut_used}컷 남음</span>
+              <div className="flex items-center gap-1 md:gap-1.5 text-xs md:text-sm font-bold text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                <CreditCard size={14} className="text-comic-orange shrink-0" />
+                <span>{credits.balance}<span className="hidden md:inline"> 크레딧</span></span>
+                <span className="text-gray-300 dark:text-zinc-700">|</span>
+                <span>{credits.subscription.cut_quota - credits.subscription.cut_used}<span className="hidden md:inline">컷 남음</span><span className="md:hidden">컷</span></span>
               </div>
             )}
-            <span className="text-sm font-bold text-gray-600 dark:text-gray-300">{user?.display_name || user?.email}</span>
-            <button onClick={handleLogout} className="p-1.5 text-gray-400 hover:text-comic-orange rounded transition-colors">
+            <span className="hidden md:inline text-sm font-bold text-gray-600 dark:text-gray-300 whitespace-nowrap">{user?.display_name || user?.email}</span>
+            <button onClick={handleLogout} className="p-1.5 text-gray-400 hover:text-comic-orange rounded transition-colors shrink-0">
               <LogOut size={18} />
             </button>
           </div>
