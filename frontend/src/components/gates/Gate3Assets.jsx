@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import api, { pollJob } from '../../api/client';
 import JobProgress from '../JobProgress';
-import { Users, MapPin, Palette, Check, RefreshCw, X, ChevronDown, ChevronUp, AlertTriangle, Edit3, Plus, Trash2, Sparkles } from 'lucide-react';
+import { Users, MapPin, Palette, Check, RefreshCw, X, ChevronDown, ChevronUp, AlertTriangle, Edit3, Plus, Trash2, Sparkles, Link, Unlink, Star, Library } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
 
@@ -18,6 +18,12 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
   const [showBeta, setShowBeta] = useState(false);
   const [styleChanged, setStyleChanged] = useState(false);
   const [cacheBuster, setCacheBuster] = useState(Date.now());
+  // P3: 캐릭터 피커
+  const [showPicker, setShowPicker] = useState(false);
+  const [pickerTab, setPickerTab] = useState('project'); // 'project' | 'library'
+  const [projectChars, setProjectChars] = useState([]);
+  const [libraryChars, setLibraryChars] = useState([]);
+  const [pickerLoading, setPickerLoading] = useState(false);
 
   const imageUrl = (path) => {
     if (!path) return '';
@@ -175,7 +181,13 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
       setSavingChar(false);
       setEditingChar(null);
     }
-    // 재생성
+    // 재생성 경고: 연결된 에피소드 2개 이상이면 확인
+    try {
+      const { data: linkInfo } = await api.get(`/characters/${characterId}/link-info`);
+      if (linkInfo.episode_count >= 2) {
+        if (!window.confirm(`${linkInfo.episode_count}개 에피소드에서 사용 중입니다. 새 이미지는 이후 생성부터 적용되며, 이미 만든 컷 이미지는 바뀌지 않습니다. 재생성하시겠습니까?`)) return;
+      }
+    } catch {}
     setPhase('characters');
     setError('');
     try {
@@ -284,6 +296,87 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
     }
   };
 
+  // ── P3: 피커 열기 ──
+  const openPicker = async () => {
+    setShowPicker(true);
+    setPickerLoading(true);
+    setPickerTab('project');
+    try {
+      const [projRes, libRes] = await Promise.all([
+        api.get(`/projects/${projectId}/characters`),
+        api.get(`/users/me/characters`).catch(() => ({ data: [] })),
+      ]);
+      // 현재 에피소드에 이미 연결된 캐릭터 ID 집합
+      const linkedIds = new Set(characters.map(c => c.id));
+      setProjectChars(projRes.data.filter(c => !linkedIds.has(c.id)));
+      setLibraryChars(libRes.data.filter(c => !linkedIds.has(c.id) && c.project_id !== projectId));
+    } catch (err) {
+      setError(err.response?.data?.detail || err.message);
+    } finally {
+      setPickerLoading(false);
+    }
+  };
+
+  const linkCharacter = async (characterId) => {
+    try {
+      await api.post(`/projects/${projectId}/episodes/${episodeId}/characters/link`, { character_id: characterId });
+      setShowPicker(false);
+      setCacheBuster(Date.now());
+      await loadAssets();
+    } catch (err) {
+      const detail = err.response?.data?.detail;
+      setError(typeof detail === 'string' ? detail : detail?.message || err.message);
+    }
+  };
+
+  const unlinkCharacter = async (characterId) => {
+    try {
+      await api.delete(`/projects/${projectId}/episodes/${episodeId}/characters/${characterId}/link`);
+      setCacheBuster(Date.now());
+      await loadAssets();
+    } catch (err) {
+      if (err.response?.status === 409) {
+        const detail = err.response.data.detail;
+        const cuts = detail?.referencing_cuts || [];
+        if (window.confirm(`이 캐릭터를 참조하는 컷이 ${cuts.length}개 있습니다 (${cuts.slice(0, 5).join(', ')}${cuts.length > 5 ? '...' : ''}). 연결을 해제하시겠습니까?`)) {
+          try {
+            await api.delete(`/projects/${projectId}/episodes/${episodeId}/characters/${characterId}/link?force=true`);
+            setCacheBuster(Date.now());
+            await loadAssets();
+          } catch (err2) {
+            setError(err2.response?.data?.detail || err2.message);
+          }
+        }
+      } else {
+        setError(err.response?.data?.detail || err.message);
+      }
+    }
+  };
+
+  const deleteCharacter = async (characterId) => {
+    try {
+      await api.delete(`/characters/${characterId}`);
+      setCacheBuster(Date.now());
+      await loadAssets();
+    } catch (err) {
+      const detail = err.response?.data?.detail;
+      setError(typeof detail === 'object' ? detail.message : (detail || err.message));
+    }
+  };
+
+  const togglePromote = async (character) => {
+    try {
+      if (character.user_id) {
+        await api.post(`/characters/${character.id}/demote`);
+      } else {
+        await api.post(`/characters/${character.id}/promote`);
+      }
+      await loadAssets();
+    } catch (err) {
+      setError(err.response?.data?.detail || err.message);
+    }
+  };
+
   const hasCharacters = characters.length > 0;
   const hasLocations = locations.length > 0;
   const hasStyle = !!styles?.preset_key;
@@ -368,13 +461,22 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
           <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2">
             <Users size={20} className="text-purple-500" /> 캐릭터 시트
           </h2>
-          <button
-            onClick={generateCharacters}
-            disabled={!!job || !hasStyle}
-            className="flex items-center gap-1 px-4 py-2 bg-purple-600 text-white rounded-full text-xs font-bold hover:bg-purple-700 hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50"
-          >
-            {hasCharacters ? <><RefreshCw size={12} /> 재생성</> : '캐릭터 생성'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={openPicker}
+              disabled={!!job}
+              className="flex items-center gap-1 px-3 py-2 text-xs font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 hover:bg-purple-100 dark:hover:bg-purple-900/40 rounded-full transition-colors disabled:opacity-50"
+            >
+              <Link size={12} /> 캐릭터 불러오기
+            </button>
+            <button
+              onClick={generateCharacters}
+              disabled={!!job || !hasStyle}
+              className="flex items-center gap-1 px-4 py-2 bg-purple-600 text-white rounded-full text-xs font-bold hover:bg-purple-700 hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50"
+            >
+              {hasCharacters ? <><RefreshCw size={12} /> 재생성</> : '+ 새 캐릭터 생성'}
+            </button>
+          </div>
         </div>
         {!hasStyle && (
           <p className="text-sm font-bold text-amber-500 dark:text-amber-400 mb-3">스타일을 먼저 선택해주세요</p>
@@ -388,12 +490,26 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
                     <div className="font-bold text-sm text-ink-black dark:text-white">{c.name}</div>
                     <div className="text-xs font-bold text-gray-500 dark:text-gray-400">{c.ref_key}</div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => togglePromote(c)}
+                      title={c.user_id ? '내 라이브러리에서 해제' : '내 라이브러리에 등록하면 모든 프로젝트에서 사용할 수 있어요'}
+                      className={`p-1 rounded-lg transition-colors ${c.user_id ? 'text-yellow-500 hover:text-yellow-600' : 'text-gray-300 dark:text-gray-600 hover:text-yellow-400'}`}
+                    >
+                      <Star size={14} fill={c.user_id ? 'currentColor' : 'none'} />
+                    </button>
                     <button
                       onClick={() => editingChar?.id === c.id ? setEditingChar(null) : openCharEditor(c)}
                       className="flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700 hover:bg-purple-100 dark:hover:bg-purple-900/50 rounded-lg transition-colors"
                     >
-                      <Edit3 size={12} /> 캐릭터 편집
+                      <Edit3 size={12} /> 편집
+                    </button>
+                    <button
+                      onClick={() => unlinkCharacter(c.id)}
+                      title="이 에피소드에서 연결 해제"
+                      className="flex items-center gap-1 px-2 py-1 text-xs font-bold text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 rounded-lg transition-colors"
+                    >
+                      <Unlink size={12} />
                     </button>
                     <div className={`text-xs font-bold px-2 py-0.5 rounded-full ${c.status === 'approved' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-500'}`}>
                       {c.status}
@@ -729,6 +845,94 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
             </button>
             <img src={lightbox.url} alt={lightbox.label} className="max-w-full max-h-[85vh] rounded-xl shadow-2xl" />
             <div className="text-center text-white text-sm font-bold mt-2">{lightbox.label}</div>
+          </div>
+        </div>
+      )}
+
+      {/* P3: 캐릭터 피커 모달 */}
+      {showPicker && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowPicker(false)}>
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl border-2 border-border dark:border-zinc-700 shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            {/* 헤더 */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border dark:border-zinc-700">
+              <h3 className="font-bold font-serif text-ink-black dark:text-white flex items-center gap-2">
+                <Library size={18} className="text-purple-500" /> 캐릭터 불러오기
+              </h3>
+              <button onClick={() => setShowPicker(false)} className="p-1 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg">
+                <X size={18} className="text-gray-500" />
+              </button>
+            </div>
+
+            {/* 탭 */}
+            <div className="flex border-b border-border dark:border-zinc-700">
+              <button
+                onClick={() => setPickerTab('project')}
+                className={`flex-1 py-2.5 text-xs font-bold transition-colors ${pickerTab === 'project' ? 'text-purple-600 dark:text-purple-400 border-b-2 border-purple-600 dark:border-purple-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'}`}
+              >
+                이 프로젝트 ({projectChars.length})
+              </button>
+              <button
+                onClick={() => setPickerTab('library')}
+                className={`flex-1 py-2.5 text-xs font-bold transition-colors ${pickerTab === 'library' ? 'text-yellow-600 dark:text-yellow-400 border-b-2 border-yellow-600 dark:border-yellow-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'}`}
+              >
+                <span className="inline-flex items-center gap-1"><Star size={12} /> 내 캐릭터 ({libraryChars.length})</span>
+              </button>
+            </div>
+
+            {/* 목록 */}
+            <div className="flex-1 overflow-y-auto p-4">
+              {pickerLoading ? (
+                <p className="text-center text-sm text-gray-400 dark:text-gray-500 py-8">불러오는 중...</p>
+              ) : (
+                <>
+                  {pickerTab === 'project' && projectChars.length === 0 && (
+                    <p className="text-center text-sm text-gray-400 dark:text-gray-500 py-8">이 프로젝트에 불러올 수 있는 캐릭터가 없습니다.</p>
+                  )}
+                  {pickerTab === 'library' && libraryChars.length === 0 && (
+                    <p className="text-center text-sm text-gray-400 dark:text-gray-500 py-8">내 라이브러리에 캐릭터가 없습니다.<br /><span className="text-xs">캐릭터 카드의 ⭐ 버튼으로 등록할 수 있어요.</span></p>
+                  )}
+                  <div className="grid grid-cols-2 gap-3">
+                    {(pickerTab === 'project' ? projectChars : libraryChars).map(c => (
+                      <div
+                        key={c.id}
+                        className="relative flex flex-col items-center gap-2 p-3 border-2 border-border dark:border-zinc-700 rounded-xl bg-white/50 dark:bg-zinc-800/50 hover:border-purple-400 dark:hover:border-purple-500 hover:-translate-y-0.5 transition-all cursor-pointer"
+                        onClick={() => linkCharacter(c.id)}
+                      >
+                        {/* 삭제 버튼: 프로젝트 탭 + episode_count 0일 때만 */}
+                        {pickerTab === 'project' && c.episode_count === 0 && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (window.confirm(`'${c.name || c.ref_key}'을(를) 완전히 삭제합니다. 이미지 파일도 함께 삭제되며 되돌릴 수 없습니다.`)) {
+                                deleteCharacter(c.id).then(() => {
+                                  setProjectChars(prev => prev.filter(pc => pc.id !== c.id));
+                                });
+                              }
+                            }}
+                            title="캐릭터 완전 삭제"
+                            className="absolute top-1.5 right-1.5 p-1 text-gray-300 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors z-10"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        )}
+                        {c.front_image_url ? (
+                          <img src={imageUrl(c.front_image_url)} alt={c.name} className="w-16 h-16 object-cover rounded-lg border border-border dark:border-zinc-600" />
+                        ) : (
+                          <div className="w-16 h-16 rounded-lg bg-gray-100 dark:bg-zinc-700 flex items-center justify-center">
+                            <Users size={20} className="text-gray-300 dark:text-gray-600" />
+                          </div>
+                        )}
+                        <div className="text-center w-full">
+                          <div className="font-bold text-sm text-ink-black dark:text-white truncate">{c.name || c.ref_key}</div>
+                          <div className="text-[10px] text-gray-400 dark:text-gray-500">{c.episode_count}개 에피소드에서 사용 중</div>
+                          {c.created_at && <div className="text-[10px] text-gray-300 dark:text-gray-600">{c.created_at.slice(0, 10)}</div>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}
