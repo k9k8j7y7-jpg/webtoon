@@ -603,6 +603,24 @@ shiftY = text_offset_y × 2 × marginY
 - **캐릭터 시트 템플릿 충돌:** 없음 (사람 전제 키워드 없음). 동물용 시트 템플릿 설계는 향후 별도 세션
 - 커밋: `24fc5d1`, `54e3751`, `c1657af`
 
+### P3 — 캐릭터 라이브러리 (2026-08-23)
+
+지시서: `docs/지시서-P3-캐릭터라이브러리.md`
+
+**백엔드 API 8종** (`characters/router.py`):
+- `GET /projects/{pid}/characters` — 집계형 (front 이미지 + episode_count)
+- `POST .../characters/link` — ref_key 충돌 검사 (EC JOIN 전체 대조)
+- `DELETE .../characters/{cid}/link` — 2단계 확인 (409 + force)
+- `DELETE /characters/{cid}` — 보수적 삭제 (연결 0건만, raw SQL 연쇄)
+- `POST /characters/{cid}/promote` / `POST /characters/{cid}/demote`
+- `GET /users/me/characters`
+- `GET /characters/{cid}/link-info`
+
+**프론트 Gate3 피커** (`Gate3Assets.jsx`):
+- 2탭 피커 모달 (이 프로젝트 / 내 캐릭터), 불러오기/연결 해제/별표 승격
+- 삭제 버튼: 피커 "이 프로젝트" 탭, episode_count==0인 항목에만 표시
+- 재생성 경고: link-info로 episode_count ≥ 2 시 확인 다이얼로그
+
 ### 발견 및 수정한 버그
 
 - **Gemini 모델 404:** `gemini-2.0-flash-exp` → `gemini-2.5-flash-image`로 변경
@@ -630,16 +648,18 @@ shiftY = text_offset_y × 2 × marginY
 
 ## 남은 작업 (향후)
 
-### 최근 완료 (2026-08-21)
+### 최근 완료 (2026-08-23)
+- [x] **P3 — 캐릭터 라이브러리** — 피커 2단/불러오기/승격/보수적 삭제. 8 API + Gate3 피커 모달. API 레벨 전수 PASS (ref_key 충돌, 연결 캐릭터 참조 동일성 포함) (b8edb19)
 - [x] **P2 — DB 기반 공사** — series·episode_characters 신설, characters 프로젝트 소속 이전, step11 서버 적용, 무변경 판정 ALL PASS (ed3fa37)
 - [x] **P1 — 단편 아이디어 입력 UI** — 예시 칩 8개 풀 + 3축 선택(장르/분위기/전개) + 프롬프트 조각 주입 (0844047)
 - [x] **Export 프론트 배선 + A4 내보내기** — 배포 완료 (9b1a52b)
 - [x] **등장인물 추가설명(description) 필드** — Gate1 UI + 자동 생성 프롬프트 + Gate2/3 전달 (c1657af)
 
-### 다음 작업: P3 — 캐릭터 라이브러리
-- 결정서-연작설계-v5.md 확정 결정 3 참조
-- 피커 2단 (에피소드 캐릭터 → 프로젝트 라이브러리), 불러오기, 승격, 재생성 경고
-- characters.episode_id 제거는 P3 안정화 후 별도
+### P3 남은 것: 사용자 브라우저 테스트
+- ①불러오기 ②승격 ③unlink 취소 ④잡캐릭터 삭제 — 다음 세션 시작점
+
+### 다음 작업: P4 — 연작 UI
+- 테스트 통과 확인 → P4 (연작 입구 + Gate 1 + 2-A 아웃라인. 결정서-연작설계-v5.md 확정 결정 1·5 참조)
 
 ### 기타 후보
 - [ ] 동물용 캐릭터 시트 템플릿 설계
@@ -694,6 +714,10 @@ shiftY = text_offset_y × 2 × marginY
 - **DB 덤프/백업 .sql 커밋 금지:** `project_t_*.sql`, `server_dump.sql` 등은 절대 커밋하지 않음. `stepN.sql` 마이그레이션 파일은 예외
 - **캐릭터 이중 기록 기간:** characters 테이블은 episode_id + project_id + episode_characters 연결을 모두 기록. episode_id 컬럼 제거는 P3 안정화 후 별도 진행
 - **캐릭터 에피소드 조회:** `episode_characters` JOIN이 표준 경로. `project_id` 직접 조회는 라이브러리 기능 전용 (에피소드 범위를 넘는 결과가 반환되므로 기존 기능에 사용 금지)
+- **link ref_key 중복 검사:** EC JOIN 전체 대조 (원 소속 에피소드만이 아님)
+- **unlink 2단계 확인:** 참조 컷 있으면 409 + referencing_cuts 반환(삭제 안 함) → `?force=true`로 실제 삭제. 캐릭터 삭제는 연결 0건만 허용 (보수적 삭제)
+- **characters 삭제:** raw SQL 연쇄 (ORM cascade 미설정 — StaleDataError 방지)
+- **D: 드라이브 I/O 에러 이력:** 2026-08-21 발생. 세션 시작 시 git status 확인 습관화. 이상 시 즉시 C:로 사본
 - **배포:** 파일별 `scp` → uvicorn `--reload` 자동 감지 (프론트는 빌드 후 dist 배포)
 - **서브 경로:** 프론트엔드 Vite `base: '/WEBTOON/'`, FastAPI `root_path="/WEBTOON"` — 새 컴포넌트 작성 시 API/라우팅에 `/WEBTOON` prefix 반영 필요
 - **디자인 작업 분담:** Antigravity에서 디자인 변경 → Claude Code에서 빌드+배포
