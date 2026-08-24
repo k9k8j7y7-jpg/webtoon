@@ -603,23 +603,32 @@ shiftY = text_offset_y × 2 × marginY
 - **캐릭터 시트 템플릿 충돌:** 없음 (사람 전제 키워드 없음). 동물용 시트 템플릿 설계는 향후 별도 세션
 - 커밋: `24fc5d1`, `54e3751`, `c1657af`
 
-### P3 — 캐릭터 라이브러리 (2026-08-23)
+### P3 — 캐릭터 라이브러리 (2026-08-23~24)
 
 지시서: `docs/지시서-P3-캐릭터라이브러리.md`
 
 **백엔드 API 8종** (`characters/router.py`):
-- `GET /projects/{pid}/characters` — 집계형 (front 이미지 + episode_count)
+- `GET /projects/{pid}/characters` — 집계형 (front 이미지 + episode_count + style)
 - `POST .../characters/link` — ref_key 충돌 검사 (EC JOIN 전체 대조)
 - `DELETE .../characters/{cid}/link` — 2단계 확인 (409 + force)
 - `DELETE /characters/{cid}` — 보수적 삭제 (연결 0건만, raw SQL 연쇄)
 - `POST /characters/{cid}/promote` / `POST /characters/{cid}/demote`
-- `GET /users/me/characters`
+- `GET /users/me/characters` — style 포함
 - `GET /characters/{cid}/link-info`
 
 **프론트 Gate3 피커** (`Gate3Assets.jsx`):
 - 2탭 피커 모달 (이 프로젝트 / 내 캐릭터), 불러오기/연결 해제/별표 승격
 - 삭제 버튼: 피커 "이 프로젝트" 탭, episode_count==0인 항목에만 표시
 - 재생성 경고: link-info로 episode_count ≥ 2 시 확인 다이얼로그
+- 스타일 뱃지: 각 캐릭터에 스타일 표시, 현재 에피소드와 불일치 시 ⚠ "그림체가 섞일 수 있어요" 경고 (차단 아님)
+- 스타일 미기록 캐릭터: 회색 "스타일 미기록" 뱃지
+
+**P3 보완 (2026-08-24):**
+- **DB 마이그레이션:** `step12.sql` — `characters.style VARCHAR(50)` 추가 + 기존 17건 백필 (styles.preset_key 기준). 전수 커버리지 100%
+- **스타일 기록:** 캐릭터 생성 시 에피소드의 선택 스타일 `preset_key`를 `characters.style`에 저장
+- **자동 생성 스킵:** 피커로 연결된 캐릭터(원 소속 에피소드 ≠ 현재 에피소드)는 이미지 재생성 스킵 + "N명은 이미 연결되어 건너뛰었습니다" 배너
+- **카드 레이아웃:** 헤더 flex-wrap + min-w-0 truncate (3개+ 카드 밀림 방지)
+- **🔗 연결 해제 툴팁:** "이 에피소드에서 제외 (캐릭터는 프로젝트에 유지됩니다)"
 
 ### 발견 및 수정한 버그
 
@@ -648,18 +657,21 @@ shiftY = text_offset_y × 2 × marginY
 
 ## 남은 작업 (향후)
 
-### 최근 완료 (2026-08-23)
-- [x] **P3 — 캐릭터 라이브러리** — 피커 2단/불러오기/승격/보수적 삭제. 8 API + Gate3 피커 모달. API 레벨 전수 PASS (ref_key 충돌, 연결 캐릭터 참조 동일성 포함) (b8edb19)
-- [x] **P2 — DB 기반 공사** — series·episode_characters 신설, characters 프로젝트 소속 이전, step11 서버 적용, 무변경 판정 ALL PASS (ed3fa37)
-- [x] **P1 — 단편 아이디어 입력 UI** — 예시 칩 8개 풀 + 3축 선택(장르/분위기/전개) + 프롬프트 조각 주입 (0844047)
-- [x] **Export 프론트 배선 + A4 내보내기** — 배포 완료 (9b1a52b)
-- [x] **등장인물 추가설명(description) 필드** — Gate1 UI + 자동 생성 프롬프트 + Gate2/3 전달 (c1657af)
+### 최근 완료 (2026-08-24)
+- [x] **P3 보완** — 스타일 뱃지/경고, 자동생성 스킵, step12 (characters.style + 백필), 카드 밀림 수정, 🔗 툴팁 (a906a4e, e453647)
+- [x] **P3 — 캐릭터 라이브러리** — 피커 2단/불러오기/승격/보수적 삭제. 8 API + Gate3 피커 모달. API 레벨 전수 PASS (b8edb19)
+- [x] **P2 — DB 기반 공사** — series·episode_characters 신설, characters 프로젝트 소속 이전, step11 서버 적용 (ed3fa37)
+- [x] **P1 — 단편 아이디어 입력 UI** — 예시 칩 8개 풀 + 3축 선택 (0844047)
+- [x] **Export 프론트 배선 + A4 내보내기** (9b1a52b)
+- [x] **등장인물 추가설명(description) 필드** (c1657af)
 
-### P3 남은 것: 사용자 브라우저 테스트
-- ①불러오기 ②승격 ③unlink 취소 ④잡캐릭터 삭제 — 다음 세션 시작점
+### P3 잔여: 브라우저 테스트 (다음 세션 시작점)
+- 버그 수정 2건 배포됨 (카드 밀림 그리드, 🔗 툴팁)
+- 테스트 잔여: ③해제→④휴지통 흐름(ep16 도도/김정신), ②승격, ⑥자동생성 스킵 배너
+- 통과 시 P3 종료 → P4
 
 ### 다음 작업: P4 — 연작 UI
-- 테스트 통과 확인 → P4 (연작 입구 + Gate 1 + 2-A 아웃라인. 결정서-연작설계-v5.md 확정 결정 1·5 참조)
+- 연작 입구 + Gate 1 + 2-A 아웃라인. 결정서-연작설계-v5.md 확정 결정 1·5 참조
 
 ### 기타 후보
 - [ ] 동물용 캐릭터 시트 템플릿 설계
@@ -717,6 +729,9 @@ shiftY = text_offset_y × 2 × marginY
 - **link ref_key 중복 검사:** EC JOIN 전체 대조 (원 소속 에피소드만이 아님)
 - **unlink 2단계 확인:** 참조 컷 있으면 409 + referencing_cuts 반환(삭제 안 함) → `?force=true`로 실제 삭제. 캐릭터 삭제는 연결 0건만 허용 (보수적 삭제)
 - **characters 삭제:** raw SQL 연쇄 (ORM cascade 미설정 — StaleDataError 방지)
+- **캐릭터 삭제 버튼:** 피커의 "이 프로젝트" 탭에서 episode_count==0인 항목에만 표시 (설계 의도). "삭제 안 보임" 문의 시 연결 해제 → 0건 → 휴지통 흐름 안내
+- **characters.style:** 생성 시 에피소드 스타일(preset_key) 기록. 피커에서 현재 에피소드와 불일치 시 ⚠ 경고 (차단 아님). NULL은 "스타일 미기록" 표시
+- **자동 생성 연결 캐릭터 스킵:** `character.episode_id != episode_id`이면 이미지 재생성 스킵 + "N명은 이미 연결되어 건너뛰었습니다" 배너
 - **D: 드라이브 I/O 에러 이력:** 2026-08-21 발생. 세션 시작 시 git status 확인 습관화. 이상 시 즉시 C:로 사본
 - **배포:** 파일별 `scp` → uvicorn `--reload` 자동 감지 (프론트는 빌드 후 dist 배포)
 - **서브 경로:** 프론트엔드 Vite `base: '/WEBTOON/'`, FastAPI `root_path="/WEBTOON"` — 새 컴포넌트 작성 시 API/라우팅에 `/WEBTOON` prefix 반영 필요
