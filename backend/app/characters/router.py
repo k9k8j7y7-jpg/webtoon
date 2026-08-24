@@ -50,6 +50,7 @@ async def create_characters(
     # 스타일 프롬프트 (에피소드에 선택된 스타일 사용, 미선택 시 기본값)
     style = db.query(Style).filter(Style.episode_id == episode_id).first()
     style_prompt = style.prompt_snippet if style else STYLE_PRESETS["korean_webtoon"]["prompt"]
+    style_preset_key = style.preset_key if style else "korean_webtoon"
 
     # Job 생성 + 백그라운드 실행
     job = create_job(total=len(characters_data))
@@ -65,6 +66,7 @@ async def create_characters(
             job_id=job.job_id,
             db=db,
             project_id=project_id,
+            style_preset_key=style_preset_key,
         ),
     )
 
@@ -273,6 +275,7 @@ async def list_project_characters(
             "id": c.id,
             "ref_key": c.ref_key,
             "name": c.name,
+            "style": c.style,
             "status": c.status,
             "user_id": c.user_id,
             "front_image_url": front_url,
@@ -508,6 +511,7 @@ async def list_my_library_characters(
             "id": c.id,
             "ref_key": c.ref_key,
             "name": c.name,
+            "style": c.style,
             "project_id": c.project_id,
             "status": c.status,
             "front_image_url": front_url,

@@ -44,6 +44,7 @@ async def generate_character_sheets(
     job_id: str,
     db: Session,
     project_id: int | None = None,
+    style_preset_key: str | None = None,
 ):
     """모든 캐릭터의 시트를 생성한다. Job으로 비동기 실행."""
     # BackgroundTask는 별도 스레드에서 실행 → 자체 DB 세션 사용
@@ -57,6 +58,7 @@ async def generate_character_sheets(
 
     adapter = get_image_adapter()
     total = len(characters_data)
+    skipped = []
     results = []
 
     for i, char_data in enumerate(characters_data):
@@ -71,6 +73,16 @@ async def generate_character_sheets(
             .filter(EpisodeCharacter.episode_id == episode_id, Character.ref_key == ref_key)
             .first()
         )
+
+        # 다른 에피소드에서 연결된 캐릭터(피커 불러오기)는 스킵
+        if character and character.episode_id != episode_id:
+            skipped.append({"ref_key": ref_key, "name": character.name or name})
+            results.append({"ref_key": ref_key, "name": character.name or name, "status": "skipped_linked"})
+            job = get_job(job_id)
+            if job:
+                update_job(job_id, progress={"done": i + 1, "total": total})
+            continue
+
         if not character:
             character = Character(
                 ref_key=ref_key,
@@ -78,6 +90,7 @@ async def generate_character_sheets(
                 project_id=project_id,
                 name=name,
                 description=description,
+                style=style_preset_key,
                 status="draft",
             )
             db.add(character)
@@ -146,4 +159,4 @@ async def generate_character_sheets(
 
     db.commit()
     db.close()
-    return {"characters": results}
+    return {"characters": results, "skipped": skipped}

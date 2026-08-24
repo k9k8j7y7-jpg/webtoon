@@ -56,17 +56,25 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
 
   useEffect(() => { loadAssets(); }, []);
 
+  const [skippedInfo, setSkippedInfo] = useState(null);
+
   const generateCharacters = async () => {
     setPhase('characters');
     setError('');
+    setSkippedInfo(null);
     try {
       const { data } = await api.post(`/projects/${projectId}/episodes/${episodeId}/characters`);
       setJob({ job_id: data.job_id, status: 'processing', progress: { done: 0, total: 0 } });
-      await pollJob(data.job_id, setJob);
+      const jobResult = await pollJob(data.job_id, setJob);
       setJob(null);
       setStyleChanged(false);
       setCacheBuster(Date.now());
       await loadAssets();
+      // 연결 캐릭터 스킵 안내
+      const skipped = jobResult?.result?.skipped;
+      if (skipped && skipped.length > 0) {
+        setSkippedInfo(skipped);
+      }
     } catch (err) {
       setJob(null);
       setError(err.response?.data?.detail || err.message);
@@ -455,6 +463,15 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
       </div>
 
       {/* 캐릭터 */}
+      {skippedInfo && (
+        <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl text-sm text-blue-700 dark:text-blue-400 mb-3">
+          <Users size={16} className="mt-0.5 flex-shrink-0" />
+          <div>
+            <span className="font-bold">{skippedInfo.length}명</span>은 이미 연결되어 건너뛰었습니다: {skippedInfo.map(s => s.name || s.ref_key).join(', ')}
+            <button onClick={() => setSkippedInfo(null)} className="ml-2 text-blue-500 hover:text-blue-700 dark:hover:text-blue-300"><X size={12} className="inline" /></button>
+          </div>
+        </div>
+      )}
       {job && phase === 'characters' && <JobProgress job={job} label="캐릭터 시트 생성" />}
       <div className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl p-6 backdrop-blur-sm">
         <div className="flex items-center justify-between mb-4">
@@ -485,12 +502,12 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {characters.map((c) => (
               <div key={c.id} className="border-2 border-border dark:border-zinc-700 rounded-xl p-3 bg-white/50 dark:bg-zinc-800/50">
-                <div className="flex items-center justify-between mb-2">
-                  <div>
-                    <div className="font-bold text-sm text-ink-black dark:text-white">{c.name}</div>
-                    <div className="text-xs font-bold text-gray-500 dark:text-gray-400">{c.ref_key}</div>
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="min-w-0">
+                    <div className="font-bold text-sm text-ink-black dark:text-white truncate">{c.name}</div>
+                    <div className="text-xs font-bold text-gray-500 dark:text-gray-400 truncate">{c.ref_key}</div>
                   </div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap justify-end">
                     <button
                       onClick={() => togglePromote(c)}
                       title={c.user_id ? '내 라이브러리에서 해제' : '내 라이브러리에 등록하면 모든 프로젝트에서 사용할 수 있어요'}
@@ -506,7 +523,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
                     </button>
                     <button
                       onClick={() => unlinkCharacter(c.id)}
-                      title="이 에피소드에서 연결 해제"
+                      title="이 에피소드에서 제외 (캐릭터는 프로젝트에 유지됩니다)"
                       className="flex items-center gap-1 px-2 py-1 text-xs font-bold text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 rounded-lg transition-colors"
                     >
                       <Unlink size={12} />
@@ -892,10 +909,16 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
                     <p className="text-center text-sm text-gray-400 dark:text-gray-500 py-8">내 라이브러리에 캐릭터가 없습니다.<br /><span className="text-xs">캐릭터 카드의 ⭐ 버튼으로 등록할 수 있어요.</span></p>
                   )}
                   <div className="grid grid-cols-2 gap-3">
-                    {(pickerTab === 'project' ? projectChars : libraryChars).map(c => (
+                    {(pickerTab === 'project' ? projectChars : libraryChars).map(c => {
+                      const currentStyle = styles?.preset_key;
+                      const styleMismatch = c.style && currentStyle && c.style !== currentStyle;
+                      const styleLabel = c.style
+                        ? [...(presets.core || []), ...(presets.beta || [])].find(p => p.key === c.style)?.label || c.style
+                        : null;
+                      return (
                       <div
                         key={c.id}
-                        className="relative flex flex-col items-center gap-2 p-3 border-2 border-border dark:border-zinc-700 rounded-xl bg-white/50 dark:bg-zinc-800/50 hover:border-purple-400 dark:hover:border-purple-500 hover:-translate-y-0.5 transition-all cursor-pointer"
+                        className={`relative flex flex-col items-center gap-2 p-3 border-2 rounded-xl bg-white/50 dark:bg-zinc-800/50 hover:-translate-y-0.5 transition-all cursor-pointer ${styleMismatch ? 'border-amber-400 dark:border-amber-500 hover:border-amber-500' : 'border-border dark:border-zinc-700 hover:border-purple-400 dark:hover:border-purple-500'}`}
                         onClick={() => linkCharacter(c.id)}
                       >
                         {/* 삭제 버튼: 프로젝트 탭 + episode_count 0일 때만 */}
@@ -924,11 +947,20 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
                         )}
                         <div className="text-center w-full">
                           <div className="font-bold text-sm text-ink-black dark:text-white truncate">{c.name || c.ref_key}</div>
+                          <span className={`inline-block text-[10px] px-1.5 py-0.5 rounded-full mt-0.5 font-bold ${!styleLabel ? 'bg-gray-100 dark:bg-zinc-700 text-gray-400 dark:text-gray-500' : styleMismatch ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400'}`}>
+                            <Palette size={8} className="inline -mt-0.5 mr-0.5" />{styleLabel || '스타일 미기록'}
+                          </span>
+                          {styleMismatch && (
+                            <div className="text-[10px] text-amber-600 dark:text-amber-400 mt-0.5 flex items-center justify-center gap-0.5">
+                              <AlertTriangle size={10} /> 그림체가 섞일 수 있어요
+                            </div>
+                          )}
                           <div className="text-[10px] text-gray-400 dark:text-gray-500">{c.episode_count}개 에피소드에서 사용 중</div>
                           {c.created_at && <div className="text-[10px] text-gray-300 dark:text-gray-600">{c.created_at.slice(0, 10)}</div>}
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </>
               )}
