@@ -24,6 +24,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
   const [projectChars, setProjectChars] = useState([]);
   const [libraryChars, setLibraryChars] = useState([]);
   const [pickerLoading, setPickerLoading] = useState(false);
+  const [pickerError, setPickerError] = useState('');
 
   const imageUrl = (path) => {
     if (!path) return '';
@@ -309,6 +310,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
     setShowPicker(true);
     setPickerLoading(true);
     setPickerTab('project');
+    setPickerError('');
     try {
       const [projRes, libRes] = await Promise.all([
         api.get(`/projects/${projectId}/characters`),
@@ -326,14 +328,17 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
   };
 
   const linkCharacter = async (characterId) => {
+    setPickerError('');
     try {
       await api.post(`/projects/${projectId}/episodes/${episodeId}/characters/link`, { character_id: characterId });
       setShowPicker(false);
+      setPickerError('');
       setCacheBuster(Date.now());
       await loadAssets();
     } catch (err) {
       const detail = err.response?.data?.detail;
-      setError(typeof detail === 'string' ? detail : detail?.message || err.message);
+      const msg = typeof detail === 'string' ? detail : detail?.message || err.message;
+      setPickerError(msg);
     }
   };
 
@@ -895,6 +900,13 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
                 <span className="inline-flex items-center gap-1"><Star size={12} /> 내 캐릭터 ({libraryChars.length})</span>
               </button>
             </div>
+
+            {/* 에러 메시지 */}
+            {pickerError && (
+              <div className="mx-4 mt-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-xs font-bold">
+                {pickerError}
+              </div>
+            )}
 
             {/* 목록 */}
             <div className="flex-1 overflow-y-auto p-4">

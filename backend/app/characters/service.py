@@ -74,7 +74,8 @@ async def generate_character_sheets(
             .first()
         )
 
-        # 다른 에피소드에서 연결된 캐릭터(피커 불러오기)는 스킵
+        # 피커로 연결된 캐릭터(이미 이미지 있음)는 스킵
+        # — 원 소속/승격 구분 없이, EC로 연결 + front 이미지 존재 + 이 에피소드 원생성이 아닌 경우
         if character and character.episode_id != episode_id:
             skipped.append({"ref_key": ref_key, "name": character.name or name})
             results.append({"ref_key": ref_key, "name": character.name or name, "status": "skipped_linked"})
@@ -84,34 +85,54 @@ async def generate_character_sheets(
             continue
 
         if not character:
-            character = Character(
-                ref_key=ref_key,
-                episode_id=episode_id,
-                project_id=project_id,
-                name=name,
-                description=description,
-                style=style_preset_key,
-                status="draft",
+            # 이전 unlink로 EC 없이 남은 고아 레코드 재활용
+            orphan = (
+                db.query(Character)
+                .filter(Character.episode_id == episode_id, Character.ref_key == ref_key)
+                .first()
             )
-            db.add(character)
-            db.flush()
+            if orphan:
+                character = orphan
+                character.name = name
+                character.description = description
+                character.style = style_preset_key
+                character.status = "draft"
+                # EC 재연결
+                ec = EpisodeCharacter(
+                    episode_id=episode_id,
+                    character_id=character.id,
+                )
+                db.add(ec)
+                db.flush()
+            else:
+                character = Character(
+                    ref_key=ref_key,
+                    episode_id=episode_id,
+                    project_id=project_id,
+                    name=name,
+                    description=description,
+                    style=style_preset_key,
+                    status="draft",
+                )
+                db.add(character)
+                db.flush()
 
-            # episode_characters 연결 (이중 기록)
-            ec = EpisodeCharacter(
-                episode_id=episode_id,
-                character_id=character.id,
-            )
-            db.add(ec)
+                # episode_characters 연결 (이중 기록)
+                ec = EpisodeCharacter(
+                    episode_id=episode_id,
+                    character_id=character.id,
+                )
+                db.add(ec)
 
-            # 기본 의상 생성
-            outfit = CharacterOutfit(
-                character_id=character.id,
-                outfit_key="default",
-                label="기본 의상",
-                is_default=True,
-            )
-            db.add(outfit)
-            db.flush()
+                # 기본 의상 생성
+                outfit = CharacterOutfit(
+                    character_id=character.id,
+                    outfit_key="default",
+                    label="기본 의상",
+                    is_default=True,
+                )
+                db.add(outfit)
+                db.flush()
 
         # 기존 이미지 삭제 (재생성 시 구 이미지 제거)
         db.query(CharacterImage).filter(CharacterImage.character_id == character.id).delete()
