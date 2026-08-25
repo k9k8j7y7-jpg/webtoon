@@ -5,6 +5,7 @@ import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import ProjectPage from './pages/ProjectPage';
 import WorkflowPage from './pages/WorkflowPage';
+import SeriesPage from './pages/SeriesPage';
 import BubbleTestPage from './pages/BubbleTestPage';
 
 function ProtectedRoute({ children }) {
@@ -27,6 +28,7 @@ function AppRoutes() {
         <Route path="/" element={<DashboardPage />} />
         <Route path="/projects/:projectId" element={<ProjectPage />} />
         <Route path="/projects/:projectId/episodes/:episodeId/workflow" element={<WorkflowPage />} />
+        <Route path="/projects/:projectId/series/:seriesId" element={<SeriesPage />} />
       </Route>
     </Routes>
   );

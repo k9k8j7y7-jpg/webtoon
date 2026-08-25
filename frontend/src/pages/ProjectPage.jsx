@@ -1,20 +1,55 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import api from '../api/client';
-import { Plus, ArrowLeft, Play, Lightbulb, FileText, Palette, LayoutGrid, ImageIcon, ChevronRight, Sparkles, X, CheckCircle, Trash2 } from 'lucide-react';
+import api, { pollJob } from '../api/client';
+import { Plus, ArrowLeft, Play, Lightbulb, FileText, Palette, LayoutGrid, ImageIcon, ChevronRight, Sparkles, X, CheckCircle, Trash2, BookOpen, Loader2 } from 'lucide-react';
 import { pickRandomChips } from '../constants/ideaChips';
+
+const GENRE_OPTIONS = [
+  { value: '', label: '장르 선택 (선택)' },
+  { value: 'romance', label: '로맨스' },
+  { value: 'daily', label: '일상/힐링' },
+  { value: 'comedy', label: '코미디' },
+  { value: 'thriller', label: '스릴러' },
+  { value: 'fantasy', label: '판타지' },
+  { value: 'drama', label: '드라마' },
+];
+
+const MOOD_OPTIONS = [
+  { value: '', label: '분위기 선택 (선택)' },
+  { value: 'warm', label: '따뜻한' },
+  { value: 'cheerful', label: '밝고 유쾌한' },
+  { value: 'tense', label: '긴장감 있는' },
+  { value: 'touching', label: '감동적인' },
+  { value: 'dark', label: '어둡고 무거운' },
+];
+
+const EPISODE_COUNT_OPTIONS = [4, 8, 12, 16, 24];
 
 export default function ProjectPage() {
   const { projectId } = useParams();
   const navigate = useNavigate();
   const [project, setProject] = useState(null);
   const [episodes, setEpisodes] = useState([]);
+  const [seriesList, setSeriesList] = useState([]);
   const [creating, setCreating] = useState(false);
+
+  // 단편 모달
   const [showModal, setShowModal] = useState(false);
   const [modalTitle, setModalTitle] = useState('');
   const [modalIdea, setModalIdea] = useState('');
   const [modalStoryOptions, setModalStoryOptions] = useState(null);
   const [modalChips, setModalChips] = useState([]);
+
+  // 연작 모달
+  const [showSeriesModal, setShowSeriesModal] = useState(false);
+  const [seriesTitle, setSeriesTitle] = useState('');
+  const [seriesIdea, setSeriesIdea] = useState('');
+  const [seriesGenre, setSeriesGenre] = useState('');
+  const [seriesMood, setSeriesMood] = useState('');
+  const [seriesEpisodeCount, setSeriesEpisodeCount] = useState(8);
+  const [seriesChips, setSeriesChips] = useState([]);
+  const [seriesCreating, setSeriesCreating] = useState(false);
+  const [seriesJobMessage, setSeriesJobMessage] = useState('');
 
   // 온보딩 예시 칩 (마운트마다 랜덤 3개)
   const onboardingChips = useMemo(() => pickRandomChips(3), []);
@@ -22,7 +57,10 @@ export default function ProjectPage() {
   useEffect(() => {
     api.get(`/projects/${projectId}`).then(({ data }) => setProject(data));
     api.get(`/projects/${projectId}/episodes`).then(({ data }) => setEpisodes(data));
+    api.get(`/projects/${projectId}/series`).then(({ data }) => setSeriesList(data)).catch(() => {});
   }, [projectId]);
+
+  // ── 단편 에피소드 ──
 
   const openModal = (chip = null) => {
     setModalTitle('');
@@ -62,6 +100,62 @@ export default function ProjectPage() {
     }
   };
 
+  // ── 연작 시리즈 ──
+
+  const openSeriesModal = () => {
+    setSeriesTitle('');
+    setSeriesIdea('');
+    setSeriesGenre('');
+    setSeriesMood('');
+    setSeriesEpisodeCount(8);
+    setSeriesChips(pickRandomChips(3));
+    setSeriesJobMessage('');
+    setShowSeriesModal(true);
+  };
+
+  const handleCreateSeries = async () => {
+    if (!seriesTitle.trim() || !seriesIdea.trim()) return;
+    setSeriesCreating(true);
+    setSeriesJobMessage('시리즈 생성 중...');
+    try {
+      // 1) 시리즈 행 생성
+      const storyOptions = (seriesGenre || seriesMood) ? { genre: seriesGenre || null, mood: seriesMood || null } : null;
+      const { data: created } = await api.post(`/projects/${projectId}/series`, {
+        title: seriesTitle.trim(),
+        idea: seriesIdea.trim(),
+        story_options: storyOptions,
+        target_episodes: seriesEpisodeCount,
+      });
+
+      // 2) 바이블+아웃라인 생성 (비동기 Job)
+      setSeriesJobMessage('바이블과 아웃라인 생성 중...');
+      const { data: jobData } = await api.post(`/series/${created.id}/bible`, {
+        target_episodes: seriesEpisodeCount,
+      });
+
+      await pollJob(jobData.job_id, null, 2000);
+
+      // 3) 완료 → 시리즈 홈으로 이동
+      setShowSeriesModal(false);
+      navigate(`/projects/${projectId}/series/${created.id}`);
+    } catch (e) {
+      alert(e?.response?.data?.detail || e.message || '시리즈 생성에 실패했습니다.');
+      setSeriesCreating(false);
+      setSeriesJobMessage('');
+    }
+  };
+
+  const handleDeleteSeries = async (e, sid) => {
+    e.stopPropagation();
+    if (!confirm('이 시리즈를 삭제하시겠습니까?')) return;
+    try {
+      await api.delete(`/series/${sid}`);
+      setSeriesList((prev) => prev.filter((s) => s.id !== sid));
+    } catch (e) {
+      alert(e?.response?.data?.detail || '시리즈 삭제에 실패했습니다.');
+    }
+  };
+
   if (!project) return <div className="text-center py-20 text-gray-400 dark:text-zinc-500 font-bold">로딩 중...</div>;
 
   const isEpisodeCompleted = (gs) => {
@@ -77,24 +171,35 @@ export default function ProjectPage() {
     return `게이트 ${g} — ${labels[g]}`;
   };
 
+  const hasContent = episodes.length > 0 || seriesList.length > 0;
+
   return (
     <div>
       <button onClick={() => navigate('/')} className="flex items-center gap-1 text-sm font-bold text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 mb-4 transition-colors">
         <ArrowLeft size={16} /> 프로젝트 목록
       </button>
 
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
         <h1 className="text-2xl font-bold font-serif text-ink-black dark:text-white">{project.title}</h1>
-        <button
-          onClick={() => openModal()}
-          disabled={creating}
-          className="flex items-center gap-1.5 px-5 py-2.5 bg-ink-black text-white dark:bg-white dark:text-ink-black rounded-full text-sm font-bold hover:bg-comic-blue dark:hover:bg-comic-orange hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50"
-        >
-          <Plus size={16} /> 새 에피소드
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => openModal()}
+            disabled={creating}
+            className="flex items-center gap-1.5 px-4 py-2 bg-ink-black text-white dark:bg-white dark:text-ink-black rounded-full text-sm font-bold hover:bg-comic-blue dark:hover:bg-comic-orange hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50"
+          >
+            <Plus size={16} /> 단편
+          </button>
+          <button
+            onClick={openSeriesModal}
+            disabled={creating || seriesCreating}
+            className="flex items-center gap-1.5 px-4 py-2 bg-purple-600 text-white rounded-full text-sm font-bold hover:bg-purple-700 hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50"
+          >
+            <BookOpen size={16} /> 연작
+          </button>
+        </div>
       </div>
 
-      {episodes.length === 0 ? (
+      {!hasContent ? (
         <div className="bg-white dark:bg-surface-dark rounded-2xl border-2 border-border dark:border-zinc-800 overflow-hidden backdrop-blur-sm">
           {/* 파이프라인 가이드 */}
           <div className="px-6 pt-6 pb-4">
@@ -144,18 +249,55 @@ export default function ProjectPage() {
           </div>
 
           {/* CTA 버튼 */}
-          <div className="px-6 pb-6">
+          <div className="px-6 pb-6 flex gap-3">
             <button
               onClick={() => openModal()}
               disabled={creating}
-              className="w-full py-3 bg-comic-orange text-white rounded-full font-bold hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
+              className="flex-1 py-3 bg-comic-orange text-white rounded-full font-bold hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              <Plus size={18} /> 첫 에피소드 만들기
+              <Plus size={18} /> 단편 에피소드
+            </button>
+            <button
+              onClick={openSeriesModal}
+              disabled={creating || seriesCreating}
+              className="flex-1 py-3 bg-purple-600 text-white rounded-full font-bold hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              <BookOpen size={18} /> 연작 시리즈
             </button>
           </div>
         </div>
       ) : (
         <div className="space-y-3">
+          {/* 시리즈 카드 */}
+          {seriesList.map((s) => (
+            <div
+              key={`s-${s.id}`}
+              onClick={() => navigate(`/projects/${projectId}/series/${s.id}`)}
+              className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl p-4 flex items-center justify-between hover:shadow-md hover:border-purple-400 hover:-translate-y-0.5 transition-all cursor-pointer backdrop-blur-sm group"
+            >
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="shrink-0 px-2 py-0.5 text-[10px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 rounded-full">연작</span>
+                  <h3 className="font-bold font-serif text-ink-black dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors truncate">{s.title}</h3>
+                </div>
+                <p className="text-sm font-bold text-gray-500 dark:text-gray-400 mt-0.5">
+                  {s.outline_count}화 계획 · 대본 {s.episode_count} · 이미지 0
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={(e) => handleDeleteSeries(e, s.id)}
+                  className="p-1.5 text-gray-300 hover:text-red-500 dark:text-zinc-600 dark:hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                  title="시리즈 삭제"
+                >
+                  <Trash2 size={16} />
+                </button>
+                <BookOpen size={20} className="text-purple-500 group-hover:text-purple-600 transition-colors" />
+              </div>
+            </div>
+          ))}
+
+          {/* 에피소드 카드 */}
           {episodes.map((ep) => (
             <div
               key={ep.id}
@@ -187,7 +329,7 @@ export default function ProjectPage() {
         </div>
       )}
 
-      {/* 새 에피소드 생성 모달 */}
+      {/* 단편 에피소드 생성 모달 */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowModal(false)}>
           <div
@@ -195,7 +337,7 @@ export default function ProjectPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white">새 에피소드 만들기</h2>
+              <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white">단편 에피소드 만들기</h2>
               <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
                 <X size={20} />
               </button>
@@ -261,6 +403,145 @@ export default function ProjectPage() {
                 className="flex-1 py-2.5 bg-comic-orange text-white rounded-full font-bold hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50 disabled:hover:translate-y-0"
               >
                 {creating ? '생성 중...' : '생성하기'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 연작 시리즈 생성 모달 */}
+      {showSeriesModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => !seriesCreating && setShowSeriesModal(false)}>
+          <div
+            className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2">
+                <BookOpen size={20} className="text-purple-500" />
+                연작 시리즈 만들기
+              </h2>
+              <button onClick={() => !seriesCreating && setShowSeriesModal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">시리즈 제목</label>
+                <input
+                  type="text"
+                  value={seriesTitle}
+                  onChange={(e) => setSeriesTitle(e.target.value)}
+                  placeholder="예: 도도의 카페 일상"
+                  className="w-full px-4 py-2.5 border-2 border-border dark:border-zinc-700 rounded-xl bg-white dark:bg-zinc-800 text-ink-black dark:text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none transition-colors font-bold"
+                  autoFocus
+                  disabled={seriesCreating}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">아이디어</label>
+                <textarea
+                  value={seriesIdea}
+                  onChange={(e) => setSeriesIdea(e.target.value)}
+                  placeholder="시리즈의 전체 줄거리 아이디어를 입력하세요"
+                  rows={3}
+                  className="w-full px-4 py-2.5 border-2 border-border dark:border-zinc-700 rounded-xl bg-white dark:bg-zinc-800 text-ink-black dark:text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none transition-colors font-bold resize-none"
+                  disabled={seriesCreating}
+                />
+                <div className="mt-3">
+                  <div className="flex items-baseline gap-1.5 mb-1.5">
+                    <span className="text-xs font-bold text-gray-600 dark:text-gray-400">아이디어 예시</span>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    {seriesChips.map((chip, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        disabled={seriesCreating}
+                        onClick={() => {
+                          setSeriesIdea(chip.text);
+                          if (chip.genre) setSeriesGenre(chip.genre);
+                          if (chip.mood) setSeriesMood(chip.mood);
+                        }}
+                        className="px-3 py-1.5 text-xs font-bold text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-zinc-800 border border-border dark:border-zinc-700 rounded-xl hover:border-purple-400 hover:text-purple-600 hover:bg-purple-50 transition-all text-left whitespace-normal disabled:opacity-50"
+                      >
+                        💡 {chip.text}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">장르</label>
+                  <select
+                    value={seriesGenre}
+                    onChange={(e) => setSeriesGenre(e.target.value)}
+                    disabled={seriesCreating}
+                    className="w-full px-3 py-2 border-2 border-border dark:border-zinc-700 rounded-xl bg-white dark:bg-zinc-800 text-sm font-bold text-ink-black dark:text-white focus:border-purple-500 focus:outline-none"
+                  >
+                    {GENRE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">분위기</label>
+                  <select
+                    value={seriesMood}
+                    onChange={(e) => setSeriesMood(e.target.value)}
+                    disabled={seriesCreating}
+                    className="w-full px-3 py-2 border-2 border-border dark:border-zinc-700 rounded-xl bg-white dark:bg-zinc-800 text-sm font-bold text-ink-black dark:text-white focus:border-purple-500 focus:outline-none"
+                  >
+                    {MOOD_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">목표 회차 수</label>
+                <div className="flex gap-2">
+                  {EPISODE_COUNT_OPTIONS.map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      disabled={seriesCreating}
+                      onClick={() => setSeriesEpisodeCount(n)}
+                      className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all border-2 ${
+                        seriesEpisodeCount === n
+                          ? 'border-purple-500 bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
+                          : 'border-border dark:border-zinc-700 text-gray-500 dark:text-gray-400 hover:border-purple-300'
+                      } disabled:opacity-50`}
+                    >
+                      {n}화
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {seriesJobMessage && (
+              <div className="mt-4 px-4 py-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl flex items-center gap-2">
+                <Loader2 size={16} className="animate-spin text-purple-500" />
+                <span className="text-sm font-bold text-purple-600 dark:text-purple-400">{seriesJobMessage}</span>
+              </div>
+            )}
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowSeriesModal(false)}
+                disabled={seriesCreating}
+                className="flex-1 py-2.5 border-2 border-border dark:border-zinc-700 rounded-full font-bold text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-all disabled:opacity-50"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleCreateSeries}
+                disabled={!seriesTitle.trim() || !seriesIdea.trim() || seriesCreating}
+                className="flex-1 py-2.5 bg-purple-600 text-white rounded-full font-bold hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50 disabled:hover:translate-y-0"
+              >
+                {seriesCreating ? '생성 중...' : '시리즈 만들기'}
               </button>
             </div>
           </div>
