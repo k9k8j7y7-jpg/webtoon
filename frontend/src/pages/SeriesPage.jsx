@@ -13,8 +13,11 @@ export default function SeriesPage() {
   const [series, setSeries] = useState(null);
   const [loading, setLoading] = useState(true);
   const [bibleOpen, setBibleOpen] = useState(true);
-  const [jobRunning, setJobRunning] = useState(false);
-  const [jobMessage, setJobMessage] = useState('');
+
+  // 비동기 Job 상태: { type, affectedNos, message, error }
+  const [activeJob, setActiveJob] = useState(null);
+  // 완료 하이라이트 (회차 번호 목록)
+  const [highlightNos, setHighlightNos] = useState([]);
 
   // 인라인 편집
   const [editingIdx, setEditingIdx] = useState(null);
@@ -22,6 +25,8 @@ export default function SeriesPage() {
 
   // from_no 재생성
   const [regenFromNo, setRegenFromNo] = useState(null);
+
+  const jobRunning = !!activeJob;
 
   const loadSeries = useCallback(async () => {
     try {
@@ -39,29 +44,44 @@ export default function SeriesPage() {
 
   // ── Job 실행 헬퍼 ──
 
-  const runJob = async (apiCall, message) => {
-    setJobRunning(true);
-    setJobMessage(message);
+  const runJob = async (apiCall, message, type, affectedNos) => {
+    setActiveJob({ type, affectedNos, message, error: null });
+    setHighlightNos([]);
     try {
       const { data } = await apiCall();
       await pollJob(data.job_id, null, 2000);
       await loadSeries();
+      // 완료 하이라이트: 변경된 회차 추정
+      let changedNos = affectedNos;
+      if (type === 'merge') {
+        // 병합 후 noA가 남고 noB 이후 리넘버링
+        changedNos = affectedNos.length > 0 ? [affectedNos[0]] : [];
+      } else if (type === 'split') {
+        const no = affectedNos[0];
+        changedNos = [no, no + 1];
+      }
+      setHighlightNos(changedNos);
+      setActiveJob(null);
+      setTimeout(() => setHighlightNos([]), 2000);
     } catch (e) {
-      alert(e?.response?.data?.detail || e.message || '작업에 실패했습니다.');
-    } finally {
-      setJobRunning(false);
-      setJobMessage('');
+      const errMsg = e?.response?.data?.detail || e.message || '작업에 실패했습니다.';
+      setActiveJob((prev) => prev ? { ...prev, error: errMsg } : null);
     }
   };
+
+  const dismissJobError = () => setActiveJob(null);
 
   // ── 바이블 재생성 ──
 
   const handleBibleRegenerate = () => {
     if (!confirm('바이블과 아웃라인을 전체 재생성합니다.\n기존 내용이 모두 교체됩니다.')) return;
     const target = series.bible?.target_episodes || series.outline?.length || 8;
+    const allNos = (series.outline || []).map((x) => x.no);
     runJob(
       () => api.post(`/series/${seriesId}/bible/regenerate`, { target_episodes: target }),
-      '바이블 재생성 중...'
+      '바이블 전체 재생성 중...',
+      'bible',
+      allNos,
     );
   };
 
@@ -70,9 +90,12 @@ export default function SeriesPage() {
   const handleOutlineRegenerate = (fromNo) => {
     if (!confirm(`${fromNo}화부터 아웃라인을 재생성합니다.\n${fromNo}화 이전은 유지됩니다.`)) return;
     setRegenFromNo(null);
+    const affectedNos = (series.outline || []).filter((x) => x.no >= fromNo).map((x) => x.no);
     runJob(
       () => api.post(`/series/${seriesId}/outline/regenerate`, { from_no: fromNo }),
-      `${fromNo}화부터 재생성 중...`
+      `${fromNo}화부터 재생성 중...`,
+      'regen_from',
+      affectedNos,
     );
   };
 
@@ -82,7 +105,9 @@ export default function SeriesPage() {
     if (!confirm(`${noA}화와 ${noB}화를 합칩니다.\n요약이 AI로 재작성됩니다.`)) return;
     runJob(
       () => api.post(`/series/${seriesId}/outline/merge`, { no_a: noA, no_b: noB }),
-      `${noA}화+${noB}화 병합 중...`
+      `${noA}화+${noB}화 병합 중...`,
+      'merge',
+      [noA, noB],
     );
   };
 
@@ -92,7 +117,9 @@ export default function SeriesPage() {
     if (!confirm(`${no}화를 두 회차로 분할합니다.`)) return;
     runJob(
       () => api.post(`/series/${seriesId}/outline/split`, { no }),
-      `${no}화 분할 중...`
+      `${no}화 분할 중...`,
+      'split',
+      [no],
     );
   };
 
@@ -190,11 +217,30 @@ export default function SeriesPage() {
         </div>
       </div>
 
-      {/* Job 진행 배너 */}
-      {jobRunning && (
+      {/* 바이블 전체 재생성 배너 */}
+      {activeJob?.type === 'bible' && !activeJob.error && (
+        <div className="mb-4 px-4 py-3 bg-purple-50 dark:bg-purple-900/20 border-2 border-purple-300 dark:border-purple-700 rounded-xl flex items-center gap-2">
+          <Loader2 size={16} className="animate-spin text-purple-600 dark:text-purple-400" />
+          <span className="text-sm font-bold text-purple-600 dark:text-purple-400">{activeJob.message}</span>
+        </div>
+      )}
+      {/* 바이블 에러 배너 */}
+      {activeJob?.type === 'bible' && activeJob.error && (
+        <div className="mb-4 px-4 py-3 bg-red-50 dark:bg-red-900/20 border-2 border-red-300 dark:border-red-700 rounded-xl flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-bold text-red-600 dark:text-red-400">바이블 재생성 실패: {activeJob.error}</span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button onClick={handleBibleRegenerate} className="text-xs font-bold text-red-600 hover:text-red-800 transition-colors">재시도</button>
+            <button onClick={dismissJobError} className="text-gray-400 hover:text-gray-600"><X size={14} /></button>
+          </div>
+        </div>
+      )}
+      {/* 일반 Job 진행 배너 (bible 외) */}
+      {activeJob && activeJob.type !== 'bible' && !activeJob.error && (
         <div className="mb-4 px-4 py-3 bg-comic-blue/10 dark:bg-comic-blue/20 border-2 border-comic-blue/30 rounded-xl flex items-center gap-2">
           <Loader2 size={16} className="animate-spin text-comic-blue" />
-          <span className="text-sm font-bold text-comic-blue">{jobMessage}</span>
+          <span className="text-sm font-bold text-comic-blue">{activeJob.message}</span>
         </div>
       )}
 
@@ -306,39 +352,97 @@ export default function SeriesPage() {
         </div>
       ) : (
         <div className="space-y-3 mb-8">
-          {outline.map((item, idx) => (
+          {outline.map((item, idx) => {
+            const isAffected = activeJob && !activeJob.error && activeJob.affectedNos?.includes(item.no);
+            const isFirstAffected = activeJob?.affectedNos?.[0] === item.no;
+            const hasError = activeJob?.error && isFirstAffected;
+            const isHighlighted = highlightNos.includes(item.no);
+            return (
             <div
               key={`${item.no}-${idx}`}
-              className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl p-4 transition-all"
+              className={`relative bg-white dark:bg-surface-dark border-2 rounded-2xl p-4 transition-all duration-500 ${
+                isHighlighted
+                  ? 'border-green-400 dark:border-green-500 bg-green-50 dark:bg-green-900/20'
+                  : hasError
+                    ? 'border-red-300 dark:border-red-700'
+                    : 'border-border dark:border-zinc-800'
+              }`}
             >
+              {/* 진행 중 오버레이 */}
+              {isAffected && (
+                <div className="absolute inset-0 bg-white/70 dark:bg-zinc-900/70 rounded-2xl z-10 flex items-center justify-center gap-2">
+                  <Loader2 size={18} className="animate-spin text-comic-blue" />
+                  <span className="text-sm font-bold text-comic-blue">{activeJob.message}</span>
+                </div>
+              )}
+              {/* 에러 표시 */}
+              {hasError && (
+                <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-red-600 dark:text-red-400">{activeJob.error}</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {activeJob.type === 'merge' && (
+                      <button onClick={() => { dismissJobError(); handleMerge(activeJob.affectedNos[0], activeJob.affectedNos[1]); }}
+                        className="text-xs font-bold text-red-600 hover:text-red-800 transition-colors">재시도</button>
+                    )}
+                    {activeJob.type === 'split' && (
+                      <button onClick={() => { dismissJobError(); handleSplit(activeJob.affectedNos[0]); }}
+                        className="text-xs font-bold text-red-600 hover:text-red-800 transition-colors">재시도</button>
+                    )}
+                    {activeJob.type === 'regen_from' && (
+                      <button onClick={() => { const fromNo = Math.min(...activeJob.affectedNos); dismissJobError(); handleOutlineRegenerate(fromNo); }}
+                        className="text-xs font-bold text-red-600 hover:text-red-800 transition-colors">재시도</button>
+                    )}
+                    <button onClick={dismissJobError} className="text-gray-400 hover:text-gray-600"><X size={14} /></button>
+                  </div>
+                </div>
+              )}
               {editingIdx === idx ? (
                 /* 편집 모드 */
                 <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-comic-orange">{item.no}화</span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="shrink-0 text-sm font-bold text-comic-orange">{item.no}화</span>
                     <input
                       type="text"
+                      name="outline-title"
+                      autoComplete="off"
+                      autoCorrect="off"
                       value={editDraft.title}
                       onChange={(e) => setEditDraft({ ...editDraft, title: e.target.value })}
-                      className="flex-1 px-3 py-1.5 text-sm font-bold border-2 border-comic-orange/50 rounded-lg bg-white dark:bg-zinc-800 text-ink-black dark:text-white focus:border-comic-orange focus:outline-none"
+                      className="min-w-0 flex-1 px-3 py-1.5 text-sm font-bold border-2 border-comic-orange/50 rounded-lg bg-white dark:bg-zinc-800 text-ink-black dark:text-white focus:border-comic-orange focus:outline-none"
                     />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-gray-500 mb-1">요약</label>
                     <textarea
+                      name="outline-summary"
+                      autoComplete="off"
+                      autoCorrect="off"
                       value={editDraft.summary}
-                      onChange={(e) => setEditDraft({ ...editDraft, summary: e.target.value })}
-                      rows={3}
+                      onChange={(e) => {
+                        setEditDraft({ ...editDraft, summary: e.target.value });
+                        e.target.style.height = 'auto';
+                        e.target.style.height = e.target.scrollHeight + 'px';
+                      }}
+                      onFocus={(e) => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
+                      rows={4}
                       className="w-full px-3 py-2 text-sm border-2 border-border dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-gray-700 dark:text-gray-300 focus:border-comic-orange focus:outline-none resize-none"
                     />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-gray-500 mb-1">엔딩 훅</label>
-                    <input
-                      type="text"
+                    <textarea
+                      name="outline-hook"
+                      autoComplete="off"
+                      autoCorrect="off"
                       value={editDraft.hook}
-                      onChange={(e) => setEditDraft({ ...editDraft, hook: e.target.value })}
-                      className="w-full px-3 py-1.5 text-sm border-2 border-border dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-gray-700 dark:text-gray-300 focus:border-comic-orange focus:outline-none"
+                      onChange={(e) => {
+                        setEditDraft({ ...editDraft, hook: e.target.value });
+                        e.target.style.height = 'auto';
+                        e.target.style.height = e.target.scrollHeight + 'px';
+                      }}
+                      onFocus={(e) => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
+                      rows={2}
+                      className="w-full px-3 py-2 text-sm border-2 border-border dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-gray-700 dark:text-gray-300 focus:border-comic-orange focus:outline-none resize-none"
                     />
                   </div>
                   <div className="flex gap-2 justify-end">
@@ -406,7 +510,8 @@ export default function SeriesPage() {
                 </>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
