@@ -1,6 +1,32 @@
 # 진행 상태 추적
 
-## 현재 작업: P4 — 2단계 백엔드 완료 → 3단계(프론트) 대기
+## 현재 작업: P5 — 4단계 검증 대기 (2026-08-26)
+
+### P5 — 2단계 백엔드 + 3단계 프론트 완료 (2026-08-26)
+
+**구현 완료:**
+- `POST /series/{sid}/episodes/{no}/generate` — 에피소드 생성 + Gate 1 자동 승인 + 대본 생성(Job)
+- 바이블→기획 파생 (`_derive_planning_from_bible`)
+- 직전 회차 캐릭터 자동 연결 (`_auto_link_characters`)
+- 연작 컨텍스트 프롬프트 주입 (`prompt_fragments.py`)
+- outline status 추적 (script_generating → script_done/script_failed)
+- merge/split/PUT episode_id 방어 (409)
+- list_series에 script_done/image_done 집계
+
+**프론트:**
+- SeriesPage: 대본 생성 버튼 활성 + 완료 뱃지/열기 + episode_id 편집 잠금
+- WorkflowPage: 시리즈 홈 복귀 + 시리즈명·회차 표시
+- Gate1Planning: 파생 기획 읽기전용 + 안내 배너
+- ProjectPage: 시리즈 카드 실숫자 연동
+
+**실서버 검증 (2단계):**
+- 1화 에피소드 생성 + Gate 1 승인 + 대본 생성 ✅
+- derived_from_series 플래그 ✅
+- 중복 생성 방어 409 ✅
+- merge/split episode_id 방어 409 ✅
+- progress 집계 정상 ✅
+
+**다음: 4단계 검증 9항목** (지시서-P5 참조. 핵심: 이월된 스킵 배너 실발화 = 검증 4번)
 
 ### P4 — 2단계 백엔드 완료 (2026-08-25)
 
