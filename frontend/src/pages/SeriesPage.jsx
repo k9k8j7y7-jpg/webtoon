@@ -4,6 +4,7 @@ import api, { pollJob } from '../api/client';
 import {
   ArrowLeft, ChevronDown, ChevronUp, RefreshCw, Plus, Trash2, X,
   Merge, Split, ArrowUp, ArrowDown, FileText, Lock, Edit3, Check, Loader2,
+  ExternalLink, CheckCircle, BookOpen,
 } from 'lucide-react';
 
 export default function SeriesPage() {
@@ -119,6 +120,19 @@ export default function SeriesPage() {
       () => api.post(`/series/${seriesId}/outline/split`, { no }),
       `${no}화 분할 중...`,
       'split',
+      [no],
+    );
+  };
+
+  // ── 대본 생성 (P5) ──
+
+  const handleGenerate = (no) => {
+    const msg = `${no}화 대본을 생성합니다.\n직전 회차의 캐릭터가 자동으로 연결됩니다.`;
+    if (!confirm(msg)) return;
+    runJob(
+      () => api.post(`/series/${seriesId}/episodes/${no}/generate`),
+      `${no}화 대본 생성 중...`,
+      'generate',
       [no],
     );
   };
@@ -462,29 +476,36 @@ export default function SeriesPage() {
                     </div>
                     {/* 액션 버튼들 */}
                     <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
-                      <button onClick={() => startEdit(idx)} disabled={jobRunning} title="수정"
-                        className="p-1 text-gray-400 hover:text-comic-blue transition-colors disabled:opacity-30">
-                        <Edit3 size={14} />
-                      </button>
-                      {idx < outline.length - 1 && (
-                        <button onClick={() => handleMerge(item.no, outline[idx + 1].no)} disabled={jobRunning} title={`${item.no}화+${item.no + 1}화 병합`}
-                          className="p-1 text-gray-400 hover:text-purple-500 transition-colors disabled:opacity-30">
-                          <Merge size={14} />
-                        </button>
+                      {item.episode_id ? (
+                        /* 에피소드 생성됨 — 수정 불가 */
+                        <span className="text-[10px] text-gray-400 dark:text-zinc-600" title="에피소드가 연결되어 수정할 수 없습니다">🔒</span>
+                      ) : (
+                        <>
+                          <button onClick={() => startEdit(idx)} disabled={jobRunning} title="수정"
+                            className="p-1 text-gray-400 hover:text-comic-blue transition-colors disabled:opacity-30">
+                            <Edit3 size={14} />
+                          </button>
+                          {idx < outline.length - 1 && (
+                            <button onClick={() => handleMerge(item.no, outline[idx + 1].no)} disabled={jobRunning} title={`${item.no}화+${item.no + 1}화 병합`}
+                              className="p-1 text-gray-400 hover:text-purple-500 transition-colors disabled:opacity-30">
+                              <Merge size={14} />
+                            </button>
+                          )}
+                          <button onClick={() => handleSplit(item.no)} disabled={jobRunning} title="분할"
+                            className="p-1 text-gray-400 hover:text-green-500 transition-colors disabled:opacity-30">
+                            <Split size={14} />
+                          </button>
+                          <button onClick={() => handleDeleteItem(item.no)} disabled={jobRunning} title="삭제"
+                            className="p-1 text-gray-400 hover:text-red-500 transition-colors disabled:opacity-30">
+                            <Trash2 size={14} />
+                          </button>
+                        </>
                       )}
-                      <button onClick={() => handleSplit(item.no)} disabled={jobRunning} title="분할"
-                        className="p-1 text-gray-400 hover:text-green-500 transition-colors disabled:opacity-30">
-                        <Split size={14} />
-                      </button>
-                      <button onClick={() => handleDeleteItem(item.no)} disabled={jobRunning} title="삭제"
-                        className="p-1 text-gray-400 hover:text-red-500 transition-colors disabled:opacity-30">
-                        <Trash2 size={14} />
-                      </button>
-                      <button onClick={() => handleMove(idx, -1)} disabled={jobRunning || idx === 0} title="위로"
+                      <button onClick={() => handleMove(idx, -1)} disabled={jobRunning || idx === 0 || !!item.episode_id} title={item.episode_id ? "에피소드 연결됨" : "위로"}
                         className="p-1 text-gray-400 hover:text-gray-700 transition-colors disabled:opacity-20">
                         <ArrowUp size={14} />
                       </button>
-                      <button onClick={() => handleMove(idx, 1)} disabled={jobRunning || idx === outline.length - 1} title="아래로"
+                      <button onClick={() => handleMove(idx, 1)} disabled={jobRunning || idx === outline.length - 1 || !!item.episode_id} title={item.episode_id ? "에피소드 연결됨" : "아래로"}
                         className="p-1 text-gray-400 hover:text-gray-700 transition-colors disabled:opacity-20">
                         <ArrowDown size={14} />
                       </button>
@@ -496,16 +517,30 @@ export default function SeriesPage() {
                       훅: {item.hook}
                     </p>
                   )}
-                  {/* 대본 생성 버튼 — 비활성 예약 */}
+                  {/* 대본 생성 / 완료 상태 */}
                   <div className="mt-3 pt-3 border-t border-border dark:border-zinc-800">
-                    <button
-                      disabled
-                      title="다음 업데이트에서 제공"
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-gray-300 dark:text-zinc-600 border border-gray-200 dark:border-zinc-700 rounded-lg cursor-not-allowed"
-                    >
-                      <Lock size={12} /> 대본 생성
-                      <span className="text-[10px] text-gray-300 dark:text-zinc-600 ml-1">(다음 업데이트)</span>
-                    </button>
+                    {item.episode_id ? (
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="flex items-center gap-1.5 text-xs font-bold text-green-600 dark:text-green-400">
+                          <CheckCircle size={14} />
+                          {item.status === 'script_done' ? '대본 완료' : '에피소드 생성됨'}
+                        </span>
+                        <button
+                          onClick={() => navigate(`/projects/${series.project_id}/episodes/${item.episode_id}/workflow`)}
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-comic-blue hover:text-white border border-comic-blue hover:bg-comic-blue rounded-lg transition-all"
+                        >
+                          <ExternalLink size={12} /> 열기
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handleGenerate(item.no)}
+                        disabled={jobRunning}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-comic-blue hover:bg-blue-600 rounded-lg hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:hover:translate-y-0"
+                      >
+                        <BookOpen size={12} /> 대본 생성
+                      </button>
+                    )}
                   </div>
                 </>
               )}

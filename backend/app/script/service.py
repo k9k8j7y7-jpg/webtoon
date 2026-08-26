@@ -67,27 +67,48 @@ SYSTEM_INSTRUCTION = """너는 웹툰 대본 작가야.
 - 각 씬에는 최소 2컷 이상"""
 
 
-async def generate_script(planning: dict) -> dict:
-    """기획안으로부터 대본을 생성한다."""
-    prompt = f"""아래 기획안을 바탕으로 웹툰 1화 대본을 만들어줘.
+async def generate_script(planning: dict, series_context: dict | None = None) -> dict:
+    """기획안으로부터 대본을 생성한다.
+
+    series_context가 있으면 연작 컨텍스트를 프롬프트에 주입한다.
+    """
+    from app.script.prompt_fragments import (
+        build_series_context_block,
+        SERIES_SCRIPT_INSTRUCTION_ADDON,
+    )
+
+    # 연작 컨텍스트 블록
+    series_block = build_series_context_block(series_context) if series_context else ""
+    ep_label = f"{series_context['episode_no']}화" if series_context else "1화"
+
+    prompt = f"""아래 기획안을 바탕으로 웹툰 {ep_label} 대본을 만들어줘.
 
 제목: {planning.get('title', '')}
 로그라인: {planning.get('logline', '')}
 시놉시스: {planning.get('synopsis', '')}
 세계관: {planning.get('world', '')}
 등장인물: {json.dumps(planning.get('characters', []), ensure_ascii=False, indent=2)}
+"""
 
+    if series_block:
+        prompt += f"\n{series_block}\n"
+
+    prompt += f"""
 중요 지시:
 1. 먼저 시놉시스를 분석해서 주요 사건을 모두 파악하라.
 2. 시놉시스의 첫 장면부터 마지막 결말까지 빠짐없이 대본에 포함하라.
 3. 특히 시놉시스의 클라이맥스와 결말이 반드시 대본에 있어야 한다.
 4. 이야기가 중간에 끊기면 안 된다. 시놉시스 끝까지 완결하라.
 
-위 기획안으로 웹툰 1화 대본을 JSON으로 만들어줘."""
+위 기획안으로 웹툰 {ep_label} 대본을 JSON으로 만들어줘."""
+
+    system = SYSTEM_INSTRUCTION
+    if series_context:
+        system += SERIES_SCRIPT_INSTRUCTION_ADDON
 
     raw = await generate_text(
         prompt=prompt,
-        system_instruction=SYSTEM_INSTRUCTION,
+        system_instruction=system,
         temperature=0.85,
         max_output_tokens=16384,
     )

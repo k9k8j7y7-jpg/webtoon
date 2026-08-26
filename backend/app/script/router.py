@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.auth.deps import get_current_user
 from app.users.models import User
-from app.projects.models import Project, Episode
+from app.projects.models import Project, Episode, Series
 from app.script.service import generate_script, extract_character_names, extract_location_names
 from app.workflow.gate import approve_gate, get_gate_number
 from app.workflow.service import compute_invalidation_scope, invalidate_from_gate
@@ -57,7 +57,31 @@ async def create_script(
             detail="Planning data not found. Complete gate 1 first.",
         )
 
-    result = await generate_script(planning)
+    # 연작이면 시리즈 컨텍스트 조립
+    series_context = None
+    if episode.series_id:
+        series = db.query(Series).filter(Series.id == episode.series_id).first()
+        if series and series.outline:
+            bible = series.bible or {}
+            outline = series.outline or []
+            ep_no = episode.episode_no or 1
+            current_item = next((x for x in outline if x.get("episode_id") == episode.id), None)
+            if not current_item:
+                current_item = next((x for x in outline if x.get("no") == ep_no), {})
+            prev_item = next((x for x in outline if x.get("no") == ep_no - 1), None) if ep_no > 1 else None
+            series_context = {
+                "synopsis": bible.get("synopsis", ""),
+                "world": bible.get("world"),
+                "characters": bible.get("characters", []),
+                "episode_no": ep_no,
+                "total_episodes": len(outline),
+                "current_summary": current_item.get("summary", "") if current_item else "",
+                "current_hook": current_item.get("hook", "") if current_item else "",
+                "prev_summary": prev_item.get("summary") if prev_item else None,
+                "prev_hook": prev_item.get("hook") if prev_item else None,
+            }
+
+    result = await generate_script(planning, series_context=series_context)
 
     # 대본 저장
     script_data = dict(episode.script) if episode.script else {}
@@ -176,7 +200,9 @@ async def get_episode_status(
     current_user: User = Depends(get_current_user),
 ):
     episode = _get_episode_for_user(db, project_id, episode_id, current_user.id)
-    return episode.gate_status
+    result = dict(episode.gate_status)
+    result["series_id"] = episode.series_id
+    return result
 
 
 def _get_episode_for_user(db: Session, project_id: int, episode_id: int, user_id: int) -> Episode:

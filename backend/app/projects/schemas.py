@@ -44,6 +44,7 @@ class EpisodeResponse(BaseModel):
     episode_no: int
     title: str | None
     gate_status: dict
+    series_id: int | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

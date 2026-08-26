@@ -22,13 +22,28 @@ export default function WorkflowPage() {
   const [viewingGate, setViewingGate] = useState(null);
   const [revertModal, setRevertModal] = useState(null);
   const [reverting, setReverting] = useState(false);
+  const [seriesInfo, setSeriesInfo] = useState(null); // { id, title, outline_count, episode_no }
 
   const loadStatus = useCallback(async () => {
     const { data } = await api.get(`/projects/${projectId}/episodes/${episodeId}/status`);
     setGateStatus(data);
     setViewingGate(null);
+    // 시리즈 정보 로드
+    if (data.series_id && !seriesInfo) {
+      try {
+        const { data: sd } = await api.get(`/series/${data.series_id}`);
+        const outline = sd.outline || [];
+        const match = outline.find((x) => x.episode_id === Number(episodeId));
+        setSeriesInfo({
+          id: sd.id,
+          title: sd.title,
+          outline_count: outline.length,
+          episode_no: match?.no || null,
+        });
+      } catch { /* ignore */ }
+    }
     return data;
-  }, [projectId, episodeId]);
+  }, [projectId, episodeId, seriesInfo]);
 
   useEffect(() => {
     loadStatus().finally(() => setLoading(false));
@@ -106,12 +121,26 @@ export default function WorkflowPage() {
 
   return (
     <div>
-      <button
-        onClick={() => navigate(`/projects/${projectId}`)}
-        className="flex items-center gap-1 text-sm font-bold text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 mb-4 transition-colors"
-      >
-        <ArrowLeft size={16} /> 에피소드 목록
-      </button>
+      {seriesInfo ? (
+        <div className="flex items-center gap-3 mb-4 flex-wrap">
+          <button
+            onClick={() => navigate(`/projects/${projectId}/series/${seriesInfo.id}`)}
+            className="flex items-center gap-1 text-sm font-bold text-purple-500 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors"
+          >
+            <ArrowLeft size={16} /> 시리즈 홈
+          </button>
+          <span className="text-sm font-bold text-gray-400 dark:text-zinc-500">
+            {seriesInfo.title} · {seriesInfo.episode_no || '?'}/{seriesInfo.outline_count}화
+          </span>
+        </div>
+      ) : (
+        <button
+          onClick={() => navigate(`/projects/${projectId}`)}
+          className="flex items-center gap-1 text-sm font-bold text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 mb-4 transition-colors"
+        >
+          <ArrowLeft size={16} /> 에피소드 목록
+        </button>
+      )}
 
       <div className="mb-6">
         <GateProgress gateStatus={gateStatus} onGateClick={handleGateClick} viewingGate={viewingGate} />
@@ -124,12 +153,15 @@ export default function WorkflowPage() {
             게이트 {viewingGate} — {gateLabels[viewingGate]} (읽기 전용)
           </div>
           <div className="flex gap-2">
-            <button
-              onClick={handleRevertClick}
-              className="flex items-center gap-1.5 px-4 py-1.5 bg-red-500 text-white rounded-full text-xs font-bold hover:-translate-y-0.5 transition-all"
-            >
-              <RotateCcw size={12} /> {gateLabels[viewingGate]} 수정하기
-            </button>
+            {/* 연작 파생 Gate 1은 수정 불가 */}
+            {!(viewingGate === 1 && gateStatus?.series_id) && (
+              <button
+                onClick={handleRevertClick}
+                className="flex items-center gap-1.5 px-4 py-1.5 bg-red-500 text-white rounded-full text-xs font-bold hover:-translate-y-0.5 transition-all"
+              >
+                <RotateCcw size={12} /> {gateLabels[viewingGate]} 수정하기
+              </button>
+            )}
             <button
               onClick={() => setViewingGate(null)}
               className="flex items-center gap-1.5 px-4 py-1.5 bg-amber-500 text-white rounded-full text-xs font-bold hover:-translate-y-0.5 transition-all"
@@ -152,6 +184,7 @@ export default function WorkflowPage() {
         initialIdea={displayGate === 1 && !viewingGate ? initialIdea : ''}
         initialStoryOptions={displayGate === 1 && !viewingGate ? initialStoryOptions : null}
         readOnly={isViewingPrevious}
+        derivedFromSeries={!!gateStatus?.series_id}
       />
 
       {/* 되돌아가기 무효화 경고 모달 */}

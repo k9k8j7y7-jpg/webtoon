@@ -281,7 +281,7 @@ export default function ProjectPage() {
                   <h3 className="font-bold font-serif text-ink-black dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors truncate">{s.title}</h3>
                 </div>
                 <p className="text-sm font-bold text-gray-500 dark:text-gray-400 mt-0.5">
-                  {s.outline_count}화 계획 · 대본 {s.episode_count} · 이미지 0
+                  {s.outline_count}화 계획 · 대본 {s.script_done ?? s.episode_count} · 이미지 {s.image_done ?? 0}
                 </p>
               </div>
               <div className="flex items-center gap-2">

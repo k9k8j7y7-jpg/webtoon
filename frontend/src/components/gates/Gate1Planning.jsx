@@ -31,7 +31,7 @@ const DEVELOPMENT_OPTIONS = [
   { key: 'cliffhanger', label: '클리프행어', desc: '다음 화가 궁금해지는 끝맺음' },
 ];
 
-export default function Gate1Planning({ projectId, episodeId, onRefresh, initialIdea = '', initialStoryOptions = null, readOnly = false }) {
+export default function Gate1Planning({ projectId, episodeId, onRefresh, initialIdea = '', initialStoryOptions = null, readOnly = false, derivedFromSeries = false }) {
   const [idea, setIdea] = useState(initialIdea);
   const [characters, setCharacters] = useState([]);
   const [planning, setPlanning] = useState(null);
@@ -152,13 +152,27 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, initial
 
   if (loading) return <div className="text-center py-10 text-gray-400 dark:text-zinc-500 font-bold">기획 데이터 로딩 중...</div>;
 
-  if (readOnly) {
+  // 연작 파생 기획: Gate 1은 항상 읽기 전용
+  const isSeriesDerived = derivedFromSeries && planning?.derived_from_series;
+
+  if (readOnly || isSeriesDerived) {
     return (
       <div className="space-y-4">
+        {isSeriesDerived && (
+          <div className="px-4 py-3 bg-purple-50 dark:bg-purple-900/20 border-2 border-purple-200 dark:border-purple-800 rounded-2xl flex items-center gap-2">
+            <Lightbulb size={16} className="text-purple-500 shrink-0" />
+            <span className="text-sm font-bold text-purple-600 dark:text-purple-400">
+              연작 회차는 시리즈 기획(바이블)을 따릅니다. 기획을 수정하려면 시리즈 홈에서 바이블을 수정하세요.
+            </span>
+          </div>
+        )}
         <div className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl p-6 backdrop-blur-sm">
           <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2 mb-4">
             <Lightbulb size={20} className="text-amber-500" />
             게이트 1 — 기획
+            {isSeriesDerived && (
+              <span className="text-xs font-bold text-purple-500 bg-purple-100 dark:bg-purple-900/40 px-2 py-0.5 rounded-full">파생 기획</span>
+            )}
           </h2>
           {planning ? (
             <div className="space-y-4">

@@ -1,28 +1,32 @@
-"""Series API — P4: 시리즈 CRUD + 바이블/아웃라인 생성·편집.
+"""Series API — P4+P5: 시리즈 CRUD + 바이블/아웃라인 + 회차 대본 생성.
 
 엔드포인트 목록:
-  POST   /projects/{pid}/series            — 시리즈 생성
-  GET    /projects/{pid}/series             — 시리즈 목록
-  GET    /series/{sid}                      — 시리즈 상세
-  DELETE /series/{sid}                      — 시리즈 삭제 (보수적)
-  POST   /series/{sid}/bible                — 바이블+아웃라인 생성
-  POST   /series/{sid}/bible/regenerate     — 전체 재생성
-  POST   /series/{sid}/outline/regenerate   — 부분 재생성 (from_no)
-  PUT    /series/{sid}/outline              — 아웃라인 배열 교체
-  POST   /series/{sid}/outline/merge        — 인접 회차 병합
-  POST   /series/{sid}/outline/split        — 회차 분할
+  POST   /projects/{pid}/series                — 시리즈 생성
+  GET    /projects/{pid}/series                — 시리즈 목록
+  GET    /series/{sid}                         — 시리즈 상세 (에피소드 집계 포함)
+  DELETE /series/{sid}                         — 시리즈 삭제 (보수적)
+  POST   /series/{sid}/bible                   — 바이블+아웃라인 생성
+  POST   /series/{sid}/bible/regenerate        — 전체 재생성
+  POST   /series/{sid}/outline/regenerate      — 부분 재생성 (from_no)
+  PUT    /series/{sid}/outline                 — 아웃라인 배열 교체
+  POST   /series/{sid}/outline/merge           — 인접 회차 병합
+  POST   /series/{sid}/outline/split           — 회차 분할
+  POST   /series/{sid}/episodes/{no}/generate  — 회차 대본 생성 (P5)
 """
 
 import logging
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.database import get_db
 from app.auth.deps import get_current_user
 from app.users.models import User
 from app.projects.models import Project, Series, Episode
+from app.characters.models import Character, EpisodeCharacter
 from app.jobs import create_job, run_job_in_background
+from app.workflow.gate import approve_gate
 
 from .schemas import (
     SeriesCreateRequest,
@@ -74,8 +78,8 @@ def _renumber(outline: list[dict]) -> list[dict]:
     return outline
 
 
-def _series_to_dict(s: Series) -> dict:
-    return {
+def _series_to_dict(s: Series, db: Session | None = None) -> dict:
+    result = {
         "id": s.id,
         "project_id": s.project_id,
         "title": s.title,
@@ -84,6 +88,30 @@ def _series_to_dict(s: Series) -> dict:
         "created_at": s.created_at.isoformat(),
         "updated_at": s.updated_at.isoformat(),
     }
+    # 에피소드 진행 집계 (2단계-2)
+    if db and s.outline:
+        ep_ids = [item.get("episode_id") for item in s.outline if item.get("episode_id")]
+        if ep_ids:
+            episodes = db.query(Episode).filter(Episode.id.in_(ep_ids), Episode.deleted_at.is_(None)).all()
+            ep_map = {e.id: e for e in episodes}
+            script_done = 0
+            image_done = 0
+            for eid in ep_ids:
+                ep = ep_map.get(eid)
+                if not ep:
+                    continue
+                gs = ep.gate_status or {}
+                gates = gs.get("gates", {})
+                if gates.get("2_script", {}).get("status") == "approved":
+                    script_done += 1
+                if gates.get("5_review", {}).get("status") == "approved":
+                    image_done += 1
+            result["progress"] = {
+                "script_done": script_done,
+                "image_done": image_done,
+                "episode_count": len(ep_ids),
+            }
+    return result
 
 
 # ── 시리즈 CRUD ──
@@ -143,17 +171,26 @@ def list_series(
     result = []
     for s in rows:
         outline = s.outline or []
-        # 연결된 에피소드 수
-        episode_count = (
-            db.query(Episode)
-            .filter(Episode.series_id == s.id, Episode.deleted_at.is_(None))
-            .count()
-        )
+        # 연결된 에피소드 진행 집계
+        ep_ids = [item.get("episode_id") for item in outline if item.get("episode_id")]
+        script_done = 0
+        image_done = 0
+        if ep_ids:
+            episodes = db.query(Episode).filter(Episode.id.in_(ep_ids), Episode.deleted_at.is_(None)).all()
+            for ep in episodes:
+                gs = ep.gate_status or {}
+                gates = gs.get("gates", {})
+                if gates.get("2_script", {}).get("status") == "approved":
+                    script_done += 1
+                if gates.get("5_review", {}).get("status") == "approved":
+                    image_done += 1
         result.append({
             "id": s.id,
             "title": s.title,
             "outline_count": len(outline),
-            "episode_count": episode_count,
+            "episode_count": len(ep_ids),
+            "script_done": script_done,
+            "image_done": image_done,
             "created_at": s.created_at.isoformat(),
         })
 
@@ -166,9 +203,9 @@ def get_series(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """시리즈 상세 조회."""
+    """시리즈 상세 조회 (에피소드 진행 집계 포함)."""
     series = _get_series_with_auth(db, series_id, current_user.id)
-    return _series_to_dict(series)
+    return _series_to_dict(series, db=db)
 
 
 @router.delete("/series/{series_id}", status_code=status.HTTP_200_OK)
@@ -571,3 +608,251 @@ async def split_outline_ep(
     run_job_in_background(background_tasks, job.job_id, _run())
 
     return {"job_id": job.job_id}
+
+
+# ── 회차 대본 생성 (P5) ──
+
+
+def _derive_planning_from_bible(bible: dict, outline_item: dict) -> dict:
+    """바이블 + 아웃라인 항목 → Gate 1 planning 파생.
+
+    planning.derived_from_series=true 플래그로 프론트에서 읽기 전용 판정.
+    """
+    summary = outline_item.get("summary", "")
+    first_sentence = summary.split(".")[0] + "." if "." in summary else summary
+
+    return {
+        "title": outline_item.get("title", ""),
+        "logline": first_sentence,
+        "synopsis": summary,
+        "world": bible.get("world", ""),
+        "characters": bible.get("characters", []),
+        "derived_from_series": True,
+    }
+
+
+def _auto_link_characters(
+    db: Session,
+    source_episode_id: int,
+    target_episode_id: int,
+    project_id: int,
+) -> dict:
+    """직전 에피소드 캐릭터를 현재 에피소드에 자동 연결.
+
+    P3 link API의 검증 로직(같은 프로젝트, ref_key 충돌)을 그대로 통과.
+    충돌 캐릭터는 조용히 건너뛰고 결과를 반환한다.
+    """
+    source_chars = (
+        db.query(Character)
+        .join(EpisodeCharacter, EpisodeCharacter.character_id == Character.id)
+        .filter(EpisodeCharacter.episode_id == source_episode_id)
+        .all()
+    )
+
+    linked = []
+    skipped = []
+
+    for char in source_chars:
+        # P3 검증 1: 같은 프로젝트 또는 사용자 라이브러리
+        if char.project_id != project_id and not char.user_id:
+            skipped.append({"ref_key": char.ref_key, "name": char.name, "reason": "프로젝트 불일치"})
+            continue
+
+        # P3 검증 2: 이미 연결됨 (멱등)
+        existing = (
+            db.query(EpisodeCharacter)
+            .filter(
+                EpisodeCharacter.episode_id == target_episode_id,
+                EpisodeCharacter.character_id == char.id,
+            )
+            .first()
+        )
+        if existing:
+            linked.append({"ref_key": char.ref_key, "name": char.name, "status": "already_linked"})
+            continue
+
+        # P3 검증 3: ref_key 충돌 검사
+        conflict = (
+            db.query(Character)
+            .join(EpisodeCharacter, EpisodeCharacter.character_id == Character.id)
+            .filter(
+                EpisodeCharacter.episode_id == target_episode_id,
+                Character.ref_key == char.ref_key,
+                Character.id != char.id,
+            )
+            .first()
+        )
+        if conflict:
+            skipped.append({"ref_key": char.ref_key, "name": char.name, "reason": "ref_key 충돌"})
+            continue
+
+        # 연결 생성
+        ec = EpisodeCharacter(episode_id=target_episode_id, character_id=char.id)
+        db.add(ec)
+        linked.append({"ref_key": char.ref_key, "name": char.name, "status": "newly_linked"})
+
+    db.flush()
+    return {"linked": linked, "skipped": skipped}
+
+
+@router.post("/series/{series_id}/episodes/{episode_no}/generate")
+async def generate_episode_script(
+    series_id: int,
+    episode_no: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """회차 대본 생성 (P5):
+    1. outline[no]에 episode_id 없는지 확인
+    2. episodes 행 생성 + Gate 1 자동 승인
+    3. 직전 회차 캐릭터 자동 연결
+    4. Gate 2 대본 생성 job 시작
+    """
+    series = _get_series_with_auth(db, series_id, current_user.id)
+
+    if not series.bible or not series.outline:
+        raise HTTPException(status_code=400, detail="바이블이 아직 생성되지 않았습니다.")
+
+    outline = list(series.outline)
+    target_item = next((x for x in outline if x["no"] == episode_no), None)
+    if not target_item:
+        raise HTTPException(status_code=404, detail=f"{episode_no}화를 찾을 수 없습니다.")
+
+    # a. 이미 생성됨 방어
+    if target_item.get("episode_id"):
+        raise HTTPException(status_code=409, detail=f"{episode_no}화는 이미 에피소드가 생성되었습니다.")
+
+    bible = series.bible
+
+    # b. episodes 행 생성 + Gate 1 자동 승인
+    from app.workflow.gate import create_initial_gate_status
+    planning = _derive_planning_from_bible(bible, target_item)
+
+    gate_status = create_initial_gate_status()
+
+    episode = Episode(
+        project_id=series.project_id,
+        series_id=series.id,
+        episode_no=episode_no,
+        title=target_item.get("title", f"{episode_no}화"),
+        logline=planning["logline"],
+        synopsis=planning["synopsis"],
+        script={"planning": planning},
+        gate_status=gate_status,
+    )
+    db.add(episode)
+    db.flush()  # episode.id 확보
+
+    # Gate 1 자동 승인 → current_gate=2, Gate 2=draft
+    episode.gate_status = approve_gate(episode.gate_status, 1)
+    db.flush()
+
+    episode_id = episode.id
+
+    # c. 직전 회차 캐릭터 자동 연결
+    link_result = {"linked": [], "skipped": []}
+    if episode_no > 1:
+        prev_item = next((x for x in outline if x["no"] == episode_no - 1), None)
+        if prev_item and prev_item.get("episode_id"):
+            link_result = _auto_link_characters(
+                db=db,
+                source_episode_id=prev_item["episode_id"],
+                target_episode_id=episode_id,
+                project_id=series.project_id,
+            )
+
+    # e. outline 갱신: episode_id + status
+    for item in outline:
+        if item["no"] == episode_no:
+            item["episode_id"] = episode_id
+            item["status"] = "script_generating"
+            break
+    series.outline = outline
+    flag_modified(series, "outline")
+
+    db.commit()
+
+    # d. Gate 2 대본 생성 job
+    job = create_job(total=1)
+
+    # 시리즈 컨텍스트 조립
+    prev_item_ctx = next((x for x in outline if x["no"] == episode_no - 1), None) if episode_no > 1 else None
+    series_context = {
+        "synopsis": bible.get("synopsis", ""),
+        "world": bible.get("world"),
+        "characters": bible.get("characters", []),
+        "episode_no": episode_no,
+        "total_episodes": len(outline),
+        "current_summary": target_item.get("summary", ""),
+        "current_hook": target_item.get("hook", ""),
+        "prev_summary": prev_item_ctx.get("summary") if prev_item_ctx else None,
+        "prev_hook": prev_item_ctx.get("hook") if prev_item_ctx else None,
+    }
+
+    async def _run_script():
+        from app.database import SessionLocal
+        from app.jobs import update_job
+        from app.script.service import generate_script
+
+        sess = SessionLocal()
+        try:
+            result = await generate_script(planning, series_context=series_context)
+
+            ep = sess.query(Episode).filter(Episode.id == episode_id).first()
+            if not ep:
+                raise ValueError("Episode not found")
+
+            # 대본 저장
+            script_data = dict(ep.script) if ep.script else {}
+            script_data["script"] = result
+            ep.script = script_data
+            sess.flush()
+
+            # outline status 갱신
+            s = sess.query(Series).filter(Series.id == series_id).first()
+            if s and s.outline:
+                ol = list(s.outline)
+                for item in ol:
+                    if item["no"] == episode_no:
+                        item["status"] = "script_done"
+                        break
+                s.outline = ol
+                flag_modified(s, "outline")
+
+            sess.commit()
+            update_job(job.job_id, status="completed", progress={"done": 1, "total": 1}, result={
+                "series_id": series_id,
+                "episode_id": episode_id,
+                "episode_no": episode_no,
+                "link_result": link_result,
+            })
+        except Exception as e:
+            sess.rollback()
+            # outline status 실패로 갱신
+            try:
+                s = sess.query(Series).filter(Series.id == series_id).first()
+                if s and s.outline:
+                    ol = list(s.outline)
+                    for item in ol:
+                        if item["no"] == episode_no:
+                            item["status"] = "script_failed"
+                            break
+                    s.outline = ol
+                    flag_modified(s, "outline")
+                    sess.commit()
+            except Exception:
+                sess.rollback()
+            logger.error("Episode script generation failed: %s", e, exc_info=True)
+            raise
+        finally:
+            sess.close()
+
+    run_job_in_background(background_tasks, job.job_id, _run_script())
+
+    return {
+        "job_id": job.job_id,
+        "episode_id": episode_id,
+        "episode_no": episode_no,
+        "link_result": link_result,
+    }
