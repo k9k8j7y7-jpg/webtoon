@@ -4,7 +4,7 @@ import api, { pollJob } from '../api/client';
 import {
   ArrowLeft, ChevronDown, ChevronUp, RefreshCw, Plus, Trash2, X,
   Merge, Split, ArrowUp, ArrowDown, FileText, Lock, Edit3, Check, Loader2,
-  ExternalLink, CheckCircle, BookOpen,
+  ExternalLink, CheckCircle, BookOpen, Image, PenLine,
 } from 'lucide-react';
 
 export default function SeriesPage() {
@@ -23,6 +23,12 @@ export default function SeriesPage() {
   // 인라인 편집
   const [editingIdx, setEditingIdx] = useState(null);
   const [editDraft, setEditDraft] = useState({});
+
+  // 수정 후 재생성 (P6)
+  const [revisingIdx, setRevisingIdx] = useState(null);
+  const [reviseDraft, setReviseDraft] = useState({});
+  // 다음 회차 재생성 권장 배너
+  const [reviseAdviceNo, setReviseAdviceNo] = useState(null);
 
   // from_no 재생성
   const [regenFromNo, setRegenFromNo] = useState(null);
@@ -103,7 +109,13 @@ export default function SeriesPage() {
   // ── 병합 ──
 
   const handleMerge = (noA, noB) => {
-    if (!confirm(`${noA}화와 ${noB}화를 합칩니다.\n요약이 AI로 재작성됩니다.`)) return;
+    const itemA = series.outline.find((x) => x.no === noA);
+    const itemB = series.outline.find((x) => x.no === noB);
+    const hasScripts = itemA?.episode_id || itemB?.episode_id;
+    const msg = hasScripts
+      ? `${noA}화와 ${noB}화를 합칩니다.\n기존 대본은 새 요약으로 다시 생성됩니다 (직접 수정한 내용 포함).`
+      : `${noA}화와 ${noB}화를 합칩니다.\n요약이 AI로 재작성됩니다.`;
+    if (!confirm(msg)) return;
     runJob(
       () => api.post(`/series/${seriesId}/outline/merge`, { no_a: noA, no_b: noB }),
       `${noA}화+${noB}화 병합 중...`,
@@ -135,6 +147,53 @@ export default function SeriesPage() {
       'generate',
       [no],
     );
+  };
+
+  // ── 수정 후 재생성 (P6) ──
+
+  const startRevise = (idx) => {
+    const item = series.outline[idx];
+    setRevisingIdx(idx);
+    setReviseDraft({ title: item.title, summary: item.summary, hook: item.hook || '' });
+  };
+
+  const cancelRevise = () => {
+    setRevisingIdx(null);
+    setReviseDraft({});
+  };
+
+  const submitRevise = (idx) => {
+    const item = series.outline[idx];
+    if (!confirm(`${item.no}화 대본을 새로 생성합니다.\n기존 대본은 대체됩니다 (대본에서 직접 수정한 내용 포함).`)) return;
+
+    const no = item.no;
+    setRevisingIdx(null);
+    setReviseDraft({});
+
+    const apiCall = () => api.post(`/series/${seriesId}/outline/${no}/revise`, reviseDraft);
+
+    // runJob 변형: 완료 후 next_has_script 확인
+    setActiveJob({ type: 'revise', affectedNos: [no], message: `${no}화 수정 후 재생성 중...`, error: null });
+    setHighlightNos([]);
+    setReviseAdviceNo(null);
+
+    (async () => {
+      try {
+        const { data } = await apiCall();
+        await pollJob(data.job_id, null, 2000);
+        await loadSeries();
+        setHighlightNos([no]);
+        setActiveJob(null);
+        setTimeout(() => setHighlightNos([]), 2000);
+        // 다음 회차 재생성 권장
+        if (data.next_has_script) {
+          setReviseAdviceNo(no + 1);
+        }
+      } catch (e) {
+        const errMsg = e?.response?.data?.detail || e.message || '작업에 실패했습니다.';
+        setActiveJob((prev) => prev ? { ...prev, error: errMsg } : null);
+      }
+    })();
   };
 
   // ── 회차 추가 ──
@@ -406,11 +465,74 @@ export default function SeriesPage() {
                       <button onClick={() => { const fromNo = Math.min(...activeJob.affectedNos); dismissJobError(); handleOutlineRegenerate(fromNo); }}
                         className="text-xs font-bold text-red-600 hover:text-red-800 transition-colors">재시도</button>
                     )}
+                    {activeJob.type === 'revise' && (
+                      <button onClick={() => { const no = activeJob.affectedNos[0]; dismissJobError(); startRevise(outline.findIndex(x => x.no === no)); }}
+                        className="text-xs font-bold text-red-600 hover:text-red-800 transition-colors">다시 시도</button>
+                    )}
                     <button onClick={dismissJobError} className="text-gray-400 hover:text-gray-600"><X size={14} /></button>
                   </div>
                 </div>
               )}
-              {editingIdx === idx ? (
+              {revisingIdx === idx ? (
+                /* 수정 후 재생성 편집 모드 (P6) */
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="shrink-0 text-sm font-bold text-comic-orange">{item.no}화</span>
+                    <input
+                      type="text"
+                      name="revise-title"
+                      autoComplete="off"
+                      autoCorrect="off"
+                      value={reviseDraft.title}
+                      onChange={(e) => setReviseDraft({ ...reviseDraft, title: e.target.value })}
+                      className="min-w-0 flex-1 px-3 py-1.5 text-sm font-bold border-2 border-comic-orange/50 rounded-lg bg-white dark:bg-zinc-800 text-ink-black dark:text-white focus:border-comic-orange focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">요약</label>
+                    <textarea
+                      name="revise-summary"
+                      autoComplete="off"
+                      autoCorrect="off"
+                      value={reviseDraft.summary}
+                      onChange={(e) => {
+                        setReviseDraft({ ...reviseDraft, summary: e.target.value });
+                        e.target.style.height = 'auto';
+                        e.target.style.height = e.target.scrollHeight + 'px';
+                      }}
+                      onFocus={(e) => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
+                      rows={4}
+                      className="w-full px-3 py-2 text-sm border-2 border-border dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-gray-700 dark:text-gray-300 focus:border-comic-orange focus:outline-none resize-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">엔딩 훅</label>
+                    <textarea
+                      name="revise-hook"
+                      autoComplete="off"
+                      autoCorrect="off"
+                      value={reviseDraft.hook}
+                      onChange={(e) => {
+                        setReviseDraft({ ...reviseDraft, hook: e.target.value });
+                        e.target.style.height = 'auto';
+                        e.target.style.height = e.target.scrollHeight + 'px';
+                      }}
+                      onFocus={(e) => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
+                      rows={2}
+                      className="w-full px-3 py-2 text-sm border-2 border-border dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-gray-700 dark:text-gray-300 focus:border-comic-orange focus:outline-none resize-none"
+                    />
+                  </div>
+                  <div className="px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                    <p className="text-xs text-amber-700 dark:text-amber-400">저장하면 기존 대본이 새로 생성됩니다. 대본에서 직접 수정한 내용도 대체됩니다.</p>
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <button onClick={cancelRevise} className="px-3 py-1.5 text-xs font-bold text-gray-500 hover:text-gray-700 transition-colors">취소</button>
+                    <button onClick={() => submitRevise(idx)} className="px-4 py-1.5 text-xs font-bold bg-comic-orange text-white rounded-lg hover:-translate-y-0.5 transition-all flex items-center gap-1">
+                      <RefreshCw size={12} /> 수정 후 재생성
+                    </button>
+                  </div>
+                </div>
+              ) : editingIdx === idx ? (
                 /* 편집 모드 */
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 min-w-0">
@@ -473,20 +595,56 @@ export default function SeriesPage() {
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="shrink-0 text-sm font-bold text-comic-orange">{item.no}화</span>
                       <h3 className="font-bold text-ink-black dark:text-white truncate">{item.title}</h3>
+                      {/* 상태 뱃지 */}
+                      {item.status === 'script_generating' || item.status === 'script_regenerating' ? (
+                        <span className="shrink-0 flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold bg-blue-50 text-blue-500 dark:bg-blue-900/30 dark:text-blue-400 rounded-full">
+                          <Loader2 size={10} className="animate-spin" /> 생성 중
+                        </span>
+                      ) : item.has_images ? (
+                        <span className="shrink-0 flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold bg-green-50 text-green-600 dark:bg-green-900/30 dark:text-green-400 rounded-full">
+                          <Image size={10} /> 이미지
+                        </span>
+                      ) : item.episode_id ? (
+                        <span className="shrink-0 flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 rounded-full">
+                          <PenLine size={10} /> 대본
+                        </span>
+                      ) : (
+                        <span className="shrink-0 px-2 py-0.5 text-[10px] font-bold bg-gray-100 text-gray-500 dark:bg-zinc-800 dark:text-zinc-500 rounded-full">
+                          아웃라인
+                        </span>
+                      )}
                     </div>
                     {/* 액션 버튼들 */}
                     <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
-                      {item.episode_id ? (
-                        /* 에피소드 생성됨 — 수정 불가 */
-                        <span className="text-[10px] text-gray-400 dark:text-zinc-600" title="에피소드가 연결되어 수정할 수 없습니다">🔒</span>
+                      {item.has_images ? (
+                        /* 이미지 완전 잠금 */
+                        <span className="p-1 text-gray-300 dark:text-zinc-600 cursor-default" title="이미지가 생성된 회차는 수정·병합·분할할 수 없습니다">
+                          <Lock size={14} />
+                        </span>
+                      ) : item.episode_id ? (
+                        /* 대본 회차: 병합 허용, 분할 금지, 편집 → revise */
+                        <>
+                          {idx < outline.length - 1 && !outline[idx + 1]?.has_images && (
+                            <button onClick={() => handleMerge(item.no, outline[idx + 1].no)} disabled={jobRunning}
+                              title={`${item.no}화+${item.no + 1}화 병합 (대본 재생성)`}
+                              className="p-1 text-gray-400 hover:text-purple-500 transition-colors disabled:opacity-30">
+                              <Merge size={14} />
+                            </button>
+                          )}
+                          <span className="p-1 text-gray-300 dark:text-zinc-700 cursor-default" title="대본이 있는 회차는 분할할 수 없습니다. [수정 후 재생성]으로 내용을 조정하세요.">
+                            <Split size={14} />
+                          </span>
+                        </>
                       ) : (
+                        /* 아웃라인 회차: 자유 편집 */
                         <>
                           <button onClick={() => startEdit(idx)} disabled={jobRunning} title="수정"
                             className="p-1 text-gray-400 hover:text-comic-blue transition-colors disabled:opacity-30">
                             <Edit3 size={14} />
                           </button>
-                          {idx < outline.length - 1 && (
-                            <button onClick={() => handleMerge(item.no, outline[idx + 1].no)} disabled={jobRunning} title={`${item.no}화+${item.no + 1}화 병합`}
+                          {idx < outline.length - 1 && !outline[idx + 1]?.has_images && (
+                            <button onClick={() => handleMerge(item.no, outline[idx + 1].no)} disabled={jobRunning}
+                              title={`${item.no}화+${outline[idx + 1].no}화 병합`}
                               className="p-1 text-gray-400 hover:text-purple-500 transition-colors disabled:opacity-30">
                               <Merge size={14} />
                             </button>
@@ -501,14 +659,18 @@ export default function SeriesPage() {
                           </button>
                         </>
                       )}
-                      <button onClick={() => handleMove(idx, -1)} disabled={jobRunning || idx === 0 || !!item.episode_id} title={item.episode_id ? "에피소드 연결됨" : "위로"}
-                        className="p-1 text-gray-400 hover:text-gray-700 transition-colors disabled:opacity-20">
-                        <ArrowUp size={14} />
-                      </button>
-                      <button onClick={() => handleMove(idx, 1)} disabled={jobRunning || idx === outline.length - 1 || !!item.episode_id} title={item.episode_id ? "에피소드 연결됨" : "아래로"}
-                        className="p-1 text-gray-400 hover:text-gray-700 transition-colors disabled:opacity-20">
-                        <ArrowDown size={14} />
-                      </button>
+                      {!item.has_images && !item.episode_id && (
+                        <>
+                          <button onClick={() => handleMove(idx, -1)} disabled={jobRunning || idx === 0} title="위로"
+                            className="p-1 text-gray-400 hover:text-gray-700 transition-colors disabled:opacity-20">
+                            <ArrowUp size={14} />
+                          </button>
+                          <button onClick={() => handleMove(idx, 1)} disabled={jobRunning || idx === outline.length - 1} title="아래로"
+                            className="p-1 text-gray-400 hover:text-gray-700 transition-colors disabled:opacity-20">
+                            <ArrowDown size={14} />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                   <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed mb-2">{item.summary}</p>
@@ -517,20 +679,48 @@ export default function SeriesPage() {
                       훅: {item.hook}
                     </p>
                   )}
+                  {/* 재생성 권장 배너 (P6) */}
+                  {reviseAdviceNo === item.no && (
+                    <div className="mt-2 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                      <p className="text-xs text-amber-700 dark:text-amber-400 font-bold">
+                        {item.no}화는 이전 {item.no - 1}화 내용을 기준으로 생성되었습니다.
+                      </p>
+                      <p className="text-xs text-amber-600 dark:text-amber-500 mt-0.5">
+                        {item.no}화도 [수정 후 재생성]으로 갱신하는 것을 권장합니다.
+                      </p>
+                      <button onClick={() => setReviseAdviceNo(null)} className="mt-1 text-[10px] text-amber-500 hover:text-amber-700 transition-colors">닫기</button>
+                    </div>
+                  )}
                   {/* 대본 생성 / 완료 상태 */}
                   <div className="mt-3 pt-3 border-t border-border dark:border-zinc-800">
                     {item.episode_id ? (
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="flex items-center gap-1.5 text-xs font-bold text-green-600 dark:text-green-400">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className={`flex items-center gap-1.5 text-xs font-bold ${
+                          item.has_images
+                            ? 'text-green-600 dark:text-green-400'
+                            : 'text-blue-600 dark:text-blue-400'
+                        }`}>
                           <CheckCircle size={14} />
-                          {item.status === 'script_done' ? '대본 완료' : '에피소드 생성됨'}
+                          {item.has_images ? '이미지 생성됨' : item.status === 'script_done' ? '대본 완료' : '에피소드 생성됨'}
                         </span>
-                        <button
-                          onClick={() => navigate(`/projects/${series.project_id}/episodes/${item.episode_id}/workflow`)}
-                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-comic-blue hover:text-white border border-comic-blue hover:bg-comic-blue rounded-lg transition-all"
-                        >
-                          <ExternalLink size={12} /> 열기
-                        </button>
+                        <div className="flex items-center gap-2">
+                          {/* 수정 후 재생성 버튼 — 대본 완료 + 이미지 없음 */}
+                          {!item.has_images && (
+                            <button
+                              onClick={() => startRevise(idx)}
+                              disabled={jobRunning}
+                              className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-comic-orange hover:text-white border border-comic-orange hover:bg-comic-orange rounded-lg transition-all disabled:opacity-50"
+                            >
+                              <RefreshCw size={12} /> 수정 후 재생성
+                            </button>
+                          )}
+                          <button
+                            onClick={() => navigate(`/projects/${series.project_id}/episodes/${item.episode_id}/workflow`)}
+                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-comic-blue hover:text-white border border-comic-blue hover:bg-comic-blue rounded-lg transition-all"
+                          >
+                            <ExternalLink size={12} /> 열기
+                          </button>
+                        </div>
                       </div>
                     ) : (
                       <button

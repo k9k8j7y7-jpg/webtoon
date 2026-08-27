@@ -24,6 +24,7 @@ from app.database import get_db
 from app.auth.deps import get_current_user
 from app.users.models import User
 from app.projects.models import Project, Series, Episode
+from app.storyboard.models import Cut
 from app.characters.models import Character, EpisodeCharacter
 from app.jobs import create_job, run_job_in_background
 from app.workflow.gate import approve_gate
@@ -34,6 +35,7 @@ from .schemas import (
     OutlineRegenerateRequest,
     OutlineMergeRequest,
     OutlineSplitRequest,
+    OutlineReviseRequest,
     SeriesResponse,
     SeriesListItem,
 )
@@ -78,22 +80,38 @@ def _renumber(outline: list[dict]) -> list[dict]:
     return outline
 
 
+def _episode_image_counts(db: Session, ep_ids: list[int]) -> dict[int, int]:
+    """에피소드별 생성된 컷 이미지 수 집계."""
+    if not ep_ids:
+        return {}
+    from sqlalchemy import func
+    rows = (
+        db.query(Cut.episode_id, func.count(Cut.id))
+        .filter(Cut.episode_id.in_(ep_ids), Cut.image_url.isnot(None))
+        .group_by(Cut.episode_id)
+        .all()
+    )
+    return {eid: cnt for eid, cnt in rows}
+
+
 def _series_to_dict(s: Series, db: Session | None = None) -> dict:
+    outline = list(s.outline) if s.outline else []
     result = {
         "id": s.id,
         "project_id": s.project_id,
         "title": s.title,
         "bible": s.bible,
-        "outline": s.outline,
+        "outline": outline,
         "created_at": s.created_at.isoformat(),
         "updated_at": s.updated_at.isoformat(),
     }
-    # 에피소드 진행 집계 (2단계-2)
-    if db and s.outline:
-        ep_ids = [item.get("episode_id") for item in s.outline if item.get("episode_id")]
+    # 에피소드 진행 집계 + has_images
+    if db and outline:
+        ep_ids = [item.get("episode_id") for item in outline if item.get("episode_id")]
         if ep_ids:
             episodes = db.query(Episode).filter(Episode.id.in_(ep_ids), Episode.deleted_at.is_(None)).all()
             ep_map = {e.id: e for e in episodes}
+            img_counts = _episode_image_counts(db, ep_ids)
             script_done = 0
             image_done = 0
             for eid in ep_ids:
@@ -106,9 +124,15 @@ def _series_to_dict(s: Series, db: Session | None = None) -> dict:
                     script_done += 1
                 if gates.get("5_review", {}).get("status") == "approved":
                     image_done += 1
+            # outline 각 항목에 has_images 추가
+            for item in outline:
+                eid = item.get("episode_id")
+                item["has_images"] = bool(img_counts.get(eid, 0)) if eid else False
+            result["outline"] = outline
             result["progress"] = {
                 "script_done": script_done,
                 "image_done": image_done,
+                "image_count": sum(1 for eid in ep_ids if img_counts.get(eid, 0)),
                 "episode_count": len(ep_ids),
             }
     return result
@@ -175,8 +199,10 @@ def list_series(
         ep_ids = [item.get("episode_id") for item in outline if item.get("episode_id")]
         script_done = 0
         image_done = 0
+        image_count = 0
         if ep_ids:
             episodes = db.query(Episode).filter(Episode.id.in_(ep_ids), Episode.deleted_at.is_(None)).all()
+            img_counts = _episode_image_counts(db, ep_ids)
             for ep in episodes:
                 gs = ep.gate_status or {}
                 gates = gs.get("gates", {})
@@ -184,6 +210,7 @@ def list_series(
                     script_done += 1
                 if gates.get("5_review", {}).get("status") == "approved":
                     image_done += 1
+            image_count = sum(1 for eid in ep_ids if img_counts.get(eid, 0))
         result.append({
             "id": s.id,
             "title": s.title,
@@ -191,6 +218,7 @@ def list_series(
             "episode_count": len(ep_ids),
             "script_done": script_done,
             "image_done": image_done,
+            "image_count": image_count,
             "created_at": s.created_at.isoformat(),
         })
 
@@ -470,7 +498,12 @@ async def merge_outline(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """인접 두 회차 병합 (AI 1콜)."""
+    """인접 두 회차 병합 (AI 1콜).
+
+    대본 회차도 허용 (이미지 있으면 409):
+    - 앞 회차 에피소드 재사용 → 대본 재생성
+    - 뒤 회차 에피소드 삭제 (episode_characters 정리, 캐릭터 본체 무손실)
+    """
     series = _get_series_with_auth(db, series_id, current_user.id)
 
     if not series.outline:
@@ -486,19 +519,32 @@ async def merge_outline(
     if not item_a or not item_b:
         raise HTTPException(status_code=400, detail="해당 회차를 찾을 수 없습니다.")
 
-    # episode_id 방어
-    if item_a.get("episode_id") or item_b.get("episode_id"):
-        raise HTTPException(status_code=409, detail="에피소드가 연결된 회차는 병합할 수 없습니다.")
-
     # 순서 보장 (no_a < no_b)
     if body.no_a > body.no_b:
         item_a, item_b = item_b, item_a
+
+    # 이미지 방어: 어느 한쪽에 이미지 있으면 409
+    for check_item in [item_a, item_b]:
+        eid = check_item.get("episode_id")
+        if eid:
+            img_cnt = db.query(Cut).filter(Cut.episode_id == eid, Cut.image_url.isnot(None)).count()
+            if img_cnt > 0:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"{check_item['no']}화에 이미지가 생성되어 병합할 수 없습니다.",
+                )
+
+    # 대본 회차 여부 판정
+    front_ep_id = item_a.get("episode_id")  # 앞 회차 에피소드 (재사용)
+    back_ep_id = item_b.get("episode_id")   # 뒤 회차 에피소드 (삭제 대상)
+    has_scripts = bool(front_ep_id or back_ep_id)
 
     job = create_job(total=1)
 
     async def _run():
         from app.database import SessionLocal
         from app.jobs import update_job
+        from sqlalchemy import text
 
         sess = SessionLocal()
         try:
@@ -507,6 +553,31 @@ async def merge_outline(
             s = sess.query(Series).filter(Series.id == series_id).first()
             if not s:
                 raise ValueError("Series not found")
+
+            merged_title = merged.get("title", item_a["title"])
+            merged_summary = merged.get("summary", "")
+            merged_hook = item_b.get("hook", "")  # 뒤 회차 훅 승계
+
+            # 대본 회차 병합: 앞 에피소드 재사용 + 대본 재생성
+            surviving_ep_id = front_ep_id
+            if has_scripts and not surviving_ep_id:
+                # 앞에 에피소드 없으면 뒤 것을 재사용
+                surviving_ep_id = back_ep_id
+
+            if has_scripts and surviving_ep_id:
+                # 뒤 에피소드 삭제 (앞과 다른 경우만)
+                delete_ep_id = back_ep_id if back_ep_id and back_ep_id != surviving_ep_id else (
+                    front_ep_id if front_ep_id and front_ep_id != surviving_ep_id else None
+                )
+                if delete_ep_id:
+                    # episode_characters 삭제 (캐릭터 본체 무손실)
+                    sess.execute(text("DELETE FROM episode_characters WHERE episode_id = :eid"), {"eid": delete_ep_id})
+                    # 에피소드 soft delete
+                    del_ep = sess.query(Episode).filter(Episode.id == delete_ep_id).first()
+                    if del_ep:
+                        from datetime import datetime, timezone
+                        del_ep.deleted_at = datetime.now(timezone.utc)
+                    sess.flush()
 
             current = list(s.outline or [])
             no_a_val = min(body.no_a, body.no_b)
@@ -517,11 +588,11 @@ async def merge_outline(
                 if item["no"] == no_a_val:
                     new_outline.append({
                         "no": 0,  # 리넘버링 예정
-                        "title": merged.get("title", item_a["title"]),
-                        "summary": merged.get("summary", ""),
-                        "hook": item_b.get("hook", ""),  # 뒤 회차 훅 승계
-                        "episode_id": None,
-                        "status": "outline",
+                        "title": merged_title,
+                        "summary": merged_summary,
+                        "hook": merged_hook,
+                        "episode_id": surviving_ep_id if has_scripts else None,
+                        "status": "script_regenerating" if surviving_ep_id else "outline",
                     })
                 elif item["no"] == no_b_val:
                     continue  # 삭제
@@ -529,10 +600,84 @@ async def merge_outline(
                     new_outline.append(item)
 
             s.outline = _renumber(new_outline)
+            flag_modified(s, "outline")
             sess.commit()
+
+            # 대본 재생성 (surviving episode가 있는 경우)
+            if surviving_ep_id:
+                from app.script.service import generate_script
+
+                bible = s.bible or {}
+                merged_item = next((x for x in s.outline if x.get("episode_id") == surviving_ep_id), None)
+                if merged_item:
+                    planning = _derive_planning_from_bible(bible, merged_item)
+
+                    # planning + episode 갱신
+                    ep = sess.query(Episode).filter(Episode.id == surviving_ep_id).first()
+                    if ep:
+                        sd = dict(ep.script) if ep.script else {}
+                        sd["planning"] = planning
+                        ep.script = sd
+                        ep.title = merged_item["title"]
+                        ep.logline = planning["logline"]
+                        ep.synopsis = planning["synopsis"]
+                        flag_modified(ep, "script")
+                        sess.commit()
+
+                    # 시리즈 컨텍스트
+                    merged_no = merged_item["no"]
+                    ol = list(s.outline)
+                    prev_item = next((x for x in ol if x["no"] == merged_no - 1), None) if merged_no > 1 else None
+                    series_context = {
+                        "synopsis": bible.get("synopsis", ""),
+                        "world": bible.get("world"),
+                        "characters": bible.get("characters", []),
+                        "episode_no": merged_no,
+                        "total_episodes": len(ol),
+                        "current_summary": merged_item.get("summary", ""),
+                        "current_hook": merged_item.get("hook", ""),
+                        "prev_summary": prev_item.get("summary") if prev_item else None,
+                        "prev_hook": prev_item.get("hook") if prev_item else None,
+                    }
+
+                    result = await generate_script(planning, series_context=series_context)
+
+                    ep = sess.query(Episode).filter(Episode.id == surviving_ep_id).first()
+                    if ep:
+                        sd = dict(ep.script) if ep.script else {}
+                        sd["script"] = result
+                        ep.script = sd
+                        flag_modified(ep, "script")
+
+                    # status 갱신
+                    s2 = sess.query(Series).filter(Series.id == series_id).first()
+                    if s2 and s2.outline:
+                        ol2 = list(s2.outline)
+                        for it in ol2:
+                            if it.get("episode_id") == surviving_ep_id:
+                                it["status"] = "script_done"
+                                break
+                        s2.outline = ol2
+                        flag_modified(s2, "outline")
+
+                    sess.commit()
+
             update_job(job.job_id, status="completed", progress={"done": 1, "total": 1}, result={"series_id": series_id})
         except Exception as e:
             sess.rollback()
+            # 실패 시 status 복원
+            try:
+                s = sess.query(Series).filter(Series.id == series_id).first()
+                if s and s.outline:
+                    ol = list(s.outline)
+                    for it in ol:
+                        if it.get("status") == "script_regenerating":
+                            it["status"] = "script_done"
+                    s.outline = ol
+                    flag_modified(s, "outline")
+                    sess.commit()
+            except Exception:
+                sess.rollback()
             logger.error("Outline merge failed: %s", e, exc_info=True)
             raise
         finally:
@@ -563,7 +708,7 @@ async def split_outline_ep(
         raise HTTPException(status_code=400, detail=f"{body.no}화를 찾을 수 없습니다.")
 
     if target.get("episode_id"):
-        raise HTTPException(status_code=409, detail="에피소드가 연결된 회차는 분할할 수 없습니다.")
+        raise HTTPException(status_code=409, detail="대본이 생성된 회차는 분할할 수 없습니다. [수정 후 재생성]으로 내용을 조정하세요.")
 
     job = create_job(total=1)
 
@@ -855,4 +1000,163 @@ async def generate_episode_script(
         "episode_id": episode_id,
         "episode_no": episode_no,
         "link_result": link_result,
+    }
+
+
+# ── 수정 후 재생성 (P6) ──
+
+
+@router.post("/series/{series_id}/outline/{episode_no}/revise")
+async def revise_outline(
+    series_id: int,
+    episode_no: int,
+    body: OutlineReviseRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """대본 있는 회차의 아웃라인 수정 → 대본 재생성.
+
+    1. outline 항목 갱신 (title/summary/hook)
+    2. Gate 1 planning 동기 갱신
+    3. Gate 2 대본 재생성 job 시작
+    이미지 있으면 409.
+    """
+    series = _get_series_with_auth(db, series_id, current_user.id)
+
+    if not series.outline:
+        raise HTTPException(status_code=400, detail="아웃라인이 없습니다.")
+
+    outline = list(series.outline)
+    target_item = next((x for x in outline if x["no"] == episode_no), None)
+    if not target_item:
+        raise HTTPException(status_code=404, detail=f"{episode_no}화를 찾을 수 없습니다.")
+
+    episode_id = target_item.get("episode_id")
+    if not episode_id:
+        raise HTTPException(status_code=400, detail="대본이 아직 생성되지 않은 회차입니다. 일반 편집을 사용하세요.")
+
+    episode = db.query(Episode).filter(Episode.id == episode_id, Episode.deleted_at.is_(None)).first()
+    if not episode:
+        raise HTTPException(status_code=404, detail="에피소드를 찾을 수 없습니다.")
+
+    # 이미지 존재 확인 → 잠금
+    img_count = (
+        db.query(Cut)
+        .filter(Cut.episode_id == episode_id, Cut.image_url.isnot(None))
+        .count()
+    )
+    if img_count > 0:
+        raise HTTPException(status_code=409, detail="이미지가 생성된 회차는 수정할 수 없습니다.")
+
+    # a. outline 항목 갱신
+    if body.title is not None:
+        target_item["title"] = body.title
+    if body.summary is not None:
+        target_item["summary"] = body.summary
+    if body.hook is not None:
+        target_item["hook"] = body.hook
+    target_item["status"] = "script_regenerating"
+
+    series.outline = outline
+    flag_modified(series, "outline")
+
+    # b. Gate 1 planning 동기 갱신
+    bible = series.bible or {}
+    planning = _derive_planning_from_bible(bible, target_item)
+    script_data = dict(episode.script) if episode.script else {}
+    script_data["planning"] = planning
+    episode.script = script_data
+    episode.title = target_item["title"]
+    episode.logline = planning["logline"]
+    episode.synopsis = planning["synopsis"]
+    flag_modified(episode, "script")
+
+    db.commit()
+
+    # c. 시리즈 컨텍스트 조립 + 대본 재생성 job
+    job = create_job(total=1)
+
+    prev_item = next((x for x in outline if x["no"] == episode_no - 1), None) if episode_no > 1 else None
+    series_context = {
+        "synopsis": bible.get("synopsis", ""),
+        "world": bible.get("world"),
+        "characters": bible.get("characters", []),
+        "episode_no": episode_no,
+        "total_episodes": len(outline),
+        "current_summary": target_item.get("summary", ""),
+        "current_hook": target_item.get("hook", ""),
+        "prev_summary": prev_item.get("summary") if prev_item else None,
+        "prev_hook": prev_item.get("hook") if prev_item else None,
+    }
+
+    # 다음 회차 재생성 권장 플래그
+    next_item = next((x for x in outline if x["no"] == episode_no + 1), None)
+    next_has_script = bool(next_item and next_item.get("episode_id"))
+
+    async def _run_revise():
+        from app.database import SessionLocal
+        from app.jobs import update_job
+        from app.script.service import generate_script
+
+        sess = SessionLocal()
+        try:
+            result = await generate_script(planning, series_context=series_context)
+
+            ep = sess.query(Episode).filter(Episode.id == episode_id).first()
+            if not ep:
+                raise ValueError("Episode not found")
+
+            # 대본 저장 (기존 대체)
+            sd = dict(ep.script) if ep.script else {}
+            sd["script"] = result
+            ep.script = sd
+            flag_modified(ep, "script")
+            sess.flush()
+
+            # outline status 갱신
+            s = sess.query(Series).filter(Series.id == series_id).first()
+            if s and s.outline:
+                ol = list(s.outline)
+                for item in ol:
+                    if item["no"] == episode_no:
+                        item["status"] = "script_done"
+                        break
+                s.outline = ol
+                flag_modified(s, "outline")
+
+            sess.commit()
+            update_job(job.job_id, status="completed", progress={"done": 1, "total": 1}, result={
+                "series_id": series_id,
+                "episode_id": episode_id,
+                "episode_no": episode_no,
+                "next_has_script": next_has_script,
+            })
+        except Exception as e:
+            sess.rollback()
+            try:
+                s = sess.query(Series).filter(Series.id == series_id).first()
+                if s and s.outline:
+                    ol = list(s.outline)
+                    for item in ol:
+                        if item["no"] == episode_no:
+                            item["status"] = "script_done"  # 실패 시 원래 상태로
+                            break
+                    s.outline = ol
+                    flag_modified(s, "outline")
+                    sess.commit()
+            except Exception:
+                sess.rollback()
+            logger.error("Revise script generation failed: %s", e, exc_info=True)
+            raise
+        finally:
+            sess.close()
+
+    run_job_in_background(background_tasks, job.job_id, _run_revise())
+
+    return {
+        "job_id": job.job_id,
+        "episode_id": episode_id,
+        "episode_no": episode_no,
+        "next_has_script": next_has_script,
     }

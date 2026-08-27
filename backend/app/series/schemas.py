@@ -39,6 +39,12 @@ class OutlineSplitRequest(BaseModel):
     no: int = Field(..., ge=1)
 
 
+class OutlineReviseRequest(BaseModel):
+    title: str | None = None
+    summary: str | None = None
+    hook: str | None = None
+
+
 # ── 응답 ──
 
 
