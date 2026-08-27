@@ -3,7 +3,7 @@ import api, { pollJob } from '../../api/client';
 import JobProgress from '../JobProgress';
 import BubbleOverlay, { BubbleMiniIcon, STYLE_ORDER, STYLE_LABELS } from '../BubbleOverlay';
 import { resolveBubbleStyle } from '../../utils/bubbleMapping';
-import { Image, RefreshCw, RotateCcw, Download, Check, AlertTriangle, MessageSquare, Save, X, ZoomIn, ChevronLeft, ChevronRight, Pencil } from 'lucide-react';
+import { Image, RefreshCw, RotateCcw, Download, Check, AlertTriangle, MessageSquare, Save, X, ZoomIn, ChevronLeft, ChevronRight, Pencil, SlidersHorizontal, ExternalLink } from 'lucide-react';
 import CutEditor from '../CutEditor';
 import SfxLayer from '../SfxLayer';
 import ExportProgressModal from '../ExportProgressModal';
@@ -308,17 +308,86 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
     }
   };
 
-  // ── 캐릭터 이름 맵 (ref_key → 한글 이름) ──
+  // ── 캐릭터 이름 맵 (ref_key → 한글 이름) + 전체 목록 ──
   const [charNameMap, setCharNameMap] = useState({});
+  const [episodeCharacters, setEpisodeCharacters] = useState([]);
   useEffect(() => {
     api.get(`/projects/${projectId}/episodes/${episodeId}/characters`)
       .then(({ data }) => {
         const map = {};
         data.forEach(c => { if (c.ref_key && c.name) map[c.ref_key] = c.name; });
         setCharNameMap(map);
+        setEpisodeCharacters(data);
       })
       .catch(() => {});
   }, [projectId, episodeId]);
+
+  // ── 콘티 수정 모달 ──
+  const [storyboardEdit, setStoryboardEdit] = useState(null); // { cut, form: { shot, action, characters } }
+  const [savingStoryboard, setSavingStoryboard] = useState(false);
+
+  const openStoryboardEditor = (cut) => {
+    const currentCharIds = (cut.characters || []).map(c => typeof c === 'string' ? c : c.character_id);
+    setStoryboardEdit({
+      cut,
+      form: {
+        shot: cut.shot || 'full',
+        action: cut.action || '',
+        characterIds: currentCharIds,
+      },
+    });
+  };
+
+  const updateStoryboardForm = (field, value) => {
+    setStoryboardEdit(prev => prev ? { ...prev, form: { ...prev.form, [field]: value } } : prev);
+  };
+
+  const toggleStoryboardChar = (refKey) => {
+    setStoryboardEdit(prev => {
+      if (!prev) return prev;
+      const ids = prev.form.characterIds;
+      const next = ids.includes(refKey) ? ids.filter(id => id !== refKey) : [...ids, refKey];
+      return { ...prev, form: { ...prev.form, characterIds: next } };
+    });
+  };
+
+  const saveStoryboard = async (andRegenerate = false) => {
+    if (!storyboardEdit) return;
+    setSavingStoryboard(true);
+    try {
+      const { cut, form } = storyboardEdit;
+      // 기존 캐릭터 데이터에서 emotion/pose 보존, 새로 추가된 캐릭터는 기본값
+      const oldChars = cut.characters || [];
+      const characters = form.characterIds.map(id => {
+        const existing = oldChars.find(c => (typeof c === 'string' ? c : c.character_id) === id);
+        if (existing && typeof existing === 'object') return existing;
+        return { character_id: id, emotion: 'neutral', pose: '' };
+      });
+
+      await api.put(`/cuts/${cut.cut_id}`, {
+        shot: form.shot,
+        action: form.action,
+        characters,
+      });
+
+      if (andRegenerate) {
+        const { data } = await api.post(`/cuts/${cut.cut_id}/regenerate`, { mode: 'reseed' });
+        setStoryboardEdit(null);
+        setJob({ job_id: data.job_id, status: 'processing', progress: { done: 0, total: 1 } });
+        await pollJob(data.job_id, setJob);
+        setJob(null);
+      } else {
+        setStoryboardEdit(null);
+      }
+
+      setCacheBuster(Date.now());
+      await loadCuts();
+    } catch (err) {
+      setError(err.response?.data?.detail || err.message);
+    } finally {
+      setSavingStoryboard(false);
+    }
+  };
 
   const pendingCuts = cuts.filter(c => c.status === 'pending' || c.status === 'invalidated');
   const hasImages = cuts.some(c => c.image_url);
@@ -488,6 +557,14 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
                       className="flex items-center gap-1 px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-full font-bold shadow-sm hover:bg-purple-200 dark:hover:bg-purple-900/50 text-[11px] transition-colors"
                     >
                       <Pencil size={11} /> 편집
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); openStoryboardEditor(cut); }}
+                      disabled={!!job}
+                      title="콘티 수정 (지문·캐릭터·샷 타입)"
+                      className="flex items-center gap-1 px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-full font-bold shadow-sm hover:bg-amber-200 dark:hover:bg-amber-900/50 text-[11px] transition-colors disabled:opacity-50"
+                    >
+                      <SlidersHorizontal size={11} /> 콘티
                     </button>
                     {cut.dialogue && cut.dialogue.length > 0 && (
                       <button
@@ -693,6 +770,111 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
                 className="flex items-center gap-1 px-4 py-2 bg-purple-600 text-white rounded-full text-sm font-bold hover:bg-purple-700 hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50"
               >
                 <Save size={14} /> {savingDialogue ? '저장 중...' : '저장 (재조판)'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 콘티 수정 모달 */}
+      {storyboardEdit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setStoryboardEdit(null)}>
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl p-6 max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto shadow-2xl border-2 border-border dark:border-zinc-700" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2">
+                <SlidersHorizontal size={18} className="text-amber-500" /> 콘티 수정 — #{storyboardEdit.cut.cut_number}
+              </h3>
+              <button onClick={() => setStoryboardEdit(null)} className="p-1 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full">
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* 샷 타입 */}
+            <div className="mb-4">
+              <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-2">샷 타입</label>
+              <div className="flex gap-2 flex-wrap">
+                {['long', 'full', 'bust', 'close_up'].map(s => (
+                  <button
+                    key={s}
+                    onClick={() => updateStoryboardForm('shot', s)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
+                      storyboardEdit.form.shot === s
+                        ? 'bg-comic-blue text-white'
+                        : 'bg-gray-100 dark:bg-zinc-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-zinc-600'
+                    }`}
+                  >
+                    {shotLabel[s]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 등장 캐릭터 */}
+            <div className="mb-4">
+              <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-2">등장 캐릭터</label>
+              <div className="flex flex-wrap gap-2">
+                {episodeCharacters.map(c => (
+                  <button
+                    key={c.ref_key}
+                    onClick={() => toggleStoryboardChar(c.ref_key)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
+                      storyboardEdit.form.characterIds.includes(c.ref_key)
+                        ? 'bg-indigo-500 text-white'
+                        : 'bg-gray-100 dark:bg-zinc-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-zinc-600'
+                    }`}
+                  >
+                    {c.name}
+                  </button>
+                ))}
+                {episodeCharacters.length === 0 && (
+                  <span className="text-xs text-gray-400">연결된 캐릭터가 없습니다</span>
+                )}
+              </div>
+            </div>
+
+            {/* 지문 (액션) */}
+            <div className="mb-4">
+              <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">지문</label>
+              <textarea
+                value={storyboardEdit.form.action}
+                onChange={(e) => updateStoryboardForm('action', e.target.value)}
+                rows={4}
+                className="w-full px-3 py-2 border-2 border-border dark:border-zinc-700 rounded-xl text-sm bg-white dark:bg-zinc-800 text-ink-black dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
+                placeholder="이 컷에서 일어나는 장면을 묘사해주세요"
+              />
+            </div>
+
+            {/* 콘티 전체 보기 링크 */}
+            <a
+              href={`/WEBTOON/projects/${projectId}/episodes/${episodeId}/workflow`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-comic-blue hover:underline mb-4"
+            >
+              <ExternalLink size={12} /> 콘티 전체 보기 (게이트 4)
+            </a>
+
+            {/* 버튼 */}
+            <div className="flex justify-end gap-2 mt-2">
+              <button
+                onClick={() => setStoryboardEdit(null)}
+                className="px-4 py-2 text-sm font-bold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => saveStoryboard(false)}
+                disabled={savingStoryboard}
+                className="flex items-center gap-1 px-4 py-2 bg-gray-200 dark:bg-zinc-700 text-gray-700 dark:text-gray-300 rounded-full text-sm font-bold hover:bg-gray-300 dark:hover:bg-zinc-600 transition-all shadow-sm disabled:opacity-50"
+              >
+                <Save size={14} /> 저장만
+              </button>
+              <button
+                onClick={() => saveStoryboard(true)}
+                disabled={savingStoryboard || !!job}
+                className="flex items-center gap-1 px-4 py-2 bg-amber-500 text-white rounded-full text-sm font-bold hover:bg-amber-600 hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50"
+              >
+                <RefreshCw size={14} /> {savingStoryboard ? '처리 중...' : '저장 후 재생성'}
               </button>
             </div>
           </div>
