@@ -10,4 +10,7 @@ backend/app/**/__pycache__/
 frontend/node_modules/
 frontend/dist/
 *.pyc
+*_dump.sql
+backup_*.sql
+project_t_before_*.sql
 0
