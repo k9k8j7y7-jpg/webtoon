@@ -1,6 +1,20 @@
 # 진행 상태 추적
 
-## 현재: 콘티 인라인 수정 완료, 캐릭터 외형 명세 주입 착수 예정 (2026-08-27)
+## 현재: 0-2 appearance_en 완료 + P5 ref_key 버그 수정 (2026-08-31)
+
+### 0-2 캐릭터 외형 명세 주입 — 완료 (2026-08-31)
+- step13 마이그레이션: `characters.appearance_en` VARCHAR(500) 추가
+- `build_appearance_en()`: 구조 필드(영어) + detail_notes(한→영 Gemini 번역) 조립
+- 컷 프롬프트 주입: `prompts/service.py`에 APPEARANCE_ANCHOR 앵커 + Image N 태그
+- `char_descs` 구조 변경: `dict[str, str]` → `dict[str, dict]` (name + appearance_en)
+- 백필 API: `POST /characters/backfill-appearance` — 25/27 성공 (2건은 description=None)
+- Gate3 UI: "고정 외형 메모" 라벨 + 힌트
+- 검증: 남편 캐릭터 ep20_c001 재생성 → v3(외형 없음) vs v4(안경 명세) 비교, 안경 유지 확인
+
+### P5 ref_key 버그 수정 — 완료 (2026-08-31)
+- 근본 원인: 바이블 생성 시 characters에 ref_key 필드 없음 → char_{i} 폴백 → 대본은 임의 키 → 100% 불일치 → 참조 이미지 0건
+- 수정: (1) BIBLE_SYSTEM_INSTRUCTION에 ref_key 필드 추가 (2) `_ensure_ref_keys()` 후방 호환 (3) 스크립트 프롬프트 강화
+- 검증: 테스트 시리즈 4화 생성 → 바이블 ref_key 4개 정상 → 1화 대본 character_id 3/3 일치, 불일치 0건
 
 ### 게이트5 콘티 인라인 수정 — 완료 (2026-08-27)
 - Gate5 컷 카드에 [콘티] 버튼 → 모달 (샷 타입/등장 캐릭터/지문)
