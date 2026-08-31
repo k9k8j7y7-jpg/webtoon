@@ -24,6 +24,7 @@ BIBLE_SYSTEM_INSTRUCTION = """너는 웹툰 시리즈(연작) 기획 전문가�
   "world": "세계관 요약 (배경, 시대, 특수 규칙)",
   "characters": [
     {
+      "ref_key": "영문 snake_case 식별자 (예: hero, me, dodo). 대본에서 이 값으로 캐릭터를 참조한다",
       "name": "캐릭터 이름",
       "role": "주인공/조연/적대자 등",
       "description": "외형·성격·동기 한 줄"

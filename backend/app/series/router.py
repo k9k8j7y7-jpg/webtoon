@@ -758,6 +758,42 @@ async def split_outline_ep(
 # ── 회차 대본 생성 (P5) ──
 
 
+def _ensure_ref_keys(characters: list[dict]) -> list[dict]:
+    """바이블 캐릭터에 ref_key가 없으면 이름 기반으로 자동 생성."""
+    import re
+    import unicodedata
+
+    def _name_to_key(name: str) -> str:
+        """한글/영문 이름 → snake_case ref_key."""
+        # 영문만 남기기 시도
+        ascii_name = name.lower().strip()
+        # 괄호 안 내용 제거 (예: "나 (주인공)" → "나")
+        ascii_name = re.sub(r"\s*\(.*?\)\s*", "", ascii_name).strip()
+        # 영문이면 그대로 사용
+        if re.match(r"^[a-z]", ascii_name):
+            return re.sub(r"[^a-z0-9]+", "_", ascii_name).strip("_")
+        # 한글이면 간단 로마자 변환 (자주 쓰는 이름 패턴)
+        # 한글을 제거하고 남는 영문이 있으면 사용
+        alpha_only = re.sub(r"[^a-z0-9]", "", ascii_name)
+        if alpha_only:
+            return alpha_only
+        # 최종 폴백: char_{index} (호출 측에서 처리)
+        return ""
+
+    used_keys = set()
+    result = []
+    for i, char in enumerate(characters):
+        c = dict(char)
+        if not c.get("ref_key"):
+            key = _name_to_key(c.get("name", ""))
+            if not key or key in used_keys:
+                key = f"char_{i}"
+            c["ref_key"] = key
+        used_keys.add(c["ref_key"])
+        result.append(c)
+    return result
+
+
 def _derive_planning_from_bible(bible: dict, outline_item: dict) -> dict:
     """바이블 + 아웃라인 항목 → Gate 1 planning 파생.
 
@@ -766,12 +802,14 @@ def _derive_planning_from_bible(bible: dict, outline_item: dict) -> dict:
     summary = outline_item.get("summary", "")
     first_sentence = summary.split(".")[0] + "." if "." in summary else summary
 
+    characters = _ensure_ref_keys(bible.get("characters", []))
+
     return {
         "title": outline_item.get("title", ""),
         "logline": first_sentence,
         "synopsis": summary,
         "world": bible.get("world", ""),
-        "characters": bible.get("characters", []),
+        "characters": characters,
         "derived_from_series": True,
     }
 

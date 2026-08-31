@@ -4,13 +4,18 @@ PRD 4.2: 캐릭터 시트(정면/표정)를 생성해 불변 자산으로 저장
 MVP: 정면 1 + 표정 2 = 3장. 의상 default 1벌 자동.
 """
 
+import logging
+
 from sqlalchemy.orm import Session
 
 from app.characters.models import Character, CharacterImage, CharacterOutfit, EpisodeCharacter
 from app.adapters.gemini_image import get_image_adapter
+from app.adapters.gemini import generate_text
 from app.storage import upload_image
 from app.jobs import get_job, update_job
 from app.database import SessionLocal
+
+logger = logging.getLogger(__name__)
 
 
 def build_character_description(character) -> str:
@@ -35,6 +40,55 @@ def build_character_description(character) -> str:
     if character.detail_notes:
         desc = f"{desc}. {character.detail_notes}" if desc else character.detail_notes
     return desc
+
+
+async def build_appearance_en(character) -> str:
+    """구조화 필드 + detail_notes → 영문 외형 명세 (컷 프롬프트 주입용).
+
+    구조화 필드는 이미 영어이므로 그대로 조립하고,
+    detail_notes(한글 가능)는 Gemini 텍스트로 영어 번역한다.
+    """
+    # 구조화 필드 → 영어 조립 (build_character_description과 동일 구조)
+    parts = []
+    if character.age_group:
+        parts.append(character.age_group)
+    if character.gender:
+        parts.append(character.gender)
+    if character.hair_color and character.hair_style:
+        parts.append(f"{character.hair_color} {character.hair_style} hair")
+    elif character.hair_color:
+        parts.append(f"{character.hair_color} hair")
+    elif character.hair_style:
+        parts.append(f"{character.hair_style} hair")
+    if character.body_type:
+        parts.append(f"{character.body_type} build")
+
+    structured_en = ", ".join(parts)
+
+    # detail_notes 번역 (있을 때만)
+    detail_en = ""
+    if character.detail_notes and character.detail_notes.strip():
+        try:
+            detail_en = await generate_text(
+                prompt=(
+                    f"Translate the following Korean character appearance notes to concise English. "
+                    f"Keep only visual/physical traits. Output ONLY the English text, nothing else.\n\n"
+                    f"{character.detail_notes}"
+                ),
+                temperature=0.2,
+                max_output_tokens=1024,
+            )
+            detail_en = detail_en.strip()
+        except Exception as e:
+            logger.warning("appearance_en translation failed for character %s: %s", character.id, e)
+            detail_en = character.detail_notes  # 폴백: 원문 그대로
+
+    if structured_en and detail_en:
+        result = f"{structured_en}. {detail_en}"
+    else:
+        result = structured_en or detail_en or ""
+    # 줄바꿈 → 공백 (프롬프트에 깔끔하게 주입)
+    return result.replace("\n", " ").strip()
 
 
 async def generate_character_sheets(
@@ -167,6 +221,23 @@ async def generate_character_sheets(
                     seed=img_result.seed,
                 )
                 db.add(char_img)
+
+            # appearance_en 초안 생성 (description 기반)
+            if not character.appearance_en and description:
+                try:
+                    character.appearance_en = await generate_text(
+                        prompt=(
+                            f"Extract ONLY the fixed visual/physical appearance traits from this character description. "
+                            f"Output concise English phrases (e.g. 'black horn-rimmed glasses, short black hair, slim build'). "
+                            f"Exclude personality, mood, role. Output ONLY the traits, nothing else.\n\n"
+                            f"{description}"
+                        ),
+                        temperature=0.2,
+                        max_output_tokens=1024,
+                    )
+                    character.appearance_en = character.appearance_en.strip().replace("\n", " ")
+                except Exception as e:
+                    logger.warning("appearance_en init failed for %s: %s", ref_key, e)
 
             results.append({"ref_key": ref_key, "name": name, "status": "generated"})
 

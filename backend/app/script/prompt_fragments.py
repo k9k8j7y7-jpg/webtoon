@@ -35,10 +35,13 @@ def build_series_context_block(series_context: dict) -> str:
     if series_context.get("characters"):
         char_lines = []
         for c in series_context["characters"]:
+            ref_key = c.get("ref_key", "")
             name = c.get("name", "")
             role = c.get("role", "")
             desc = c.get("description", "")
             line = f"- {name}"
+            if ref_key:
+                line = f"- [{ref_key}] {name}"
             if role:
                 line += f" ({role})"
             if desc:
@@ -71,5 +74,5 @@ SERIES_SCRIPT_INSTRUCTION_ADDON = """
 - 이번 회차의 요약과 엔딩 훅 방향을 반드시 따를 것.
 - 직전 회차가 있으면 그 엔딩과 자연스럽게 이어질 것.
 - 이번 회차에서 이야기를 완결하지 말고, 엔딩 훅에서 끊을 것.
-- 시리즈 인물의 ref_key를 기획안의 것과 일치시킬 것.
+- character_id는 반드시 [주요 인물] 목록의 대괄호 안 ref_key를 그대로 사용할 것. 새 키를 만들지 말 것.
 """

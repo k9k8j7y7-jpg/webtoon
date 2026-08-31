@@ -55,9 +55,12 @@ def _get_character_references(episode_id: int, character_ids: list[str], db: Ses
         if not character:
             continue
 
-        # A파트: description은 컷 프롬프트에 넣지 않음 (한글 텍스트가 그림에 깨져서 렌더링되는 버그 방지)
-        # 캐릭터 식별은 레퍼런스 이미지(정면 시트)가 담당
-        char_descs[char_id] = character.name
+        # A파트: 한글 description은 컷 프롬프트에 넣지 않음 (렌더링 버그 방지)
+        # 대신 영문 외형 명세(appearance_en)를 주입하여 외형 일관성 강화
+        char_descs[char_id] = {
+            "name": character.name,
+            "appearance_en": character.appearance_en or "",
+        }
 
         # 정면 이미지를 레퍼런스로 주입 (일관성의 핵심)
         front_img = (

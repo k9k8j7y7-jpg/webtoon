@@ -10,7 +10,7 @@ from app.auth.deps import get_current_user
 from app.users.models import User
 from app.projects.models import Project, Episode
 from app.characters.models import Character, CharacterImage, CharacterOutfit, EpisodeCharacter
-from app.characters.service import generate_character_sheets, build_character_description
+from app.characters.service import generate_character_sheets, build_character_description, build_appearance_en
 from app.jobs import create_job, run_job_in_background
 from app.workflow.gate import get_gate_number
 from app.workflow.service import invalidate_asset
@@ -94,6 +94,7 @@ async def get_character(
         "ref_key": character.ref_key,
         "name": character.name,
         "description": character.description,
+        "appearance_en": character.appearance_en,
         "gender": character.gender,
         "age_group": character.age_group,
         "hair_style": character.hair_style,
@@ -180,12 +181,17 @@ async def update_character(
 
     # 구조화 필드로 description 자동 재조립
     character.description = build_character_description(character)
+
+    # appearance_en 재생성 (영문 외형 명세 — 컷 프롬프트 주입용)
+    character.appearance_en = await build_appearance_en(character)
+
     db.commit()
 
     return {
         "id": character.id,
         "name": character.name,
         "description": character.description,
+        "appearance_en": character.appearance_en,
         "gender": character.gender,
         "age_group": character.age_group,
         "hair_style": character.hair_style,
@@ -546,6 +552,45 @@ async def get_character_link_info(
         "episode_count": len(linked),
         "linked_episode_ids": [e.episode_id for e in linked],
     }
+
+
+# ── 백필: appearance_en 일괄 생성 ─────────────────────────────
+
+@router.post("/characters/backfill-appearance")
+async def backfill_appearance_en(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """appearance_en이 NULL인 캐릭터에 대해 description 기반 초안 생성."""
+    from app.adapters.gemini import generate_text
+
+    characters = db.query(Character).filter(Character.appearance_en.is_(None)).all()
+    results = []
+
+    for c in characters:
+        source = c.description or c.name or ""
+        if not source.strip():
+            results.append({"id": c.id, "name": c.name, "status": "skipped_empty"})
+            continue
+
+        try:
+            c.appearance_en = await generate_text(
+                prompt=(
+                    f"Extract ONLY the fixed visual/physical appearance traits from this character description. "
+                    f"Output concise English phrases (e.g. 'black horn-rimmed glasses, short black hair, slim build'). "
+                    f"Exclude personality, mood, role. Output ONLY the traits, nothing else.\n\n"
+                    f"{source}"
+                ),
+                temperature=0.2,
+                max_output_tokens=1024,
+            )
+            c.appearance_en = c.appearance_en.strip().replace("\n", " ")
+            results.append({"id": c.id, "name": c.name, "status": "generated", "appearance_en": c.appearance_en})
+        except Exception as e:
+            results.append({"id": c.id, "name": c.name, "status": "failed", "error": str(e)})
+
+    db.commit()
+    return {"total": len(characters), "results": results}
 
 
 def _get_episode_for_user(db: Session, project_id: int, episode_id: int, user_id: int) -> Episode:

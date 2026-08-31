@@ -63,7 +63,7 @@ SYSTEM_INSTRUCTION = """너는 웹툰 대본 작가야.
 - dialogue type: speech | narration | thought 중 택1
 - emphasis: normal | large | full_bleed 중 택1
 - transition: null 또는 "scene_break"
-- character_id는 기획안의 ref_key를 그대로 사용
+- character_id는 기획안 등장인물의 ref_key를 그대로 사용. 새 키를 만들지 말 것
 - 각 씬에는 최소 2컷 이상"""
 
 

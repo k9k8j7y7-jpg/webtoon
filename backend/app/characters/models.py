@@ -33,6 +33,7 @@ class Character(Base):
     mood = Column(String(50), nullable=True)
     detail_notes = Column(Text, nullable=True)
     style = Column(String(50), nullable=True)
+    appearance_en = Column(String(500), nullable=True)
     description = Column(String(2000), nullable=True)
     status = Column(
         Enum("draft", "approved", "invalidated", name="char_status_enum"),

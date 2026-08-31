@@ -629,14 +629,15 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
                       </div>
                     </div>
                     <div>
-                      <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400">상세 메모</label>
+                      <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400">고정 외형 메모</label>
                       <textarea
                         value={editingChar.detail_notes}
                         onChange={e => updateCharField('detail_notes', e.target.value)}
-                        placeholder="예: 은테 안경, 왼쪽 눈 밑 점, 항상 후드티"
+                        placeholder="매 컷에서 반드시 유지할 특징 (예: 검은 뿔테 안경, 하늘색 스카프)"
                         rows={2}
                         className="w-full mt-0.5 px-2 py-1.5 text-xs rounded-lg border border-border dark:border-zinc-600 bg-white dark:bg-zinc-800 text-ink-black dark:text-white placeholder-gray-400 dark:placeholder-gray-500 resize-none"
                       />
+                      <p className="text-[9px] text-gray-400 dark:text-gray-500 mt-0.5">이미지 생성에 반영됩니다</p>
                     </div>
                     <div className="flex gap-2">
                       <button onClick={saveCharConditions} disabled={savingChar}

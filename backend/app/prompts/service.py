@@ -4,10 +4,27 @@ PRD 4.4: 프롬프트 프리셋 + 캐릭터 시트 앵커 + 장소 레퍼런스 
 A-2/A-3: 캐릭터 앵커링 최우선, 프롬프트 순서 재조정.
 """
 
+# ── 프롬프트 조각 상수 ──
+APPEARANCE_ANCHOR = "MUST keep these features exactly in every panel"
+
+
+def _get_char_name(desc) -> str:
+    """character_descs 값에서 이름 추출 (str 또는 dict 호환)."""
+    if isinstance(desc, dict):
+        return desc.get("name", "")
+    return desc  # 하위 호환: 문자열이면 그대로 이름
+
+
+def _get_char_appearance(desc) -> str:
+    """character_descs 값에서 appearance_en 추출."""
+    if isinstance(desc, dict):
+        return desc.get("appearance_en", "")
+    return ""
+
 
 def build_cut_prompt(
     cut_spec: dict,
-    character_descs: dict[str, str],
+    character_descs: dict[str, str | dict],
     location_desc: str | None,
     style_prompt: str,
     project_rules: dict | None = None,
@@ -42,14 +59,28 @@ def build_cut_prompt(
             f"{mapping_str}"
         )
 
-    # ── 2. 캐릭터별 표정·포즈 ──
+    # ── 2. 캐릭터별 외형 명세 + 표정·포즈 ──
     for char in characters:
         char_id = char.get("character_id", "")
         desc = character_descs.get(char_id, "")
+        name = _get_char_name(desc)
+        appearance = _get_char_appearance(desc)
         emotion = char.get("emotion", "neutral")
         pose = char.get("pose", "")
 
-        char_prompt = f"Character '{char_id}': {desc}, {emotion} expression"
+        if appearance:
+            # appearance_en이 있으면 명세 블록 주입
+            ref_idx = char_ids_with_ref.index(char_id) + 1 if char_id in char_ids_with_ref else 0
+            img_tag = f" (Image {ref_idx})" if ref_idx else ""
+            char_prompt = (
+                f"Character '{char_id}'{img_tag}: {appearance}. "
+                f"{APPEARANCE_ANCHOR}. "
+                f"Currently {emotion} expression"
+            )
+        else:
+            # appearance_en 없으면 기존 형식 (회귀 무영향)
+            char_prompt = f"Character '{char_id}': {name}, {emotion} expression"
+
         if pose:
             char_prompt += f", {pose}"
         parts.append(char_prompt)
