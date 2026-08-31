@@ -401,6 +401,11 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
     return charNameMap[id] || id;
   };
 
+  const isUnknownChar = (c) => {
+    const id = typeof c === 'string' ? c : c.character_id;
+    return !charNameMap[id];
+  };
+
   // SVG 오버레이 방식: raw 이미지 + BubbleOverlay (코드로 말풍선 렌더링)
   const getCutImageUrl = (cut) => {
     return cut.image_url;
@@ -533,6 +538,9 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
               <div className="p-2">
                 <div className="text-[11px] font-bold text-gray-500 dark:text-gray-400 mb-1.5">
                   {shotLabel[cut.shot] || cut.shot} · {cut.characters?.map(c => getCharName(c)).join(', ')}
+                  {cut.characters?.some(c => isUnknownChar(c)) && (
+                    <span className="text-amber-500 ml-1" title={`알 수 없는 캐릭터: ${cut.characters.filter(c => isUnknownChar(c)).map(c => typeof c === 'string' ? c : c.character_id).join(', ')}`}>⚠</span>
+                  )}
                 </div>
                 {cut.image_url && (
                   <div className="flex gap-1 flex-wrap">
@@ -823,9 +831,23 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
                         : 'bg-gray-100 dark:bg-zinc-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-zinc-600'
                     }`}
                   >
-                    {c.name}
+                    {c.name} <span className="opacity-50 text-[10px]">({c.ref_key})</span>
                   </button>
                 ))}
+                {/* 알 수 없는 ref_key (에피소드 캐릭터에 없는 키) */}
+                {storyboardEdit.form.characterIds
+                  .filter(id => !episodeCharacters.some(c => c.ref_key === id))
+                  .map(id => (
+                    <button
+                      key={id}
+                      onClick={() => toggleStoryboardChar(id)}
+                      className="px-3 py-1.5 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700 transition-all hover:bg-red-100 dark:hover:bg-red-900/30"
+                      title="클릭하여 제거"
+                    >
+                      ⚠ {id} ✕
+                    </button>
+                  ))
+                }
                 {episodeCharacters.length === 0 && (
                   <span className="text-xs text-gray-400">연결된 캐릭터가 없습니다</span>
                 )}
