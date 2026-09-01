@@ -5,6 +5,27 @@ P1의 story/prompt_fragments.py 패턴과 동일.
 """
 
 
+NARRATOR_PERSPECTIVE_KR = {
+    "first_person": "1인칭",
+    "third_person": "3인칭",
+}
+
+
+def build_narrator_block(narrator: dict) -> str:
+    """화자 정보를 프롬프트 블록으로 조립한다."""
+    name = narrator.get("name", "")
+    ref_key = narrator.get("ref_key", "")
+    perspective = narrator.get("perspective", "third_person")
+    perspective_kr = NARRATOR_PERSPECTIVE_KR.get(perspective, "3인칭")
+
+    lines = [f"\n[화자] 이 이야기는 {name}({ref_key})의 {perspective_kr} 시점."]
+    if perspective == "first_person":
+        lines.append(f"대본의 '나'는 {name}을 가리킨다. 나레이션은 {name}의 목소리로 서술할 것.")
+    else:
+        lines.append("전지적 시점으로 서술할 것.")
+    return "\n".join(lines)
+
+
 def build_series_context_block(series_context: dict) -> str:
     """시리즈 컨텍스트 dict를 프롬프트 블록으로 조립한다.
 
@@ -31,6 +52,11 @@ def build_series_context_block(series_context: dict) -> str:
 
     if series_context.get("world"):
         parts.append(f"\n[세계관]\n{series_context['world']}")
+
+    # 화자 블록
+    narrator = series_context.get("narrator")
+    if narrator:
+        parts.append(build_narrator_block(narrator))
 
     if series_context.get("characters"):
         char_lines = []

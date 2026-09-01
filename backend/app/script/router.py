@@ -69,10 +69,13 @@ async def create_script(
             if not current_item:
                 current_item = next((x for x in outline if x.get("no") == ep_no), {})
             prev_item = next((x for x in outline if x.get("no") == ep_no - 1), None) if ep_no > 1 else None
+            from app.series.router import _resolve_narrator
+            narrator, _ = _resolve_narrator(bible)
             series_context = {
                 "synopsis": bible.get("synopsis", ""),
                 "world": bible.get("world"),
                 "characters": bible.get("characters", []),
+                "narrator": narrator,
                 "episode_no": ep_no,
                 "total_episodes": len(outline),
                 "current_summary": current_item.get("summary", "") if current_item else "",

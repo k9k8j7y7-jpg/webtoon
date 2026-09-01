@@ -22,6 +22,11 @@ BIBLE_SYSTEM_INSTRUCTION = """너는 웹툰 시리즈(연작) 기획 전문가�
 {
   "synopsis": "전체 줄거리 (5~10문장, 시작-전개-클라이맥스-결말 포함)",
   "world": "세계관 요약 (배경, 시대, 특수 규칙)",
+  "narrator": {
+    "ref_key": "화자 캐릭터의 ref_key (characters 배열의 ref_key 중 하나)",
+    "name": "화자 이름",
+    "perspective": "first_person 또는 third_person"
+  },
   "characters": [
     {
       "ref_key": "영문 snake_case 식별자 (예: hero, me, dodo). 대본에서 이 값으로 캐릭터를 참조한다",
@@ -41,6 +46,8 @@ BIBLE_SYSTEM_INSTRUCTION = """너는 웹툰 시리즈(연작) 기획 전문가�
 }
 
 규칙:
+- narrator(화자)를 반드시 지정할 것. 1인칭(first_person)이면 대본의 '나'가 이 캐릭터를 가리킨다. 3인칭(third_person)이면 전지적 시점
+- narrator.ref_key는 characters 배열에 정의된 ref_key 중 하나여야 한다
 - outline 배열은 정확히 {target_episodes}개를 만들어야 해
 - 각 화는 독립적인 미니 기승전결 구조를 가질 것
 - 각 화의 엔딩 훅은 다음 화를 보고 싶게 만드는 장치일 것

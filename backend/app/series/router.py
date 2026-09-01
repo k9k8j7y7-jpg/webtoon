@@ -1,4 +1,4 @@
-"""Series API — P4+P5: 시리즈 CRUD + 바이블/아웃라인 + 회차 대본 생성.
+"""Series API — P4+P5+1-8: 시리즈 CRUD + 바이블/아웃라인 + 회차 대본 생성.
 
 엔드포인트 목록:
   POST   /projects/{pid}/series                — 시리즈 생성
@@ -7,6 +7,7 @@
   DELETE /series/{sid}                         — 시리즈 삭제 (보수적)
   POST   /series/{sid}/bible                   — 바이블+아웃라인 생성
   POST   /series/{sid}/bible/regenerate        — 전체 재생성
+  PUT    /series/{sid}/bible                   — 바이블 인라인 수정 (1-8)
   POST   /series/{sid}/outline/regenerate      — 부분 재생성 (from_no)
   PUT    /series/{sid}/outline                 — 아웃라인 배열 교체
   POST   /series/{sid}/outline/merge           — 인접 회차 병합
@@ -32,6 +33,7 @@ from app.workflow.gate import approve_gate
 from .schemas import (
     SeriesCreateRequest,
     BibleGenerateRequest,
+    BibleUpdateRequest,
     OutlineRegenerateRequest,
     OutlineMergeRequest,
     OutlineSplitRequest,
@@ -80,6 +82,27 @@ def _renumber(outline: list[dict]) -> list[dict]:
     return outline
 
 
+def _resolve_narrator(bible: dict) -> tuple[dict, bool]:
+    """바이블에서 narrator를 추출. 없으면 characters[0] 3인칭 폴백.
+
+    Returns:
+        (narrator_dict, narrator_missing)
+    """
+    narrator = bible.get("narrator")
+    if narrator and narrator.get("ref_key"):
+        return narrator, False
+    # 폴백: characters[0]을 3인칭 화자로 간주
+    characters = bible.get("characters", [])
+    if characters:
+        first = characters[0]
+        return {
+            "ref_key": first.get("ref_key", ""),
+            "name": first.get("name", ""),
+            "perspective": "third_person",
+        }, True
+    return {"ref_key": "", "name": "", "perspective": "third_person"}, True
+
+
 def _episode_image_counts(db: Session, ep_ids: list[int]) -> dict[int, int]:
     """에피소드별 생성된 컷 이미지 수 집계."""
     if not ep_ids:
@@ -96,12 +119,15 @@ def _episode_image_counts(db: Session, ep_ids: list[int]) -> dict[int, int]:
 
 def _series_to_dict(s: Series, db: Session | None = None) -> dict:
     outline = list(s.outline) if s.outline else []
+    bible = s.bible or {}
+    _, narrator_missing = _resolve_narrator(bible)
     result = {
         "id": s.id,
         "project_id": s.project_id,
         "title": s.title,
-        "bible": s.bible,
+        "bible": bible,
         "outline": outline,
+        "narrator_missing": narrator_missing,
         "created_at": s.created_at.isoformat(),
         "updated_at": s.updated_at.isoformat(),
     }
@@ -303,6 +329,7 @@ async def generate_series_bible(
             s.bible = {
                 "synopsis": result.get("synopsis", ""),
                 "world": result.get("world", ""),
+                "narrator": result.get("narrator"),
                 "characters": result.get("characters", []),
                 "idea": idea,
                 "story_options": story_options,
@@ -360,6 +387,7 @@ async def regenerate_bible(
             s.bible = {
                 "synopsis": result.get("synopsis", ""),
                 "world": result.get("world", ""),
+                "narrator": result.get("narrator"),
                 "characters": result.get("characters", []),
                 "idea": idea,
                 "story_options": story_options,
@@ -379,6 +407,93 @@ async def regenerate_bible(
     run_job_in_background(background_tasks, job.job_id, _run())
 
     return {"job_id": job.job_id}
+
+
+# ── 바이블 인라인 수정 (1-8) ──
+
+
+@router.put("/series/{series_id}/bible")
+def update_bible(
+    series_id: int,
+    body: BibleUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """바이블 필드 단위 병합 수정. outline은 절대 불변.
+
+    characters 수정 규칙:
+    - ref_key는 변경 불가 (컷 spec 참조 보호)
+    - name/role/description만 수정 가능
+    - 항목 추가 허용
+    - 삭제는 해당 ref_key가 어느 회차 대본에도 미등장일 때만 (아니면 409)
+    """
+    series = _get_series_with_auth(db, series_id, current_user.id)
+
+    bible = dict(series.bible or {})
+    if not bible.get("synopsis"):
+        raise HTTPException(status_code=400, detail="바이블이 아직 생성되지 않았습니다.")
+
+    # 필드 단위 병합 (outline 절대 불변)
+    if body.synopsis is not None:
+        bible["synopsis"] = body.synopsis
+    if body.world is not None:
+        bible["world"] = body.world
+    if body.narrator is not None:
+        bible["narrator"] = body.narrator.model_dump()
+
+    # characters 수정
+    episodes_with_scripts = 0
+    if body.characters is not None:
+        old_chars = {c["ref_key"]: c for c in bible.get("characters", [])}
+        new_ref_keys = {c.ref_key for c in body.characters}
+
+        # 삭제 대상 ref_key 검증
+        deleted_keys = set(old_chars.keys()) - new_ref_keys
+        if deleted_keys:
+            # 대본에 등장하는 ref_key인지 확인
+            outline = series.outline or []
+            ep_ids = [item.get("episode_id") for item in outline if item.get("episode_id")]
+            if ep_ids:
+                episodes = (
+                    db.query(Episode)
+                    .filter(Episode.id.in_(ep_ids), Episode.deleted_at.is_(None))
+                    .all()
+                )
+                for ep in episodes:
+                    script_data = ep.script or {}
+                    script_obj = script_data.get("script", {})
+                    scenes = script_obj.get("scenes", [])
+                    for scene in scenes:
+                        for cut in scene.get("cuts", []):
+                            # 대본 구조: characters[].character_id
+                            for char_entry in cut.get("characters", []):
+                                cid = char_entry.get("character_id", "") if isinstance(char_entry, dict) else str(char_entry)
+                                if cid in deleted_keys:
+                                    raise HTTPException(
+                                        status_code=409,
+                                        detail=f"'{cid}' 캐릭터가 대본에 등장하여 삭제할 수 없습니다.",
+                                    )
+
+        bible["characters"] = [c.model_dump() for c in body.characters]
+
+    # 대본 생성된 회차 수 집계 (안내용)
+    outline = series.outline or []
+    ep_ids = [item.get("episode_id") for item in outline if item.get("episode_id")]
+    if ep_ids:
+        episodes_with_scripts = (
+            db.query(Episode)
+            .filter(Episode.id.in_(ep_ids), Episode.deleted_at.is_(None))
+            .count()
+        )
+
+    series.bible = bible
+    flag_modified(series, "bible")
+    db.commit()
+    db.refresh(series)
+
+    result = _series_to_dict(series, db=db)
+    result["episodes_with_scripts"] = episodes_with_scripts
+    return result
 
 
 # ── 아웃라인 편집 ──
@@ -628,10 +743,12 @@ async def merge_outline(
                     merged_no = merged_item["no"]
                     ol = list(s.outline)
                     prev_item = next((x for x in ol if x["no"] == merged_no - 1), None) if merged_no > 1 else None
+                    narrator_r, _ = _resolve_narrator(bible)
                     series_context = {
                         "synopsis": bible.get("synopsis", ""),
                         "world": bible.get("world"),
                         "characters": bible.get("characters", []),
+                        "narrator": narrator_r,
                         "episode_no": merged_no,
                         "total_episodes": len(ol),
                         "current_summary": merged_item.get("summary", ""),
@@ -960,11 +1077,13 @@ async def generate_episode_script(
     job = create_job(total=1)
 
     # 시리즈 컨텍스트 조립
+    narrator, _ = _resolve_narrator(bible)
     prev_item_ctx = next((x for x in outline if x["no"] == episode_no - 1), None) if episode_no > 1 else None
     series_context = {
         "synopsis": bible.get("synopsis", ""),
         "world": bible.get("world"),
         "characters": bible.get("characters", []),
+        "narrator": narrator,
         "episode_no": episode_no,
         "total_episodes": len(outline),
         "current_summary": target_item.get("summary", ""),
@@ -1115,11 +1234,13 @@ async def revise_outline(
     # c. 시리즈 컨텍스트 조립 + 대본 재생성 job
     job = create_job(total=1)
 
+    narrator, _ = _resolve_narrator(bible)
     prev_item = next((x for x in outline if x["no"] == episode_no - 1), None) if episode_no > 1 else None
     series_context = {
         "synopsis": bible.get("synopsis", ""),
         "world": bible.get("world"),
         "characters": bible.get("characters", []),
+        "narrator": narrator,
         "episode_no": episode_no,
         "total_episodes": len(outline),
         "current_summary": target_item.get("summary", ""),

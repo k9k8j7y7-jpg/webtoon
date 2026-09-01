@@ -1,6 +1,30 @@
 # 진행 상태 추적
 
-## 현재: 도도 1화 실전 통과 + 유령 ref_key 정리 (2026-09-01)
+## 현재: 1-8 바이블 인라인 수정 + 화자/시점 명시 — 1단계 조사 (2026-09-01)
+
+### 1-8 — 2단계 백엔드 완료 (2026-09-01)
+- narrator 필드: BIBLE_SYSTEM_INSTRUCTION에 필수 스키마 추가
+- PUT /series/{sid}/bible: 필드 단위 병합 (outline 불변), ref_key 변경 불가, 대본 등장 인물 삭제 409
+- build_narrator_block(): [화자] 프롬프트 블록 조립 (1인칭/3인칭)
+- series_context 4곳에 narrator 주입 (generate/revise/merge/script router)
+- _resolve_narrator(): 구 바이블 폴백 (characters[0] 3인칭 + narrator_missing 플래그)
+- _series_to_dict에 narrator_missing 응답 포함
+- **3단계 프론트 완료:**
+  - 바이블 [수정] → 인라인 편집 모드 (시놉시스/세계관 textarea, 화자 라디오+1/3인칭 토글, 인물 카드 편집/추가/삭제, 저장/취소)
+  - narrator_missing 경고 배너 (⚠ + 수정 링크)
+  - 저장 후 episodes_with_scripts > 0 안내 배너
+  - 대본 생성/수정 후 재생성 confirm에 화자 한 줄 표시
+  - 보기 모드에 화자 표시 + 인물별 [ref_key] 표시
+  - 모바일 375px 대응 확인
+- **4단계 검증 완료 (5/5 PASS):**
+  1. 도도(10): narrator_missing=True → PUT 화자=husband(1인칭)+인물 정정 → narrator_missing=False, episodes_with_scripts=3 ✅
+  2. 테스트(11): 화자=hyungwoo(1인칭) 지정 → 1화 revise → 나레이션 speaker=hyungwoo, 1인칭 서술 일관 ✅
+  3. ref_key 보호: 대본 등장 hyungwoo 삭제 시도 → 409 정상 ✅ (character_ids→characters[].character_id 버그 수정 포함)
+  4. 신규 시리즈 바이블 → narrator={ethan_reed, first_person} 자동 생성 → 삭제 ✅
+  5. 회귀: 단편 조회 + 아웃라인 무변경 ✅
+- 배포 완료. 사용자 실전 확인 + 커밋 대기
+
+## 이전: 도도 1화 실전 통과 + 유령 ref_key 정리 (2026-09-01)
 
 ### 유령 ref_key 정리 + 재발 방지 — 완료 (2026-09-01)
 - ep20 컷 spec에서 char_0→me, char_1→husband 치환 + 중복 제거 (4컷: c003, c006, c009, c010)

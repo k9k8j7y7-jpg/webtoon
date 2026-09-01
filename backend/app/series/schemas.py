@@ -39,6 +39,26 @@ class OutlineSplitRequest(BaseModel):
     no: int = Field(..., ge=1)
 
 
+class NarratorUpdate(BaseModel):
+    ref_key: str
+    name: str
+    perspective: str = Field(..., pattern=r"^(first_person|third_person)$")
+
+
+class BibleCharacterUpdate(BaseModel):
+    ref_key: str
+    name: str
+    role: str | None = None
+    description: str | None = None
+
+
+class BibleUpdateRequest(BaseModel):
+    synopsis: str | None = None
+    world: str | None = None
+    narrator: NarratorUpdate | None = None
+    characters: list[BibleCharacterUpdate] | None = None
+
+
 class OutlineReviseRequest(BaseModel):
     title: str | None = None
     summary: str | None = None
