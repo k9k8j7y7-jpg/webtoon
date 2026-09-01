@@ -562,7 +562,7 @@ async def backfill_appearance_en(
     current_user: User = Depends(get_current_user),
 ):
     """appearance_en이 NULL인 캐릭터에 대해 description 기반 초안 생성."""
-    from app.adapters.gemini import generate_text
+    from app.adapters.gemini import generate_text, AI_TOKENS_SHORT
 
     characters = db.query(Character).filter(Character.appearance_en.is_(None)).all()
     results = []
@@ -582,7 +582,7 @@ async def backfill_appearance_en(
                     f"{source}"
                 ),
                 temperature=0.2,
-                max_output_tokens=1024,
+                max_output_tokens=AI_TOKENS_SHORT,
             )
             c.appearance_en = c.appearance_en.strip().replace("\n", " ")
             results.append({"id": c.id, "name": c.name, "status": "generated", "appearance_en": c.appearance_en})

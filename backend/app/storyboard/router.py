@@ -10,13 +10,13 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.database import get_db
 from app.auth.deps import get_current_user
 from app.users.models import User
-from app.projects.models import Project, Episode
+from app.projects.models import Project, Episode, Series
 from app.storyboard.models import Cut
 from app.characters.models import Character, EpisodeCharacter
 from app.storyboard.service import create_cuts_from_script, recommend_cut_count, readjust_storyboard
 from app.workflow.gate import approve_gate, get_gate_number
 from app.composition.service import compose_cut
-from app.adapters.gemini import generate_text
+from app.adapters.gemini import generate_text, parse_ai_json, AI_TOKENS_MEDIUM
 
 logger = logging.getLogger(__name__)
 
@@ -254,9 +254,13 @@ REWRITE_ACTION_INSTRUCTION = """\
 당신은 웹툰 콘티 지문 작가입니다. 주어진 컷의 지문을 사용자 요청에 맞게 다시 작성합니다.
 
 ## 규칙
-- 등장 인물은 이름 + 핵심 외형을 명시하여 이미지 생성 AI가 구분할 수 있게 합니다 (appearance_en 활용).
-- 인원 수, 위치, 시선, 행동을 명시합니다. 애매한 대명사('나', '그', '그녀')는 사용하지 않습니다.
-- 화자 시점 문장이 아니라 카메라 시점 묘사로 작성합니다.
+- 등장 인물은 이름 + 핵심 외형을 **한국어 괄호 짧은 표기**로 명시합니다.
+  예: 남편(검은 안경), 아내(갈색 긴 머리), 도도(갈색 포메라니안)
+  ※ appearance_en 영어 문자열을 지문에 그대로 넣지 마세요 — 영어 외형 명세는 이미지 프롬프트 단계에서 별도 주입됩니다.
+- 대명사형 이름('나', '나 (주인공)' 등)은 사용하지 않습니다. 바이블 인물명(아내, 남편 등 역할이 드러나는 명칭)을 사용하세요.
+- 화자 정보가 제공되면: 1인칭 시점의 '나'는 화자 캐릭터를 가리키므로, 지문에서는 그 캐릭터의 이름으로 치환합니다.
+- 인원 수, 위치, 시선, 행동을 명시합니다.
+- 카메라 시점 묘사로 작성합니다 (화자 시점 문장 아님).
 - 사용자 요청을 최우선 반영하되, 기존 지문의 유효한 부분은 유지합니다.
 - 한국어 2~3문장으로 작성합니다.
 
@@ -287,6 +291,23 @@ async def rewrite_action(
 
     spec = cut.spec or {}
 
+    # 에피소드 정보
+    episode = db.query(Episode).filter(Episode.id == cut.episode_id).first()
+
+    # 시리즈 화자 정보 (연작 회차인 경우)
+    narrator_block = ""
+    if episode and episode.series_id:
+        series = db.query(Series).filter(Series.id == episode.series_id).first()
+        if series and series.bible:
+            narrator = series.bible.get("narrator")
+            if narrator and narrator.get("ref_key"):
+                perspective = narrator.get("perspective", "third_person")
+                narrator_name = narrator.get("name", narrator["ref_key"])
+                if perspective == "first_person":
+                    narrator_block = f"\n## 화자 정보\n이 작품은 1인칭 시점입니다. '나'는 {narrator_name}(ref_key={narrator['ref_key']})을 가리킵니다.\n지문에서 '나' 대신 '{narrator_name}'으로 표기하세요.\n"
+                else:
+                    narrator_block = f"\n## 화자 정보\n이 작품은 3인칭(전지적) 시점입니다.\n"
+
     # 에피소드 연결 캐릭터 전원 (미등장 포함)
     characters = (
         db.query(Character)
@@ -296,10 +317,19 @@ async def rewrite_action(
     )
     char_lines = []
     for c in characters:
-        appearance = c.appearance_en or ""
-        if len(appearance) > 120:
-            appearance = appearance[:120] + "…"
-        char_lines.append(f"- {c.name} (ref_key={c.ref_key}): {appearance}")
+        # 한국어 핵심 외형 짧게 조합
+        traits = []
+        if c.hair_color:
+            traits.append(c.hair_color)
+        if c.hair_style:
+            traits.append(c.hair_style)
+        if c.detail_notes:
+            # detail_notes에서 첫 특징만
+            short = c.detail_notes.split(",")[0].split("，")[0].strip()
+            if short and len(short) <= 20:
+                traits.append(short)
+        appearance_ko = ", ".join(traits) if traits else (c.description or "")[:30]
+        char_lines.append(f"- {c.name} (ref_key={c.ref_key}): ({appearance_ko})")
     char_block = "\n".join(char_lines) if char_lines else "(캐릭터 없음)"
 
     # 대사 정보
@@ -315,7 +345,7 @@ async def rewrite_action(
     prompt = f"""## 현재 컷 정보
 샷 타입: {spec.get('shot_type', spec.get('shot', 'full'))}
 현재 지문: {spec.get('action', '(없음)')}
-
+{narrator_block}
 ## 대사
 {dialogue_block}
 
@@ -330,23 +360,12 @@ async def rewrite_action(
         prompt=prompt,
         system_instruction=REWRITE_ACTION_INSTRUCTION,
         temperature=0.7,
-        max_output_tokens=1024,
+        max_output_tokens=AI_TOKENS_MEDIUM,
     )
 
-    # JSON 파싱
-    text = raw.strip()
-    if text.startswith("```"):
-        text = text.split("\n", 1)[1] if "\n" in text else text[3:]
-    if text.endswith("```"):
-        text = text[:-3]
-    text = text.strip()
-    if text.startswith("json"):
-        text = text[4:].strip()
-
     try:
-        result = json.loads(text)
-    except json.JSONDecodeError:
-        logger.error("rewrite-action JSON parse failed: %s", text[:300])
+        result = parse_ai_json(raw, context="rewrite-action")
+    except ValueError:
         raise HTTPException(status_code=502, detail="AI 응답 파싱 실패")
 
     return {

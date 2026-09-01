@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.characters.models import Character, CharacterImage, CharacterOutfit, EpisodeCharacter
 from app.adapters.gemini_image import get_image_adapter
-from app.adapters.gemini import generate_text
+from app.adapters.gemini import generate_text, AI_TOKENS_SHORT
 from app.storage import upload_image
 from app.jobs import get_job, update_job
 from app.database import SessionLocal
@@ -76,7 +76,7 @@ async def build_appearance_en(character) -> str:
                     f"{character.detail_notes}"
                 ),
                 temperature=0.2,
-                max_output_tokens=1024,
+                max_output_tokens=AI_TOKENS_SHORT,
             )
             detail_en = detail_en.strip()
         except Exception as e:
@@ -233,7 +233,7 @@ async def generate_character_sheets(
                             f"{description}"
                         ),
                         temperature=0.2,
-                        max_output_tokens=1024,
+                        max_output_tokens=AI_TOKENS_SHORT,
                     )
                     character.appearance_en = character.appearance_en.strip().replace("\n", " ")
                 except Exception as e:

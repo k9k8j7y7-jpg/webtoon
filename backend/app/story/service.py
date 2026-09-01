@@ -5,7 +5,7 @@ API-Spec 3장, PRD 3.1 참조.
 
 import json
 
-from app.adapters.gemini import generate_text
+from app.adapters.gemini import generate_text, AI_TOKENS_SHORT
 
 SYSTEM_INSTRUCTION = """너는 웹툰 스토리 기획 전문가야.
 사용자의 아이디어를 받아서 웹툰 기획안을 만들어줘.
@@ -77,7 +77,7 @@ async def suggest_characters(idea: str) -> list[dict]:
         prompt=prompt,
         system_instruction=SUGGEST_CHARACTERS_INSTRUCTION,
         temperature=0.9,
-        max_output_tokens=2048,
+        max_output_tokens=AI_TOKENS_SHORT,
     )
 
     result = _parse_json(raw)

@@ -6,7 +6,7 @@
 import json
 import logging
 
-from app.adapters.gemini import generate_text
+from app.adapters.gemini import generate_text, AI_TOKENS_MEDIUM
 from app.story.prompt_fragments import GENRE_FRAGMENTS, MOOD_FRAGMENTS
 
 logger = logging.getLogger(__name__)
@@ -240,7 +240,7 @@ async def merge_outlines(item_a: dict, item_b: dict) -> dict:
         prompt=prompt,
         system_instruction=MERGE_SYSTEM_INSTRUCTION,
         temperature=0.7,
-        max_output_tokens=2048,
+        max_output_tokens=AI_TOKENS_MEDIUM,
     )
     return _parse_json(raw)
 
@@ -262,7 +262,7 @@ async def split_outline(item: dict) -> list[dict]:
         prompt=prompt,
         system_instruction=SPLIT_SYSTEM_INSTRUCTION,
         temperature=0.7,
-        max_output_tokens=2048,
+        max_output_tokens=AI_TOKENS_MEDIUM,
     )
     result = _parse_json(raw)
     return result.get("episodes", [])
