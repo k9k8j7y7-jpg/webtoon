@@ -1,6 +1,27 @@
 # 진행 상태 추적
 
-## 현재: 1-8 바이블 인라인 수정 + 화자/시점 명시 — 1단계 조사 (2026-09-01)
+## 현재: 1-7 콘티 지문 AI 재작성 — 구현 완료 (2026-09-01)
+
+### 1-7 — 구현 완료 (2026-09-01)
+- `POST /cuts/{cut_id}/rewrite-action`: 지문 AI 재작성 (저장 안 함, 프론트가 채움)
+- 입력: 현재 action, shot_type, dialogue[], 에피소드 캐릭터 전원(appearance_en 포함)
+- 출력: `{action, suggested_characters}` — 새 지문 + 등장 캐릭터 ref_key 목록
+- REWRITE_ACTION_INSTRUCTION 시스템 프롬프트: 이름+외형 명시, 대명사 금지, 카메라 시점, 2~3문장
+- 프론트 (Gate5Review 콘티 수정 모달):
+  - "이렇게 바꿔줘" 입력란 + [지문 다시 쓰기] 버튼
+  - 호출 중 스피너, 결과를 textarea에 채움
+  - [되돌리기] 1회 (이전 지문 보관)
+  - suggested_characters 미선택 칩 표시 ("아내, 도도 추가?")
+- 검증: ep25_c002 "백미러에 아내랑 도도가 보여야 해" → 3인 외형 명시 + suggested [husband, me, dodo] ✅
+- 회귀: 기존 저장/재생성 경로 무변경
+- 배포 완료. 사용자 실전 확인 + 커밋 대기
+
+### 1-8 잔무 — 바이블⇔DB 캐릭터 이름 불일치 표시 (2026-09-01)
+- GET /series/{sid} 응답에 character_sheets 맵 추가 (ref_key → {id, name})
+- 바이블 보기 모드에서 시트 이름과 불일치 시 ⚠ + 시트 이름 표기
+- 커밋 3ef3029 배포 완료
+
+## 이전: 1-8 바이블 인라인 수정 + 화자/시점 명시 (2026-09-01)
 
 ### 1-8 — 2단계 백엔드 완료 (2026-09-01)
 - narrator 필드: BIBLE_SYSTEM_INSTRUCTION에 필수 스키마 추가
