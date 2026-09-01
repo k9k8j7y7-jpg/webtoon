@@ -1,20 +1,26 @@
 # 진행 상태 추적
 
-## 현재: 1-7 콘티 지문 AI 재작성 — 구현 완료 (2026-09-01)
+## 현재: 1-7 실전 피드백 수정 + AI 토큰 전수 점검 — 완료 (2026-09-01)
+
+### 1-7 실전 피드백 수정 3건 (2026-09-01)
+1. 화자/이름: rewrite-action에 시리즈 바이블 narrator 주입 (1인칭이면 '나'→화자 이름 치환)
+2. 외형 표기: appearance_en 영어 → 한국어 짧은 괄호 표기 (남편(검은 안경), 아내(갈색 긴 머리))
+3. 대명사 금지 강화: '나 (주인공)' 등 → 바이블 인물명(아내, 남편) 사용 규칙
+- 검증: ep25_c002 3회 연속 200 OK, 한국어 지문 + '나'→아내 + 캐릭터 3명 제안 ✅
+
+### AI 토큰 전수 점검 (2026-09-01)
+- 원인: Gemini 2.5 Flash thinking 모델에서 max_output_tokens에 thinking 토큰 포함 → 1024/2048은 output 잘림
+- `AI_TOKENS_SHORT`(4096)/`MEDIUM`(8192)/`LONG`(16384) 공통 상수 신설
+- 6개 파일 12개 호출 전부 상수로 통일
+- `parse_ai_json()` 공통 유틸: 잘린 JSON regex 복구 포함
+- 커밋 849378e 배포 완료
 
 ### 1-7 — 구현 완료 (2026-09-01)
 - `POST /cuts/{cut_id}/rewrite-action`: 지문 AI 재작성 (저장 안 함, 프론트가 채움)
-- 입력: 현재 action, shot_type, dialogue[], 에피소드 캐릭터 전원(appearance_en 포함)
+- 입력: 현재 action, shot_type, dialogue[], 에피소드 캐릭터 전원
 - 출력: `{action, suggested_characters}` — 새 지문 + 등장 캐릭터 ref_key 목록
-- REWRITE_ACTION_INSTRUCTION 시스템 프롬프트: 이름+외형 명시, 대명사 금지, 카메라 시점, 2~3문장
-- 프론트 (Gate5Review 콘티 수정 모달):
-  - "이렇게 바꿔줘" 입력란 + [지문 다시 쓰기] 버튼
-  - 호출 중 스피너, 결과를 textarea에 채움
-  - [되돌리기] 1회 (이전 지문 보관)
-  - suggested_characters 미선택 칩 표시 ("아내, 도도 추가?")
-- 검증: ep25_c002 "백미러에 아내랑 도도가 보여야 해" → 3인 외형 명시 + suggested [husband, me, dodo] ✅
-- 회귀: 기존 저장/재생성 경로 무변경
-- 배포 완료. 사용자 실전 확인 + 커밋 대기
+- 프론트 (Gate5Review 콘티 수정 모달): "이렇게 바꿔줘" + 스피너 + 되돌리기 + 캐릭터 제안 칩
+- 배포 완료
 
 ### 1-8 잔무 — 바이블⇔DB 캐릭터 이름 불일치 표시 (2026-09-01)
 - GET /series/{sid} 응답에 character_sheets 맵 추가 (ref_key → {id, name})
