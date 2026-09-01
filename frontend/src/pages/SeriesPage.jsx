@@ -506,14 +506,23 @@ export default function SeriesPage() {
                 <div>
                   <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400 mb-1">주요 인물</h3>
                   <div className="space-y-1.5">
-                    {bible.characters.map((c, i) => (
-                      <div key={i} className="text-sm text-gray-700 dark:text-gray-300">
-                        <span className="font-bold">{c.name}</span>
-                        {c.role && <span className="text-gray-400 ml-1">({c.role})</span>}
-                        {c.description && <span className="ml-1">— {c.description}</span>}
-                        <span className="text-gray-300 dark:text-zinc-600 text-xs ml-1">[{c.ref_key}]</span>
-                      </div>
-                    ))}
+                    {bible.characters.map((c, i) => {
+                      const sheet = series.character_sheets?.[c.ref_key];
+                      const mismatch = sheet && sheet.name !== c.name;
+                      return (
+                        <div key={i} className="text-sm text-gray-700 dark:text-gray-300">
+                          <span className="font-bold">{c.name}</span>
+                          {c.role && <span className="text-gray-400 ml-1">({c.role})</span>}
+                          {c.description && <span className="ml-1">— {c.description}</span>}
+                          <span className="text-gray-300 dark:text-zinc-600 text-xs ml-1">[{c.ref_key}]</span>
+                          {mismatch && (
+                            <span className="ml-1 text-xs text-amber-500" title={`캐릭터 시트 이름: ${sheet.name}`}>
+                              <AlertTriangle size={12} className="inline -mt-0.5" /> 시트: {sheet.name}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}

@@ -161,6 +161,21 @@ def _series_to_dict(s: Series, db: Session | None = None) -> dict:
                 "image_count": sum(1 for eid in ep_ids if img_counts.get(eid, 0)),
                 "episode_count": len(ep_ids),
             }
+            # 바이블 인물 ↔ DB 캐릭터 이름 비교용 맵
+            bible_ref_keys = [c.get("ref_key") for c in bible.get("characters", []) if c.get("ref_key")]
+            if bible_ref_keys:
+                db_chars = (
+                    db.query(Character)
+                    .join(EpisodeCharacter, EpisodeCharacter.character_id == Character.id)
+                    .filter(EpisodeCharacter.episode_id.in_(ep_ids), Character.ref_key.in_(bible_ref_keys))
+                    .all()
+                )
+                # ref_key → {id, name} (중복 시 첫 번째)
+                char_sheet = {}
+                for ch in db_chars:
+                    if ch.ref_key not in char_sheet:
+                        char_sheet[ch.ref_key] = {"id": ch.id, "name": ch.name}
+                result["character_sheets"] = char_sheet
     return result
 
 
