@@ -1,8 +1,9 @@
 """게이트 4 — 콘티 엔드포인트. API-Spec 6장."""
 
 import json
+import logging
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -11,9 +12,13 @@ from app.auth.deps import get_current_user
 from app.users.models import User
 from app.projects.models import Project, Episode
 from app.storyboard.models import Cut
+from app.characters.models import Character, EpisodeCharacter
 from app.storyboard.service import create_cuts_from_script, recommend_cut_count, readjust_storyboard
 from app.workflow.gate import approve_gate, get_gate_number
 from app.composition.service import compose_cut
+from app.adapters.gemini import generate_text
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["gate4-storyboard"])
 
@@ -240,6 +245,113 @@ async def update_cut_dialogue(
         "composed_image_url": cut.composed_image_url,
         "dialogue": body.dialogue,
         "sfx_items": spec.get("sfx_items", []),
+    }
+
+
+# ── 지문 AI 재작성 (1-7) ──
+
+REWRITE_ACTION_INSTRUCTION = """\
+당신은 웹툰 콘티 지문 작가입니다. 주어진 컷의 지문을 사용자 요청에 맞게 다시 작성합니다.
+
+## 규칙
+- 등장 인물은 이름 + 핵심 외형을 명시하여 이미지 생성 AI가 구분할 수 있게 합니다 (appearance_en 활용).
+- 인원 수, 위치, 시선, 행동을 명시합니다. 애매한 대명사('나', '그', '그녀')는 사용하지 않습니다.
+- 화자 시점 문장이 아니라 카메라 시점 묘사로 작성합니다.
+- 사용자 요청을 최우선 반영하되, 기존 지문의 유효한 부분은 유지합니다.
+- 한국어 2~3문장으로 작성합니다.
+
+## 출력 형식 (JSON만, 마크다운 코드블록 없이)
+{
+  "action": "새 지문",
+  "suggested_characters": ["ref_key1", "ref_key2"]
+}
+- suggested_characters: 새 지문에 등장해야 할 캐릭터의 ref_key 전원 목록
+"""
+
+
+class RewriteActionRequest(BaseModel):
+    request: str = Field(..., min_length=1, max_length=500)
+
+
+@router.post("/cuts/{cut_id}/rewrite-action")
+async def rewrite_action(
+    cut_id: str,
+    body: RewriteActionRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """컷 지문을 AI로 재작성한다. 저장하지 않음 — 프론트가 결과를 편집칸에 채움."""
+    cut = db.query(Cut).filter(Cut.cut_id == cut_id).first()
+    if not cut:
+        raise HTTPException(status_code=404, detail="Cut not found")
+
+    spec = cut.spec or {}
+
+    # 에피소드 연결 캐릭터 전원 (미등장 포함)
+    characters = (
+        db.query(Character)
+        .join(EpisodeCharacter, EpisodeCharacter.character_id == Character.id)
+        .filter(EpisodeCharacter.episode_id == cut.episode_id)
+        .all()
+    )
+    char_lines = []
+    for c in characters:
+        appearance = c.appearance_en or ""
+        if len(appearance) > 120:
+            appearance = appearance[:120] + "…"
+        char_lines.append(f"- {c.name} (ref_key={c.ref_key}): {appearance}")
+    char_block = "\n".join(char_lines) if char_lines else "(캐릭터 없음)"
+
+    # 대사 정보
+    dialogue = spec.get("dialogue", [])
+    dialogue_lines = []
+    for d in dialogue:
+        speaker = d.get("speaker", "")
+        text = d.get("text", "")
+        dtype = d.get("type", "dialogue")
+        dialogue_lines.append(f"- [{dtype}] {speaker}: {text}")
+    dialogue_block = "\n".join(dialogue_lines) if dialogue_lines else "(대사 없음)"
+
+    prompt = f"""## 현재 컷 정보
+샷 타입: {spec.get('shot_type', spec.get('shot', 'full'))}
+현재 지문: {spec.get('action', '(없음)')}
+
+## 대사
+{dialogue_block}
+
+## 에피소드 캐릭터 (전원)
+{char_block}
+
+## 사용자 요청
+{body.request}
+"""
+
+    raw = await generate_text(
+        prompt=prompt,
+        system_instruction=REWRITE_ACTION_INSTRUCTION,
+        temperature=0.7,
+        max_output_tokens=1024,
+    )
+
+    # JSON 파싱
+    text = raw.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+    if text.endswith("```"):
+        text = text[:-3]
+    text = text.strip()
+    if text.startswith("json"):
+        text = text[4:].strip()
+
+    try:
+        result = json.loads(text)
+    except json.JSONDecodeError:
+        logger.error("rewrite-action JSON parse failed: %s", text[:300])
+        raise HTTPException(status_code=502, detail="AI 응답 파싱 실패")
+
+    return {
+        "action": result.get("action", ""),
+        "suggested_characters": result.get("suggested_characters", []),
     }
 
 

@@ -325,9 +325,17 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
   // ── 콘티 수정 모달 ──
   const [storyboardEdit, setStoryboardEdit] = useState(null); // { cut, form: { shot, action, characters } }
   const [savingStoryboard, setSavingStoryboard] = useState(false);
+  // ── 지문 AI 재작성 (1-7) ──
+  const [rewriteRequest, setRewriteRequest] = useState('');
+  const [rewriteLoading, setRewriteLoading] = useState(false);
+  const [rewritePrevAction, setRewritePrevAction] = useState(null); // 되돌리기용
+  const [suggestedChars, setSuggestedChars] = useState([]); // ref_key[]
 
   const openStoryboardEditor = (cut) => {
     const currentCharIds = (cut.characters || []).map(c => typeof c === 'string' ? c : c.character_id);
+    setRewriteRequest('');
+    setRewritePrevAction(null);
+    setSuggestedChars([]);
     setStoryboardEdit({
       cut,
       form: {
@@ -349,6 +357,36 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
       const next = ids.includes(refKey) ? ids.filter(id => id !== refKey) : [...ids, refKey];
       return { ...prev, form: { ...prev.form, characterIds: next } };
     });
+  };
+
+  const handleRewriteAction = async () => {
+    if (!storyboardEdit || !rewriteRequest.trim()) return;
+    setRewriteLoading(true);
+    setSuggestedChars([]);
+    try {
+      const { data } = await api.post(`/cuts/${storyboardEdit.cut.cut_id}/rewrite-action`, {
+        request: rewriteRequest.trim(),
+      });
+      setRewritePrevAction(storyboardEdit.form.action);
+      updateStoryboardForm('action', data.action);
+      // suggested_characters 중 현재 미선택인 것만 제안
+      const currentIds = storyboardEdit.form.characterIds;
+      const newSuggestions = (data.suggested_characters || []).filter(rk => !currentIds.includes(rk));
+      setSuggestedChars(newSuggestions);
+      setRewriteRequest('');
+    } catch (err) {
+      setError(err.response?.data?.detail || '지문 재작성 실패');
+    } finally {
+      setRewriteLoading(false);
+    }
+  };
+
+  const undoRewrite = () => {
+    if (rewritePrevAction !== null) {
+      updateStoryboardForm('action', rewritePrevAction);
+      setRewritePrevAction(null);
+      setSuggestedChars([]);
+    }
   };
 
   const saveStoryboard = async (andRegenerate = false) => {
@@ -854,12 +892,71 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
               </div>
             </div>
 
+            {/* 지문 AI 재작성 (1-7) */}
+            <div className="mb-3">
+              <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">이렇게 바꿔줘</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={rewriteRequest}
+                  onChange={(e) => setRewriteRequest(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && !rewriteLoading && handleRewriteAction()}
+                  placeholder="예: 백미러에 아내랑 도도가 보여야 해"
+                  className="flex-1 px-3 py-1.5 border-2 border-border dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-ink-black dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  disabled={rewriteLoading}
+                />
+                <button
+                  onClick={handleRewriteAction}
+                  disabled={rewriteLoading || !rewriteRequest.trim()}
+                  className="px-3 py-1.5 bg-amber-500 text-white rounded-lg text-xs font-bold hover:bg-amber-600 transition-all disabled:opacity-50 whitespace-nowrap flex items-center gap-1"
+                >
+                  {rewriteLoading ? (
+                    <><RefreshCw size={12} className="animate-spin" /> 작성 중...</>
+                  ) : (
+                    <><Pencil size={12} /> 지문 다시 쓰기</>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* 캐릭터 추가 제안 칩 */}
+            {suggestedChars.length > 0 && (
+              <div className="mb-3 flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-gray-500 dark:text-gray-400">추가?</span>
+                {suggestedChars.map(rk => {
+                  const c = episodeCharacters.find(ec => ec.ref_key === rk);
+                  return (
+                    <button
+                      key={rk}
+                      onClick={() => {
+                        toggleStoryboardChar(rk);
+                        setSuggestedChars(prev => prev.filter(r => r !== rk));
+                      }}
+                      className="px-2.5 py-1 rounded-full text-xs font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-300 dark:border-green-700 hover:bg-green-200 dark:hover:bg-green-800/40 transition-all"
+                    >
+                      + {c?.name || rk}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             {/* 지문 (액션) */}
             <div className="mb-4">
-              <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">지문</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-bold text-gray-600 dark:text-gray-400">지문</label>
+                {rewritePrevAction !== null && (
+                  <button
+                    onClick={undoRewrite}
+                    className="flex items-center gap-1 text-xs text-gray-500 hover:text-amber-600 transition-colors"
+                  >
+                    <RotateCcw size={12} /> 되돌리기
+                  </button>
+                )}
+              </div>
               <textarea
                 value={storyboardEdit.form.action}
-                onChange={(e) => updateStoryboardForm('action', e.target.value)}
+                onChange={(e) => { updateStoryboardForm('action', e.target.value); setRewritePrevAction(null); }}
                 rows={4}
                 className="w-full px-3 py-2 border-2 border-border dark:border-zinc-700 rounded-xl text-sm bg-white dark:bg-zinc-800 text-ink-black dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
                 placeholder="이 컷에서 일어나는 장면을 묘사해주세요"
