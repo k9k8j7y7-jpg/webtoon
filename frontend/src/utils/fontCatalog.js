@@ -1,8 +1,8 @@
 /**
  * fontCatalog.js — 커스텀 폰트 단일 소스
  *
- * usage: 'sfx' = 1차(효과음 전용), 'bubble' = 2차(말풍선 예약)
- * charWidth: 2차에서 실측 예정, 현재 0.93 초기값
+ * usage: 'sfx' = 효과음 전용, 'bubble' = 말풍선, 'default' = 기본
+ * charWidth: 실측 기반 (measureText × 1.413 안전 계수, Pretendard 0.93 기준)
  * file: /WEBTOON/fonts/xxx.woff2 경로 (Vite public/ 기준)
  */
 
@@ -23,7 +23,7 @@ const FONT_CATALOG = [
     family: "'NanumBrush', 'Pretendard', sans-serif",
     file: `${BASE}fonts/nanum-brush.woff2`,
     usage: 'sfx',
-    charWidth: 0.93,
+    charWidth: 0.68,
   },
   {
     id: 'nanum-bisang',
@@ -31,7 +31,7 @@ const FONT_CATALOG = [
     family: "'NanumBisang', 'Pretendard', sans-serif",
     file: `${BASE}fonts/nanum-bisang.woff2`,
     usage: 'sfx',
-    charWidth: 0.93,
+    charWidth: 0.60,
   },
   {
     id: 'nanum-nunchi',
@@ -39,7 +39,7 @@ const FONT_CATALOG = [
     family: "'NanumNunchi', 'Pretendard', sans-serif",
     file: `${BASE}fonts/nanum-nunchi.woff2`,
     usage: 'sfx',
-    charWidth: 0.93,
+    charWidth: 0.61,
   },
   {
     id: 'chab',
@@ -47,7 +47,7 @@ const FONT_CATALOG = [
     family: "'Chab', 'Pretendard', sans-serif",
     file: `${BASE}fonts/chab.woff2`,
     usage: 'sfx',
-    charWidth: 0.93,
+    charWidth: 1.03,
   },
   {
     id: 'jeongseon',
@@ -55,16 +55,16 @@ const FONT_CATALOG = [
     family: "'Jeongseon', 'Pretendard', sans-serif",
     file: `${BASE}fonts/jeongseon.woff2`,
     usage: 'sfx',
-    charWidth: 0.93,
+    charWidth: 0.80,
   },
-  // ── 2차 예약 (말풍선) ──
+  // ── 말풍선 폰트 ──
   {
     id: 'recipekorea',
     label: '레코체',
     family: "'Recipekorea', 'Pretendard', sans-serif",
     file: `${BASE}fonts/recipekorea.woff2`,
     usage: 'bubble',
-    charWidth: 0.93,
+    charWidth: 1.06,
   },
   {
     id: 'bmjua',
@@ -72,7 +72,7 @@ const FONT_CATALOG = [
     family: "'BMJUA', 'Pretendard', sans-serif",
     file: `${BASE}fonts/bmjua.woff2`,
     usage: 'bubble',
-    charWidth: 0.93,
+    charWidth: 0.88,
   },
 ];
 

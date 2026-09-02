@@ -54,11 +54,12 @@ const SFX_COLORS = [
 ];
 
 // ── 버블 픽셀 높이 계산 — spec 기반, minHeightPx 최소 높이 지원 ──
-function computeBubblePixelH(text, pw, style, fontScale = 1.0, minHeightPx = 0) {
+function computeBubblePixelH(text, pw, style, fontScale = 1.0, minHeightPx = 0, fontId) {
   const cfg = BUBBLE_CONFIGS[style] || BUBBLE_CONFIGS.round;
   const sp = bubbleSpec.styles[style] || bubbleSpec.styles.round;
   const fontSize = bubbleSpec.baseFontSize * (cfg.fontSize || 1) * fontScale;
-  const maxChars = Math.max(4, Math.floor((pw - sp.paddingX * 2) / (fontSize * CHAR_WIDTH)));
+  const cw = getFontById(fontId).charWidth;
+  const maxChars = Math.max(4, Math.floor((pw - sp.paddingX * 2) / (fontSize * cw)));
   const lines = wrapText(text || '', maxChars);
   const textH = lines.length * fontSize * bubbleSpec.lineHeightRatio + sp.paddingY * 2;
   return Math.max(textH, minHeightPx);
@@ -601,7 +602,8 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
 
                 // computeSingleBubbleGeo로 실제 도형 크기를 얻음
                 // fixedWidth=true: 사용자가 설정한 너비를 그대로 사용 (스마트핏 없음)
-                const geo = computeSingleBubbleGeo(style, b.text, px, py, pw, minHeightPx, fontScale, tailDir, flipTail, true);
+                const bubbleFontId = layout.font;
+                const geo = computeSingleBubbleGeo(style, b.text, px, py, pw, minHeightPx, fontScale, tailDir, flipTail, true, imgW, layout.text_offset_x || 0, layout.text_offset_y || 0, bubbleFontId);
                 const { bx: gx, by: gy, needW: gw, needH: gh } = geo;
 
                 const isSelected = selectedIdx === i;
@@ -621,6 +623,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                         viewW={imgW}
                         textOffsetX={layout.text_offset_x || 0}
                         textOffsetY={layout.text_offset_y || 0}
+                        fontId={bubbleFontId}
                       />
                     </g>
                     {/* 선택 박스 — 실제 도형 크기(gx,gy,gw,gh) 기준 */}
@@ -921,6 +924,27 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                     </button>
                   </div>
                 )}
+
+                {/* 폰트 선택 */}
+                <div className="shrink-0">
+                  <p className="text-[10px] text-zinc-500 font-bold mb-1">폰트</p>
+                  <select
+                    value={selectedBubble.bubble_layout?.font || 'pretendard'}
+                    onChange={e => updateLayout(selectedIdx, { font: e.target.value })}
+                    className="px-2 py-1.5 rounded-lg text-xs font-bold bg-zinc-700 text-zinc-200 border border-zinc-600 focus:outline-none focus:border-purple-500 cursor-pointer"
+                    onClick={e => e.stopPropagation()}
+                  >
+                    {getFontsByUsage('bubble').map(f => (
+                      <option key={f.id} value={f.id} style={{ fontFamily: f.family }}>
+                        {f.label}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="mt-1 px-2 py-1 bg-zinc-900 rounded text-center"
+                    style={{ fontFamily: getFontById(selectedBubble.bubble_layout?.font).family, fontWeight: 500, fontSize: '13px', color: '#c084fc' }}>
+                    안녕하세요!
+                  </div>
+                </div>
 
                 {/* 텍스트 편집 */}
                 <div className="flex-1 min-w-[160px]">

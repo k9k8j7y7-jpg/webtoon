@@ -105,13 +105,17 @@ export async function loadFontCSS(usedFontIds = []) {
 }
 
 /**
- * 컷 목록에서 사용된 SFX 폰트 id 수집
+ * 컷 목록에서 사용된 폰트 id 수집 (SFX + 말풍선)
  */
 export function collectUsedFonts(cuts) {
   const ids = new Set();
   for (const cut of cuts) {
     for (const sfx of cut.sfx_items || []) {
       const fontId = sfx.sfx_layout?.font;
+      if (fontId) ids.add(fontId);
+    }
+    for (const d of cut.dialogue || []) {
+      const fontId = d.bubble_layout?.font;
       if (fontId) ids.add(fontId);
     }
   }

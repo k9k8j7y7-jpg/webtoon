@@ -11,6 +11,7 @@
 
 import { useMemo } from 'react';
 import { resolveBubbleStyle } from '../utils/bubbleMapping';
+import { getFontById } from '../utils/fontCatalog';
 
 // ── 스타일별 설정 (색상은 backend/app/composition/service.py 기준) ──
 
@@ -673,7 +674,7 @@ function computeTextShift(cfg, rxE, ryE, needW, needH, textBlockW, textBlockH, p
 
 // ── 말풍선 기하학 계산 (CutEditor 편집 모드에서 선택 박스·히트 영역에 사용) ──
 
-export function computeSingleBubbleGeo(style, text, bubbleX, bubbleY, bubbleW, minHeightPx, fontScale, tailDirection, flipTail, fixedWidth, viewW, textOffsetX, textOffsetY) {
+export function computeSingleBubbleGeo(style, text, bubbleX, bubbleY, bubbleW, minHeightPx, fontScale, tailDirection, flipTail, fixedWidth, viewW, textOffsetX, textOffsetY, fontId) {
   const cfg = BUBBLE_CONFIGS[style] || BUBBLE_CONFIGS.round;
   const s = getScale(viewW);
   const fs = fontScale || 1.0;
@@ -681,10 +682,11 @@ export function computeSingleBubbleGeo(style, text, bubbleX, bubbleY, bubbleW, m
   const lineHeight = fontSize * LINE_HEIGHT_RATIO;
   const padX = BASE_PADDING_X * s;
   const padY = BASE_PADDING_Y * s;
-  const maxChars = Math.max(4, Math.floor((bubbleW - padX * 2) / (fontSize * CHAR_WIDTH)));
+  const cw = getFontById(fontId).charWidth;
+  const maxChars = Math.max(4, Math.floor((bubbleW - padX * 2) / (fontSize * cw)));
   const lines = wrapText(text, maxChars);
   const longestLine = Math.max(...lines.map(l => l.length), 1);
-  const textBlockW = longestLine * fontSize * CHAR_WIDTH;
+  const textBlockW = longestLine * fontSize * cw;
   const textBlockH = lines.length * lineHeight;
 
   const { needW, needH } = computeBubbleSize(cfg, textBlockW, textBlockH, bubbleW, fixedWidth, minHeightPx, padX, padY, s);
@@ -703,7 +705,7 @@ export function computeSingleBubbleGeo(style, text, bubbleX, bubbleY, bubbleW, m
 export function SingleBubble({
   style, text, bubbleX, bubbleY, bubbleW, bubbleH,
   tailDirection, flipTail, fontScale, fixedWidth, viewW,
-  textOffsetX, textOffsetY, renderMode,
+  textOffsetX, textOffsetY, renderMode, fontId,
 }) {
   const cfg = BUBBLE_CONFIGS[style] || BUBBLE_CONFIGS.round;
   const s = getScale(viewW);
@@ -712,10 +714,12 @@ export function SingleBubble({
   const lineHeight = fontSize * LINE_HEIGHT_RATIO;
   const padX = BASE_PADDING_X * s;
   const padY = BASE_PADDING_Y * s;
-  const maxChars = Math.max(4, Math.floor((bubbleW - padX * 2) / (fontSize * CHAR_WIDTH)));
+  const fontEntry = getFontById(fontId);
+  const cw = fontEntry.charWidth;
+  const maxChars = Math.max(4, Math.floor((bubbleW - padX * 2) / (fontSize * cw)));
   const lines = wrapText(text, maxChars);
   const longestLine = Math.max(...lines.map(l => l.length), 1);
-  const textBlockW = longestLine * fontSize * CHAR_WIDTH;
+  const textBlockW = longestLine * fontSize * cw;
   const textBlockH = lines.length * lineHeight;
 
   const { needW, needH } = computeBubbleSize(cfg, textBlockW, textBlockH, bubbleW, fixedWidth, bubbleH, padX, padY, s);
@@ -747,7 +751,7 @@ export function SingleBubble({
     if (renderMode === 'svg-text') {
       elements.push(
         <text key="text" textAnchor="middle" fill={cfg.textColor}
-          fontSize={fontSize} fontFamily="'Pretendard', 'Nanum Gothic', sans-serif"
+          fontSize={fontSize} fontFamily={fontEntry.family}
           fontWeight={400} letterSpacing="0.02em">
           {lines.map((line, i) => (
             <tspan key={i} x={textCenterX}
@@ -765,7 +769,7 @@ export function SingleBubble({
               color: cfg.textColor,
               fontSize: `${fontSize}px`,
               lineHeight: `${lineHeight}px`,
-              fontFamily: "'Pretendard', 'Nanum Gothic', sans-serif",
+              fontFamily: fontEntry.family,
               fontWeight: 400,
               textAlign: 'center',
               whiteSpace: 'nowrap',
@@ -865,7 +869,7 @@ export function SingleBubble({
   if (renderMode === 'svg-text') {
     elements.push(
       <text key="text" textAnchor="middle" fill={cfg.textColor}
-        fontSize={fontSize} fontFamily="'Pretendard', 'Nanum Gothic', sans-serif"
+        fontSize={fontSize} fontFamily={fontEntry.family}
         fontWeight={textFW} letterSpacing="0.02em">
         {lines.map((line, i) => (
           <tspan key={i} x={textCX}
@@ -883,7 +887,7 @@ export function SingleBubble({
             color: cfg.textColor,
             fontSize: `${fontSize}px`,
             lineHeight: `${lineHeight}px`,
-            fontFamily: "'Pretendard', 'Nanum Gothic', sans-serif",
+            fontFamily: fontEntry.family,
             fontWeight: textFW,
             textAlign: 'center',
             whiteSpace: 'nowrap',
@@ -1032,12 +1036,14 @@ export default function BubbleOverlay({ dialogue, characters, width, height, ren
         const flip = bl.tail_flip || false;
         const txOff = bl.text_offset_x || 0;
         const tyOff = bl.text_offset_y || 0;
+        const blFont = bl.font;
+        const cw = getFontById(blFont).charWidth;
 
         const fontSize = BASE_FONT_SIZE * s * (cfg.fontSize || 1) * fs;
         const lineHeight = fontSize * LINE_HEIGHT_RATIO;
-        const maxChars = Math.max(4, Math.floor((bw - padX * 2) / (fontSize * CHAR_WIDTH)));
+        const maxChars = Math.max(4, Math.floor((bw - padX * 2) / (fontSize * cw)));
         const lines = wrapText(item.text || '', maxChars);
-        const textBlockW = Math.max(...lines.map(l => l.length), 1) * fontSize * CHAR_WIDTH;
+        const textBlockW = Math.max(...lines.map(l => l.length), 1) * fontSize * cw;
         const textH = lines.length * lineHeight;
         const { needW: w2, needH: h2 } = computeBubbleSize(cfg, textBlockW, textH, bw, true, minH, padX, padY, s);
 
@@ -1047,11 +1053,12 @@ export default function BubbleOverlay({ dialogue, characters, width, height, ren
           tailDirection: tailDir, flipTail: flip, fontScale: fs,
           fixedWidth: true,
           textOffsetX: txOff, textOffsetY: tyOff,
+          fontId: blFont,
         });
         continue;
       }
 
-      // 기본 자동 배치
+      // 기본 자동 배치 (font 미지정 → pretendard 기본값)
       const fontSize = BASE_FONT_SIZE * s * (cfg.fontSize || 1);
       const lineHeight = fontSize * LINE_HEIGHT_RATIO;
       const maxChars = Math.max(4, Math.floor((maxBubbleW - padX * 2) / (fontSize * CHAR_WIDTH)));
@@ -1101,6 +1108,7 @@ export default function BubbleOverlay({ dialogue, characters, width, height, ren
           textOffsetX={b.textOffsetX}
           textOffsetY={b.textOffsetY}
           renderMode={renderMode}
+          fontId={b.fontId}
         />
       ))}
     </svg>
