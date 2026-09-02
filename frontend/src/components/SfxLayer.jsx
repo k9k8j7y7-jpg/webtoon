@@ -6,7 +6,10 @@
  * - 굵은 폰트 + 흰색 아웃라인 (웹툰 효과음 스타일)
  * - 회전 지원 (sfx_layout.rotation)
  * - pointer-events: none (편집은 CutEditor에서)
+ * - sfx_layout.font: FONT_CATALOG id → 커스텀 폰트 적용
  */
+
+import { getFontById } from '../utils/fontCatalog';
 
 export default function SfxLayer({ sfxItems, width, height }) {
   if (!sfxItems?.length || !width || !height) return null;
@@ -34,6 +37,7 @@ export default function SfxLayer({ sfxItems, width, height }) {
         const strokeW = Math.max(1.5, fontSize * 0.08);
         // 흰색 텍스트일 때는 아웃라인을 검정으로
         const outlineColor = color === '#ffffff' ? '#1a1a1a' : '#ffffff';
+        const fontEntry = getFontById(layout.font);
 
         return (
           <g key={sfx.id || i} transform={`translate(${px}, ${py}) rotate(${rotation})`}>
@@ -47,7 +51,7 @@ export default function SfxLayer({ sfxItems, width, height }) {
                 stroke: outlineColor,
                 strokeWidth: strokeW,
                 paintOrder: 'stroke fill',
-                fontFamily: "'Pretendard', 'Nanum Gothic', sans-serif",
+                fontFamily: fontEntry.family,
                 letterSpacing: '0.02em',
               }}
             >

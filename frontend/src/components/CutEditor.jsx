@@ -12,10 +12,11 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import api from '../api/client';
-import BubbleOverlay, { BUBBLE_CONFIGS, SingleBubble, BubbleMiniIcon, wrapText, computeSingleBubbleGeo } from './BubbleOverlay';
+import BubbleOverlay, { BUBBLE_CONFIGS, SingleBubble, BubbleMiniIcon, wrapText, computeSingleBubbleGeo, CHAR_WIDTH } from './BubbleOverlay';
 import SfxLayer from './SfxLayer';
 import { resolveBubbleStyle } from '../utils/bubbleMapping';
 import bubbleSpec from '../utils/bubbleSpec.json';
+import { getFontById, getFontsByUsage } from '../utils/fontCatalog';
 import { X, Save, Pencil, Eye, Info, Zap, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { computeInitialLayouts } from '../utils/bubbleLayout';
 
@@ -57,7 +58,7 @@ function computeBubblePixelH(text, pw, style, fontScale = 1.0, minHeightPx = 0) 
   const cfg = BUBBLE_CONFIGS[style] || BUBBLE_CONFIGS.round;
   const sp = bubbleSpec.styles[style] || bubbleSpec.styles.round;
   const fontSize = bubbleSpec.baseFontSize * (cfg.fontSize || 1) * fontScale;
-  const maxChars = Math.max(4, Math.floor((pw - sp.paddingX * 2) / (fontSize * bubbleSpec.charWidth)));
+  const maxChars = Math.max(4, Math.floor((pw - sp.paddingX * 2) / (fontSize * CHAR_WIDTH)));
   const lines = wrapText(text || '', maxChars);
   const textH = lines.length * fontSize * bubbleSpec.lineHeightRatio + sp.paddingY * 2;
   return Math.max(textH, minHeightPx);
@@ -668,6 +669,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                 const strokeW = Math.max(2, fontSize * 0.08);
                 // 흰색 텍스트일 때는 아웃라인을 검정으로
                 const outlineColor = color === '#ffffff' ? '#1a1a1a' : '#ffffff';
+                const fontEntry = getFontById(layout.font);
 
                 return (
                   <g key={`sfx-${sfx.id || i}`} transform={`translate(${px}, ${py}) rotate(${rotation})`}>
@@ -685,7 +687,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                         fontSize: `${fontSize}px`, fontWeight: 900,
                         fill: color, stroke: outlineColor, strokeWidth: strokeW,
                         paintOrder: 'stroke fill',
-                        fontFamily: "'Pretendard', 'Nanum Gothic', sans-serif",
+                        fontFamily: fontEntry.family,
                         letterSpacing: '0.02em', pointerEvents: 'none',
                       }}
                     >{text}</text>
@@ -993,6 +995,27 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                         }`}
                         style={{ backgroundColor: color }} />
                     ))}
+                  </div>
+                </div>
+
+                {/* 폰트 선택 */}
+                <div className="shrink-0">
+                  <p className="text-[10px] text-zinc-500 font-bold mb-1">폰트</p>
+                  <select
+                    value={selectedSfxItem.sfx_layout?.font || 'pretendard'}
+                    onChange={e => updateSfxLayout(selectedSfxIdx, { font: e.target.value })}
+                    className="px-2 py-1.5 rounded-lg text-xs font-bold bg-zinc-700 text-zinc-200 border border-zinc-600 focus:outline-none focus:border-orange-500 cursor-pointer"
+                    onClick={e => e.stopPropagation()}
+                  >
+                    {getFontsByUsage('sfx').map(f => (
+                      <option key={f.id} value={f.id} style={{ fontFamily: f.family }}>
+                        {f.label}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="mt-1 px-2 py-1 bg-zinc-900 rounded text-center"
+                    style={{ fontFamily: getFontById(selectedSfxItem.sfx_layout?.font).family, fontWeight: 900, fontSize: '16px', color: '#f97316' }}>
+                    쾅!
                   </div>
                 </div>
 

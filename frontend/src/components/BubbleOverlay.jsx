@@ -137,7 +137,7 @@ const BUBBLE_CONFIGS = {
 export const NO_TAIL_STYLES = ['narration', 'shout', 'angry', 'surprised'];
 
 // ── 하드코딩 상수 (bubbleSpec.json 사용 금지 — 0.72 charWidth가 버그 원인) ──
-const CHAR_WIDTH = 0.93;
+export const CHAR_WIDTH = 0.93;
 const REF_WIDTH = 800;          // 기준 렌더 폭 (미리보기 모달 기준)
 const BASE_FONT_SIZE = 14;      // REF_WIDTH 기준 폰트 크기
 const LINE_HEIGHT_RATIO = 1.45;

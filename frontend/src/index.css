@@ -1,6 +1,15 @@
 @import url("https://cdn.jsdelivr.net/npm/pretendard/dist/web/static/pretendard.css");
 @import url("https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap");
 
+/* ── 커스텀 폰트 (효과음 + 말풍선) ── */
+@font-face { font-family: 'NanumBrush';  src: url('/WEBTOON/fonts/nanum-brush.woff2')  format('woff2'); font-display: swap; }
+@font-face { font-family: 'NanumBisang'; src: url('/WEBTOON/fonts/nanum-bisang.woff2') format('woff2'); font-display: swap; }
+@font-face { font-family: 'NanumNunchi'; src: url('/WEBTOON/fonts/nanum-nunchi.woff2') format('woff2'); font-display: swap; }
+@font-face { font-family: 'Chab';        src: url('/WEBTOON/fonts/chab.woff2')         format('woff2'); font-display: swap; }
+@font-face { font-family: 'Jeongseon';   src: url('/WEBTOON/fonts/jeongseon.woff2')    format('woff2'); font-display: swap; }
+@font-face { font-family: 'Recipekorea'; src: url('/WEBTOON/fonts/recipekorea.woff2')  format('woff2'); font-display: swap; }
+@font-face { font-family: 'BMJUA';       src: url('/WEBTOON/fonts/bmjua.woff2')        format('woff2'); font-display: swap; }
+
 @import "tailwindcss";
 
 @theme {

@@ -153,6 +153,7 @@ async def list_characters(
 
 
 class CharacterUpdateRequest(BaseModel):
+    name: str | None = None
     gender: str | None = None
     age_group: str | None = None
     hair_style: str | None = None
@@ -174,16 +175,23 @@ async def update_character(
     if not character:
         raise HTTPException(status_code=404, detail="Character not found")
 
-    for field in ["gender", "age_group", "hair_style", "hair_color", "body_type", "mood", "detail_notes"]:
+    # name은 외형 무관 — appearance_en 재생성 불필요
+    if body.name is not None:
+        character.name = body.name.strip()
+
+    appearance_fields = ["gender", "age_group", "hair_style", "hair_color", "body_type", "mood", "detail_notes"]
+    appearance_changed = False
+    for field in appearance_fields:
         val = getattr(body, field)
         if val is not None:
             setattr(character, field, val)
+            appearance_changed = True
 
-    # 구조화 필드로 description 자동 재조립
-    character.description = build_character_description(character)
-
-    # appearance_en 재생성 (영문 외형 명세 — 컷 프롬프트 주입용)
-    character.appearance_en = await build_appearance_en(character)
+    if appearance_changed:
+        # 구조화 필드로 description 자동 재조립
+        character.description = build_character_description(character)
+        # appearance_en 재생성 (영문 외형 명세 — 컷 프롬프트 주입용)
+        character.appearance_en = await build_appearance_en(character)
 
     db.commit()
 

@@ -152,6 +152,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
     setSavingChar(true);
     try {
       await api.put(`/characters/${editingChar.id}`, {
+        name: editingChar.name || null,
         gender: editingChar.gender || null,
         age_group: editingChar.age_group || null,
         hair_style: editingChar.hair_style || null,
@@ -174,6 +175,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
       setSavingChar(true);
       try {
         await api.put(`/characters/${editingChar.id}`, {
+          name: editingChar.name || null,
           gender: editingChar.gender || null,
           age_group: editingChar.age_group || null,
           hair_style: editingChar.hair_style || null,
@@ -542,6 +544,15 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
                 {/* 캐릭터 편집 폼 */}
                 {editingChar?.id === c.id && (
                   <div className="mt-3 p-3 bg-purple-50/50 dark:bg-purple-900/10 border border-purple-200 dark:border-purple-800 rounded-lg space-y-3">
+                    <div>
+                      <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400">이름</label>
+                      <input
+                        type="text"
+                        value={editingChar.name}
+                        onChange={e => updateCharField('name', e.target.value)}
+                        className="w-full mt-0.5 px-2 py-1.5 text-xs font-bold rounded-lg border border-border dark:border-zinc-600 bg-white dark:bg-zinc-800 text-ink-black dark:text-white"
+                      />
+                    </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400">성별</label>
@@ -639,10 +650,11 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
                       />
                       <p className="text-[9px] text-gray-400 dark:text-gray-500 mt-0.5">이미지 생성에 반영됩니다</p>
                     </div>
+                    <p className="text-[9px] text-purple-500 dark:text-purple-400">이름은 이 캐릭터가 연결된 모든 에피소드에 반영됩니다</p>
                     <div className="flex gap-2">
                       <button onClick={saveCharConditions} disabled={savingChar}
                         className="flex-1 px-3 py-1.5 text-xs font-bold bg-purple-600 text-white rounded-full hover:bg-purple-700 transition-colors disabled:opacity-50">
-                        {savingChar ? '저장 중...' : '조건 저장'}
+                        {savingChar ? '저장 중...' : '저장'}
                       </button>
                       <button onClick={() => saveAndRegenerate(c.id)} disabled={savingChar || !!job}
                         className="flex-1 px-3 py-1.5 text-xs font-bold bg-comic-orange text-white rounded-full hover:bg-orange-600 transition-colors disabled:opacity-50">

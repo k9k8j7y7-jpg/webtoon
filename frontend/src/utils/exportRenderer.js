@@ -14,7 +14,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import BubbleOverlayComponent from '../components/BubbleOverlay';
 import SfxLayerComponent from '../components/SfxLayer';
-import { loadFontCSS } from './fontEmbed';
+import { loadFontCSS, collectUsedFonts, ensureFontsLoaded } from './fontEmbed';
 import { computeInitialLayouts } from './bubbleLayout';
 
 // ── 이미지 로드 헬퍼 ──
@@ -142,8 +142,10 @@ async function processAllCuts(
   onProgress,
   signal,
 ) {
-  // 폰트 CSS를 한 번만 로드하여 전 컷에 재사용 (캐시됨)
-  const fontCSS = await loadFontCSS();
+  // 사용된 커스텀 폰트 수집 → 폰트 CSS 로드 + 브라우저 폰트 대기
+  const usedFontIds = collectUsedFonts(cuts);
+  const fontCSS = await loadFontCSS(usedFontIds);
+  await ensureFontsLoaded(usedFontIds);
 
   const results = [];
   for (let i = 0; i < cuts.length; i++) {
