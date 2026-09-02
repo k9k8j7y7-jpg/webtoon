@@ -1,6 +1,34 @@
 # 진행 상태 추적
 
-## 현재: 1-7 실전 피드백 수정 + AI 토큰 전수 점검 — 완료 (2026-09-01)
+## 현재: 0-4 커스텀 폰트 완료 + 1-1 장소 사진 조사 (2026-09-02)
+
+### 0-4 커스텀 폰트 — 완료 (2026-09-02)
+- **1차 (효과음 5종 + 말풍선 2종 예약):**
+  - woff2 서브셋 파이프라인: `scripts/build-fonts.py` + `scripts/ksx1001_chars.py` (KS X 1001 2,350자)
+  - FONT_CATALOG 단일 소스 (`frontend/src/utils/fontCatalog.js`): 8종, id/label/family/file/usage/charWidth
+  - SfxLayer: 폰트 선택 적용, CutEditor: SFX 편집 패널 폰트 드롭다운
+  - fontEmbed.js: 커스텀 폰트 Base64 인라인 (사용된 폰트만), ensureFontsLoaded()
+  - CHAR_WIDTH 0.72→0.93 버그 수정 (bubbleSpec.json 값 사용 금지)
+- **2차 (말풍선 폰트 + charWidth 실측):**
+  - `scripts/measure-font-width.mjs`: Playwright Canvas measureText × 1.413 안전계수
+  - charWidth: pretendard 0.93, nanum-brush 0.68, nanum-bisang 0.60, nanum-nunchi 0.61, chab 1.03, jeongseon 0.80, recipekorea 1.06, bmjua 0.88
+  - 폭 계산 6개소 폰트 인식: computeSingleBubbleGeo, computeOverlayLayout, SingleBubble, computeBubblePixelH, CutEditor SFX 렌더, export
+  - CutEditor: 말풍선 편집 패널 폰트 드롭다운 + 미리보기
+  - 배포 완료
+
+### 캐릭터 이름 편집 — 완료 (2026-09-02)
+- Gate3 캐릭터 편집 폼에 이름 입력 필드 추가 (이전엔 ⚠ 표시만)
+- 백엔드 `CharacterUpdateRequest`에 `name` 필드 추가, 이름만 변경 시 appearance_en 불변
+- 배포 완료
+
+### 1-1 장소 사진 업로드 — 조사 완료 (2026-09-02)
+- 백엔드 `locations/router.py`: upload_reference_image API 기존재, storage에 저장
+- 프론트 Gate3Assets: 장소 카드에 사진 업로드 UI 미구현 (텍스트 설명만)
+- 컷 생성 시 장소 이미지: reference_images[]에 포함 + "Setting: {desc}" 텍스트 주입
+- 스타일 충돌 우려: 실사 사진 → 그림체와 충돌 가능. "spatial-only" 지시어 추가 권장
+- 캐릭터 시트 reference_images: 파라미터 기존재 (service.py), 서비스에서 미전달 → 즉시 확장 가능
+
+## 이전: 1-7 실전 피드백 수정 + AI 토큰 전수 점검 — 완료 (2026-09-01)
 
 ### 1-7 실전 피드백 수정 3건 (2026-09-01)
 1. 화자/이름: rewrite-action에 시리즈 바이블 narrator 주입 (1인칭이면 '나'→화자 이름 치환)

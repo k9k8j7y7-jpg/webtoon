@@ -6,40 +6,17 @@
 
 ```
 WEBTOON/
-├── backend/           # FastAPI 모듈러 모놀리스 (Python)
-│   ├── app/
-│   │   ├── adapters/      # Gemini API 어댑터 (텍스트·이미지)
-│   │   ├── auth/          # OAuth + JWT 인증
-│   │   ├── billing/       # 과금 (구독 + 크레딧)
-│   │   ├── characters/    # 캐릭터 시트 관리
-│   │   ├── composition/   # 말풍선/대사 조판 엔진 (Pillow)
-│   │   ├── export/        # 내보내기 (PNG/세로/인스타/A4)
-│   │   ├── images/        # 컷 이미지 생성 엔진 (핵심)
-│   │   ├── locations/     # 장소 레퍼런스 관리
-│   │   ├── projects/      # 프로젝트/에피소드 CRUD
-│   │   ├── prompts/       # 프롬프트 엔진
-│   │   ├── script/        # 대본 생성 (게이트 2)
-│   │   ├── story/         # 기획 생성 (게이트 1)
-│   │   ├── series/        # 시리즈(연작) CRUD
-│   │   ├── storyboard/    # 콘티 (게이트 4)
-│   │   ├── styles/        # 스타일 프리셋
-│   │   ├── workflow/      # 게이트 상태 + 무효화 전파
-│   │   ├── config.py      # 환경설정 (pydantic-settings)
-│   │   ├── database.py    # SQLAlchemy 엔진/세션
-│   │   ├── jobs.py        # 비동기 Job 관리 (인메모리)
-│   │   ├── storage.py     # 파일 저장 (S3 → 로컬 폴백)
-│   │   └── main.py        # FastAPI 앱 + 라우터 등록 + SPA 서빙
-│   ├── frontend/dist/     # 빌드된 프론트엔드 (서버에서 서빙)
-│   ├── init_db.sql ~ step12.sql # DB 마이그레이션 (+ stepN_down.sql 롤백)
-│   └── requirements.txt
-├── frontend/          # React 19 + Vite + Tailwind CSS
-│   └── src/
-│       ├── api/client.js          # Axios + JWT + Job 폴링
-│       ├── contexts/AuthContext
-│       ├── components/            # Layout, GateProgress, JobProgress, CutEditor, BubbleOverlay, SfxLayer
-│       │   └── gates/             # Gate1~5 컴포넌트
-│       └── pages/                 # Login, Dashboard, Project, Series, Workflow
-└── docs/              # 설계 문서 + 지시서 + CLAUDE_archive.md (이력 전문)
+├── backend/app/       # FastAPI 모듈러 모놀리스: adapters/ auth/ billing/ characters/
+│   │                  # composition/ export/ images/ locations/ projects/ prompts/
+│   │                  # script/ story/ series/ storyboard/ styles/ workflow/
+│   │                  # config.py database.py jobs.py storage.py main.py
+│   ├── frontend/dist/ # 빌드된 프론트엔드 (서버에서 서빙)
+│   └── init_db.sql ~ step13.sql  # DB 마이그레이션 (+ stepN_down.sql 롤백)
+├── frontend/src/      # React 19 + Vite + Tailwind CSS 4
+│   ├── components/    # CutEditor, BubbleOverlay, SfxLayer, gates/Gate1~5
+│   └── utils/         # fontCatalog, fontEmbed, exportRenderer, bubbleSpec
+├── scripts/           # build-fonts.py, measure-font-width.mjs
+└── docs/              # 설계 문서 + CLAUDE_archive.md (이력)
 ```
 
 ## 기술 스택
@@ -74,56 +51,48 @@ WEBTOON/
 - **무효화 전파:** 대본 수정 → diff 판정 → 영향 자산/컷만 invalidated
 - **과금:** 구독 할당량 우선 → 초과분 크레딧 차감 (게이트4 승인 시 강제 정지)
 
-## 현재 상태 (2026-09-01)
+## 현재 상태 (2026-09-02)
 
-**전체 완료:** 백엔드 7단계 + 프론트엔드 MVP + 5게이트 전체 + 연작 P1~P6 + 콘티 인라인 수정 + 0-2 appearance_en + P5 ref_key 버그 수정 + 유령 ref_key 정리 + 1-8 바이블 화자/인물 인라인 수정 + 1-7 지문 AI 재작성 + AI 토큰 공통 상수화
+**전체 완료:** 백엔드 7단계 + 프론트엔드 MVP + 5게이트 전체 + 연작 P1~P6 + 콘티 인라인 수정 + 0-2 appearance_en + 1-8 바이블 수정 + 1-7 지문 AI 재작성 + AI 토큰 상수화 + 0-4 커스텀 폰트 + 캐릭터 이름 편집
 
 **주요 기능 요약:**
-- 게이트 1~5: 기획→대본→자산(캐릭터 7필드 편집/장소 AI 제안·mood_notes)→콘티(컷 수 조정)→이미지(배치 5컷씩/부분 실패 UI)
-- 말풍선: 12종 SVG + CutEditor 드래그 편집 + SFX 효과음
-- Export: 프론트 렌더링 (PNG ZIP/세로/인스타/A4). 백엔드 렌더러 버전 추적 (`RENDERER_VERSION`)
+- 게이트 1~5: 기획→대본→자산(캐릭터 7필드+이름 편집/장소 AI 제안·mood_notes)→콘티(컷 수 조정)→이미지(배치 5컷씩/부분 실패 UI)
+- 말풍선: 12종 SVG + CutEditor 드래그 편집 + SFX 효과음 + 커스텀 폰트 (효과음 5종 + 말풍선 2종)
+- Export: 프론트 렌더링 (PNG ZIP/세로/인스타/A4) + 커스텀 폰트 Base64 인라인 + document.fonts.load() 동기화
 - 연작(Series): 바이블→아웃라인→회차 대본 생성→3단계 잠금→revise API→merge/split
-- 캐릭터: 라이브러리 피커 + appearance_en 외형 명세 주입 (step13, 백필 25/27)
-- 바이블 인라인 수정(1-8): 시놉시스/세계관/화자(1·3인칭)/인물 편집. narrator_missing 경고. 대본 등장 인물 삭제 방어(409)
-- 콘티 지문 AI 재작성(1-7): 화자 주입 + 한국어 외형 + 대명사 금지. 저장 안 함(프론트 채움)
+- 캐릭터: 라이브러리 피커 + appearance_en 외형 명세 주입 + 이름 편집(외형 무관, appearance_en 불변)
+- 폰트: FONT_CATALOG 단일 소스 (8종, charWidth 실측), woff2 서브셋 파이프라인 (scripts/build-fonts.py)
 
-**도도 시리즈:** 1·2화 이미지 완료, 3화 대본 승인·게이트3 진행 중
+**도도 시리즈:** 1~3화 이미지 완료 (사용자 완주)
 
 **다음 세션 시작점:**
-1. 실전 잔여 — 2화 컷 #2 "이렇게 바꿔줘" → 저장 후 재생성 이미지 확인 + 게이트3 캐릭터 이름 "나 (주인공)"→"아내" 변경
-2. 3화 이미지 제작 (참조·명세·화자 전부 맞는 첫 회차 — 손본 컷 수가 성적표)
-3. 0-4 커스텀 폰트 (docs/에 후보 폰트 7개 준비됨, 사용자가 용도 구분 제공 예정)
+1. 1-1 장소 사진 업로드 구현 (조사 완료, 구현 미착수) → 배포 → 실전 검증 (집 실사진 업로드 → 4화 컷 생성 → 그림체 유지 확인)
+2. 1-1c 캐릭터 사진→시트 생성 (reference_images 파라미터 기존재, 업로드 유틸 공용)
+3. 4화 제작 계속
 
-**모델 실험(1-5):** 참조+명세로 일관성 확보됨 → 시급도 하향, 1층 후순위로
+**미수집 데이터:** 3화 손본 컷 수 (모델 실험 우선순위 근거 — 사용자 재확인 필요)
 
-**실사용:** "아빠 엄마에 우리 도도" 1화 12컷 완주
+## 남은 작업
 
-## 남은 작업 (로드맵 v6 — 0층)
-
-- [x] 0-2 캐릭터 외형 명세 주입 (appearance_en + step13 + 백필)
-- [ ] 0-3 도도 1화 문제 컷 재생성 → 안경 유지율로 모델 실험 시급도 결정
-- [ ] 0-4 커스텀 폰트 (조사 지시 있음, 사용자 폰트 선정 대기)
-- [ ] 0-5 도도 2~3화 제작 (병행)
-
-상세는 `docs/로드맵-v6.md` 참조
+- [x] 0-2 캐릭터 외형 명세 주입
+- [x] 0-4 커스텀 폰트 (효과음 5종 + 말풍선 2종 + charWidth 실측)
+- [ ] 1-1 장소 사진 업로드 (조사 완료, 스타일 충돌 방어 확인됨)
+- [ ] 1-1c 캐릭터 사진→시트 (1-1 검증 후 즉시)
+- [ ] 0-5 도도 4화~ 제작 (병행)
 
 ## 개발 규칙
 
 - **문서대로 구현.** 설계 문서(`docs/`)가 기준. 즉흥 이탈 금지
 - **git 안전:** (1) 테스트 통과마다 커밋 (2) 큰 구조 변경 전 커밋 (3) `git checkout`/`git reset` 등 파괴적 명령 전 사용자 확인
-- **BubbleOverlay 상수 불변:** `CHAR_WIDTH=0.93`, `REF_WIDTH=800`, `LINE_HEIGHT_RATIO=1.45`, `BASE_FONT_SIZE=14`, `BASE_PADDING_X=14`, `BASE_PADDING_Y=10`. `bubbleSpec.json`의 `charWidth: 0.72` 사용 금지
+- **BubbleOverlay 상수:** `CHAR_WIDTH=0.93`(기본, pretendard), `REF_WIDTH=800`, `LINE_HEIGHT_RATIO=1.45`, `BASE_FONT_SIZE=14`, `BASE_PADDING_X=14`, `BASE_PADDING_Y=10`. 폰트별 charWidth는 FONT_CATALOG 참조. `bubbleSpec.json`의 `charWidth: 0.72` 사용 금지
 - **말풍선 렌더러 수정 시:** `composition/service.py`의 `RENDERER_VERSION` 올리고, `frontend/src/utils/bubbleSpec.json` + `backend/app/composition/bubble_spec.json` 동시 업데이트
 - **텍스트 렌더 이원 모드:** 화면=`<foreignObject>` / export=SVG `<text>/<tspan>` (`renderMode='svg-text'`). 수정 시 두 모드 동시 수정 + `node scripts/bubble-shot.mjs` 비교 판정 통과 필수
 - **Gemini:** API 키 `.env`의 `GEMINI_API_KEY`. 이미지 모델 `gemini-2.5-flash-image`, 텍스트 모델 `gemini-2.5-flash`
 - **DB 마이그레이션:** `stepN.sql` + `stepN_down.sql` 쌍. 리허설 up→verify→down→재-up + mysqldump 백업 + 사용자 승인 필수. DB 덤프 .sql 커밋 금지 (stepN은 예외)
-- **캐릭터 구조:** `episode_characters` JOIN이 에피소드 조회 표준 경로. `project_id` 직접 조회는 라이브러리 전용. link시 ref_key EC JOIN 전체 대조. unlink 2단계(409+force). 삭제는 연결 0건만(raw SQL 연쇄). 피커 삭제 버튼은 episode_count==0만. 연결 캐릭터(`episode_id≠현재`)는 이미지 재생성 스킵. `characters.style`: 생성 시 preset_key 기록, 불일치 시 ⚠ 경고(차단 아님)
-- **캐릭터 ref_key:** 바이블/기획 생성 시점에 확정 (영문 snake_case). 시트·대본·컷 참조 전부 이 키 기준. 자유 생성 금지. 컷 spec의 character_id는 반드시 연결 캐릭터의 ref_key와 일치해야 함. 불일치 시 Gate5 카드에 ⚠ 표시, 콘티 모달에서 제거/치환 가능
-- **바이블 인물 이름 ≠ 캐릭터 시트 이름 가능** (자동 연동 없음). 매칭은 ref_key 기준. 혼동 방지로 바이블 보기 모드에서 시트 이름 불일치 시 ⚠ 표시
-- **텍스트 AI 호출:** `AI_TOKENS_SHORT`(4096)/`MEDIUM`(8192)/`LONG`(16384) 상수만 사용 (Gemini 2.5 Flash thinking 토큰 잘림 방지). JSON 파싱은 `parse_ai_json()` 경유 (잘림 복구 포함)
-- **콘티 모달 주의:** 지문 재작성 후 suggested_characters 칩을 적용하지 않고 모달을 닫으면 캐릭터 미반영. 저장 전 캐릭터 선택 상태 확인
-- **컷 프롬프트 한글 금지:** 외형은 appearance_en(영어)만 주입. pose 필드는 아직 한글 (추후 영어화 후보). 지문(action)에는 한국어 짧은 괄호 외형만 (영어 appearance_en 금지)
-- **도도 고아 캐릭터:** id=32(백필 고아, "새하얀 털")는 ep20에서 미사용. 실사용은 id=16(갈색). 정리 후보
-- **series outline 리넘버링:** 서버 책임
+- **캐릭터 구조:** `episode_characters` JOIN이 표준 조회. link시 ref_key 대조, unlink 2단계(409+force), 삭제는 연결 0건만. 연결 캐릭터(`episode_id≠현재`)는 이미지 재생성 스킵. `characters.style`: 불일치 시 ⚠(차단 아님)
+- **캐릭터 ref_key:** 바이블/기획 시점 확정 (영문 snake_case). 시트·대본·컷 전부 이 키 기준. 불일치 시 Gate5 ⚠, 콘티 모달에서 제거/치환. 바이블 인물 이름 ≠ 시트 이름 가능 (ref_key 매칭)
+- **텍스트 AI 호출:** `AI_TOKENS_SHORT`(4096)/`MEDIUM`(8192)/`LONG`(16384) 상수만 사용. JSON 파싱은 `parse_ai_json()` 경유
+- **컷 프롬프트 한글 금지:** 외형은 appearance_en(영어)만 주입. 지문(action)에는 한국어 짧은 괄호 외형만
 - **서브 경로:** Vite `base: '/WEBTOON/'`, FastAPI `root_path="/WEBTOON"` — 새 컴포넌트 작성 시 prefix 반영
 - **정적 파일:** `app.mount()` 미사용 → SPA fallback 핸들러에서 storage/assets/frontend 통합 서빙
 - **배포:** 파일별 `scp` → uvicorn `--reload` 자동 감지 (프론트는 빌드 후 dist 배포)
@@ -134,18 +103,8 @@ WEBTOON/
 ## 배포 명령 참고
 
 ```bash
-# 백엔드 파일 배포
-scp -i "C:\Users\user\Downloads\DONGHAESSHKEy.pem" <로컬파일> bitnami@52.79.94.122:/home/bitnami/project-t/backend/<경로>
-
-# 프론트엔드 빌드 + 배포
-cd frontend && npx vite build
-scp -r dist/. bitnami@52.79.94.122:/home/bitnami/project-t/backend/frontend/dist/
-
-# DB 스키마 실행
-ssh bitnami@52.79.94.122 '/opt/bitnami/mariadb/bin/mariadb -u root -p"<비밀번호>" project_t < /home/bitnami/project-t/backend/stepN.sql'
-
-# JWT 토큰 발급 (user_id=1, 유효기간 7일)
-ssh -i "C:\Users\user\Downloads\DONGHAESSHKEy.pem" -o StrictHostKeyChecking=no bitnami@52.79.94.122 'cd /home/bitnami/project-t/backend && source venv/bin/activate && python3 -c "from app.auth.jwt import create_access_token; print(create_access_token(user_id=1))"'
+# 백엔드: scp -i "C:/Users/k9k8j/Downloads/DONGHAESSHKE.pem" <파일> bitnami@52.79.94.122:/home/bitnami/project-t/backend/<경로>
+# 프론트: cd frontend && npx vite build && scp -r dist/. bitnami@52.79.94.122:/home/bitnami/project-t/backend/frontend/dist/
+# DB: ssh bitnami@52.79.94.122 '/opt/bitnami/mariadb/bin/mariadb -u root -p"<비밀번호>" project_t < /home/bitnami/project-t/backend/stepN.sql'
+# JWT: ssh -i "..." bitnami@52.79.94.122 'cd /home/bitnami/project-t/backend && source venv/bin/activate && python3 -c "from app.auth.jwt import create_access_token; print(create_access_token(user_id=1))"'
 ```
-
-> **JWT 발급 요청 시:** 위 명령을 Bash 도구로 직접 실행하여 토큰을 발급하고 사용자에게 전달할 것.
