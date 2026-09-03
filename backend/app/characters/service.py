@@ -10,7 +10,8 @@ from sqlalchemy.orm import Session
 
 from app.characters.models import Character, CharacterImage, CharacterOutfit, EpisodeCharacter
 from app.adapters.gemini_image import get_image_adapter
-from app.adapters.gemini import generate_text, AI_TOKENS_SHORT
+from app.adapters.gemini import generate_text, parse_ai_json, AI_TOKENS_SHORT
+from app.images.service import _load_image_bytes
 from app.storage import upload_image
 from app.jobs import get_job, update_job
 from app.database import SessionLocal
@@ -99,6 +100,7 @@ async def generate_character_sheets(
     db: Session,
     project_id: int | None = None,
     style_preset_key: str | None = None,
+    use_photo_reference: bool = False,
 ):
     """모든 캐릭터의 시트를 생성한다. Job으로 비동기 실행."""
     # BackgroundTask는 별도 스레드에서 실행 → 자체 DB 세션 사용
@@ -195,9 +197,29 @@ async def generate_character_sheets(
         # 이미지 생성 (정면 1 + 표정 2)
         char_desc = f"{name}. {description}"
         try:
+            # 사진 참조 이미지 로드 (토글 ON 시)
+            photo_refs = None
+            photo_labels = None
+            if use_photo_reference and character.reference_photos:
+                photo_refs = []
+                for photo_url in character.reference_photos:
+                    photo_bytes = _load_image_bytes(photo_url)
+                    if photo_bytes:
+                        photo_refs.append(photo_bytes)
+                if photo_refs:
+                    photo_labels = [
+                        f"User photo — use ONLY for facial structure, hair, body proportions. "
+                        f"REDRAW entirely in {style_prompt} illustration style. "
+                        f"Do NOT keep photographic rendering, lighting, or background."
+                    ] * len(photo_refs)
+                else:
+                    photo_refs = None
+
             sheet_results = await adapter.generate_character_sheet(
                 character_description=char_desc,
                 style_prompt=style_prompt,
+                reference_images=photo_refs,
+                reference_labels=photo_labels,
             )
 
             image_types = [
@@ -252,3 +274,65 @@ async def generate_character_sheets(
     db.commit()
     db.close()
     return {"characters": results, "skipped": skipped}
+
+
+async def extract_appearance_from_photos(
+    photo_bytes_list: list[bytes],
+    is_animal: bool = False,
+) -> dict:
+    """사진에서 외형 명세를 추출한다 (비전 모델).
+
+    인물: 구조화 필드 JSON (gender, age_group, hair_style 등) + extra_notes
+    동물: description free-text 한 덩어리
+
+    Returns: parse_ai_json 결과 dict
+    """
+    from google.genai import types
+    from app.adapters.gemini import get_client
+
+    client = get_client()
+
+    contents: list = []
+    for i, photo_bytes in enumerate(photo_bytes_list):
+        contents.append(f"Photo {i + 1}:")
+        contents.append(types.Part.from_bytes(data=photo_bytes, mime_type="image/jpeg"))
+
+    if is_animal:
+        contents.append(
+            "You are describing this animal character for a webtoon illustrator. "
+            "Write a concise Korean description (3~5 sentences) covering: species, breed, "
+            "fur color and pattern, body size, distinctive features (ears, tail, markings). "
+            "Do NOT identify any real person's identity. Do NOT mention breed certification. "
+            "If multiple photos, describe common features across all photos. "
+            "Output JSON only:\n"
+            '{"description": "한국어 외형 묘사 (종/품종, 털 색, 체형, 특징)"}'
+        )
+    else:
+        contents.append(
+            "You are extracting appearance traits from this person's photo(s) for a webtoon illustrator. "
+            "Do NOT identify or guess the person's real name or identity. "
+            "If multiple photos, extract common features across all photos. "
+            "Output JSON only, with these exact keys (use null if not visible):\n"
+            "{\n"
+            '  "gender": "male" | "female" | "androgynous",\n'
+            '  "age_group": "child" | "teen" | "young_adult" | "adult" | "middle_aged" | "elderly",\n'
+            '  "hair_style": "short" | "medium" | "long" | "ponytail" | "twin_tails" | "bob" | "curly" | "buzz" | "bald",\n'
+            '  "hair_color": "black" | "brown" | "blonde" | "red" | "white" | "silver" | "blue" | "pink" | "purple" | "green",\n'
+            '  "body_type": "slim" | "average" | "athletic" | "chubby" | "large" | "petite",\n'
+            '  "mood": "bright" | "calm" | "cold" | "warm" | "mysterious" | "tough" | "cute" | "elegant",\n'
+            '  "extra_notes": "한국어로, 위 필드에 없는 고정 외형 특징 (예: 검은 뿔테 안경, 왼쪽 볼 점, 하늘색 스카프)"\n'
+            "}"
+        )
+
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=contents,
+        config=types.GenerateContentConfig(
+            temperature=0.3,
+            max_output_tokens=AI_TOKENS_SHORT,
+        ),
+    )
+
+    result = parse_ai_json(response.text, context="extract_appearance")
+    logger.warning("Photo appearance extraction: %s", result)
+    return result

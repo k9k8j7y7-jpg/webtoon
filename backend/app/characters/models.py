@@ -1,6 +1,6 @@
 from sqlalchemy import (
     Column, BigInteger, String, Text, Enum, DateTime, Boolean,
-    ForeignKey, UniqueConstraint,
+    ForeignKey, UniqueConstraint, JSON,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -34,6 +34,7 @@ class Character(Base):
     detail_notes = Column(Text, nullable=True)
     style = Column(String(50), nullable=True)
     appearance_en = Column(String(500), nullable=True)
+    reference_photos = Column(JSON, nullable=True)  # URL 배열, 최대 3장
     description = Column(String(2000), nullable=True)
     status = Column(
         Enum("draft", "approved", "invalidated", name="char_status_enum"),

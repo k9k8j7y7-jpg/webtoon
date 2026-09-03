@@ -1,6 +1,8 @@
 """게이트 3 — 캐릭터 엔드포인트. API-Spec 5장."""
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, status
+import json
+
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File, Query, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import func as sa_func, text
@@ -10,7 +12,8 @@ from app.auth.deps import get_current_user
 from app.users.models import User
 from app.projects.models import Project, Episode
 from app.characters.models import Character, CharacterImage, CharacterOutfit, EpisodeCharacter
-from app.characters.service import generate_character_sheets, build_character_description, build_appearance_en
+from app.characters.service import generate_character_sheets, build_character_description, build_appearance_en, extract_appearance_from_photos
+from app.storage import upload_image
 from app.jobs import create_job, run_job_in_background
 from app.workflow.gate import get_gate_number
 from app.workflow.service import invalidate_asset
@@ -95,6 +98,7 @@ async def get_character(
         "name": character.name,
         "description": character.description,
         "appearance_en": character.appearance_en,
+        "reference_photos": character.reference_photos,
         "gender": character.gender,
         "age_group": character.age_group,
         "hair_style": character.hair_style,
@@ -210,10 +214,15 @@ async def update_character(
     }
 
 
+class RegenerateRequest(BaseModel):
+    use_photo_reference: bool = False
+
+
 @router.post("/characters/{character_id}/regenerate", status_code=202)
 async def regenerate_character(
     character_id: int,
-    background_tasks: BackgroundTasks,
+    body: RegenerateRequest | None = None,
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -221,6 +230,8 @@ async def regenerate_character(
     character = db.query(Character).filter(Character.id == character_id).first()
     if not character:
         raise HTTPException(status_code=404, detail="Character not found")
+
+    use_photo = (body.use_photo_reference if body else False) and bool(character.reference_photos)
 
     # 관련 컷 무효화 (State-Model 3.4)
     inv = invalidate_asset(character.episode_id, "character", character.ref_key, db)
@@ -244,10 +255,83 @@ async def regenerate_character(
             job_id=job.job_id,
             db=db,
             project_id=character.project_id,
+            use_photo_reference=use_photo,
         ),
     )
 
     return {"job_id": job.job_id, "cuts_invalidated": inv["cuts_invalidated"]}
+
+
+# ── 1-1c: 캐릭터 실사진 업로드 + 외형 추출 ─────────────────────
+
+@router.post("/characters/{character_id}/photos")
+async def upload_character_photos(
+    character_id: int,
+    files: list[UploadFile] = File(...),
+    is_animal: bool = Query(default=False),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """캐릭터 실사진 1~3장 업로드 + 비전 외형 추출.
+
+    Returns: 업로드 URL 배열 + 추출된 구조화 필드 JSON.
+    """
+    character = db.query(Character).filter(Character.id == character_id).first()
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+
+    if len(files) > 3:
+        raise HTTPException(status_code=400, detail="최대 3장까지 가능합니다")
+
+    # 파일 검증 + 읽기
+    photo_bytes_list: list[bytes] = []
+    urls: list[str] = []
+    for i, file in enumerate(files):
+        if file.content_type not in ("image/jpeg", "image/png"):
+            raise HTTPException(status_code=400, detail=f"파일 {i+1}: JPEG 또는 PNG만 가능합니다")
+        contents = await file.read()
+        if len(contents) > 5 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail=f"파일 {i+1}: 5MB 이하만 가능합니다")
+        photo_bytes_list.append(contents)
+
+        ext = "jpg" if "jpeg" in file.content_type else "png"
+        url = upload_image(
+            image_bytes=contents,
+            path_prefix=f"characters/{character_id}/photos",
+            filename=f"ref_{i}.{ext}",
+            mime_type=file.content_type,
+        )
+        urls.append(url)
+
+    # DB에 URL 배열 저장
+    character.reference_photos = urls
+    db.commit()
+
+    # 비전 외형 추출
+    extracted = await extract_appearance_from_photos(photo_bytes_list, is_animal=is_animal)
+
+    return {
+        "id": character.id,
+        "reference_photos": urls,
+        "extracted": extracted,
+    }
+
+
+@router.delete("/characters/{character_id}/photos")
+async def delete_character_photos(
+    character_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """캐릭터 실사진 삭제."""
+    character = db.query(Character).filter(Character.id == character_id).first()
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+
+    character.reference_photos = None
+    db.commit()
+
+    return {"id": character.id, "reference_photos": None}
 
 
 # ── P3: 프로젝트 캐릭터 목록 (집계형 1콜) ───────────────────────

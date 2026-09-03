@@ -128,6 +128,9 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
   // ── 캐릭터 캐릭터 편집 ──
   const [editingChar, setEditingChar] = useState(null); // { id, gender, age_group, ... }
   const [savingChar, setSavingChar] = useState(false);
+  const [uploadingCharPhoto, setUploadingCharPhoto] = useState(false);
+  const [charPhotoExtracted, setCharPhotoExtracted] = useState(false); // 사진 추출 안내 표시
+  const [usePhotoReference, setUsePhotoReference] = useState(false);
 
   const openCharEditor = (c) => {
     setEditingChar({
@@ -140,11 +143,65 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
       body_type: c.body_type || '',
       mood: c.mood || '',
       detail_notes: c.detail_notes || '',
+      reference_photos: c.reference_photos || [],
     });
+    setCharPhotoExtracted(false);
+    setUsePhotoReference(false);
   };
 
   const updateCharField = (field, value) => {
     setEditingChar(prev => ({ ...prev, [field]: value }));
+  };
+
+  const uploadCharPhotos = async (charId, files) => {
+    setUploadingCharPhoto(true);
+    setError('');
+    try {
+      const formData = new FormData();
+      for (const file of files) formData.append('files', file);
+      // 동물 판정: description에 동물 관련 키워드가 있으면 is_animal=true
+      const desc = (editingChar?.detail_notes || '') + (editingChar?.name || '');
+      const isAnimal = /강아지|고양이|포메|개|dog|cat|pet|animal|푸들|말티즈|시츄/i.test(desc);
+      const { data } = await api.post(
+        `/characters/${charId}/photos?is_animal=${isAnimal}`,
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } },
+      );
+      // 추출 결과로 폼 필드 채움
+      const ext = data.extracted || {};
+      if (ext.description) {
+        // 동물: description → detail_notes에 채움
+        updateCharField('detail_notes', ext.description);
+      } else {
+        // 인물: 구조화 필드 채움
+        if (ext.gender) updateCharField('gender', ext.gender);
+        if (ext.age_group) updateCharField('age_group', ext.age_group);
+        if (ext.hair_style) updateCharField('hair_style', ext.hair_style);
+        if (ext.hair_color) updateCharField('hair_color', ext.hair_color);
+        if (ext.body_type) updateCharField('body_type', ext.body_type);
+        if (ext.mood) updateCharField('mood', ext.mood);
+        if (ext.extra_notes) updateCharField('detail_notes', ext.extra_notes);
+      }
+      // reference_photos 갱신
+      setEditingChar(prev => ({ ...prev, reference_photos: data.reference_photos || [] }));
+      setCharPhotoExtracted(true);
+      setCacheBuster(Date.now());
+    } catch (err) {
+      setError(err.response?.data?.detail || err.message);
+    } finally {
+      setUploadingCharPhoto(false);
+    }
+  };
+
+  const deleteCharPhotos = async (charId) => {
+    try {
+      await api.delete(`/characters/${charId}/photos`);
+      setEditingChar(prev => ({ ...prev, reference_photos: [] }));
+      setCharPhotoExtracted(false);
+      setUsePhotoReference(false);
+    } catch (err) {
+      setError(err.response?.data?.detail || err.message);
+    }
   };
 
   const saveCharConditions = async () => {
@@ -202,7 +259,9 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
     setPhase('characters');
     setError('');
     try {
-      const { data } = await api.post(`/characters/${characterId}/regenerate`);
+      const { data } = await api.post(`/characters/${characterId}/regenerate`, {
+        use_photo_reference: usePhotoReference,
+      });
       setJob({ job_id: data.job_id, status: 'processing', progress: { done: 0, total: 1 } });
       await pollJob(data.job_id, setJob);
       setJob(null);
@@ -645,6 +704,71 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
                         className="w-full mt-0.5 px-2 py-1.5 text-xs font-bold rounded-lg border border-border dark:border-zinc-600 bg-white dark:bg-zinc-800 text-ink-black dark:text-white"
                       />
                     </div>
+                    {/* 사진 업로드 */}
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400">
+                        참고 사진 <span className="font-normal">(1~3장 — 외형을 자동으로 읽어옵니다)</span>
+                      </label>
+                      {editingChar.reference_photos?.length > 0 ? (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            {editingChar.reference_photos.map((url, idx) => (
+                              <div key={idx} className="cursor-pointer" onClick={() => setLightbox({ url: imageUrl(url), label: `참고 사진 ${idx + 1}` })}>
+                                <img src={imageUrl(url)} alt={`ref ${idx + 1}`} className="w-12 h-12 object-cover rounded-lg border border-purple-300 dark:border-purple-700" />
+                              </div>
+                            ))}
+                            <button
+                              onClick={() => deleteCharPhotos(c.id)}
+                              className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-red-500 hover:text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                            >
+                              <X size={10} /> 삭제
+                            </button>
+                          </div>
+                          {/* 참조 토글 */}
+                          <label className="flex items-center gap-2 text-[10px] text-gray-500 dark:text-gray-400 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={usePhotoReference}
+                              onChange={e => setUsePhotoReference(e.target.checked)}
+                              className="rounded border-gray-300 dark:border-zinc-600"
+                            />
+                            <span className="font-bold">사진을 참조 이미지로도 첨부</span>
+                            <span className="font-normal">(실험 — 사진풍이 섞일 수 있음)</span>
+                          </label>
+                        </div>
+                      ) : (
+                        <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-purple-300 dark:border-purple-700 rounded-lg cursor-pointer hover:border-purple-500 dark:hover:border-purple-500 hover:bg-purple-50/50 dark:hover:bg-purple-900/10 transition-colors">
+                          <Camera size={12} className="text-purple-500" />
+                          <span className="text-xs font-bold text-purple-600 dark:text-purple-400">
+                            {uploadingCharPhoto ? '업로드 + 분석 중...' : '사진에서 외형 읽기'}
+                          </span>
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png"
+                            multiple
+                            className="hidden"
+                            disabled={uploadingCharPhoto}
+                            onChange={(e) => {
+                              const files = Array.from(e.target.files || []).slice(0, 3);
+                              if (files.length) uploadCharPhotos(c.id, files);
+                              e.target.value = '';
+                            }}
+                          />
+                        </label>
+                      )}
+                    </div>
+
+                    {/* 사진 추출 안내 */}
+                    {charPhotoExtracted && (
+                      <div className="flex items-center gap-2 px-3 py-2 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg">
+                        <Sparkles size={12} className="text-purple-500 flex-shrink-0" />
+                        <p className="text-[10px] font-bold text-purple-600 dark:text-purple-400">
+                          사진에서 외형을 읽어왔어요. 확인 후 저장하세요
+                        </p>
+                        <button onClick={() => setCharPhotoExtracted(false)} className="ml-auto text-purple-400 hover:text-purple-600"><X size={12} /></button>
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400">성별</label>

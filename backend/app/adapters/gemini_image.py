@@ -73,6 +73,7 @@ class GeminiImageAdapter(ImageAdapter):
         character_description: str,
         style_prompt: str,
         reference_images: list[bytes] | None = None,
+        reference_labels: list[str] | None = None,
     ) -> list[ImageResult]:
         """캐릭터 시트 생성: 정면 1 + 표정 2 = 총 3장 (MVP 최소)."""
         results = []
@@ -89,10 +90,17 @@ class GeminiImageAdapter(ImageAdapter):
         ]
 
         for i, prompt in enumerate(prompts):
-            ref = [results[0].image_bytes] if results else reference_images
+            # 첫 장: 사용자 사진 참조 (있으면), 이후: 생성된 정면 참조
+            if results:
+                ref = [results[0].image_bytes]
+                labels = None
+            else:
+                ref = reference_images
+                labels = reference_labels
             result = await self.generate_image(
                 prompt=prompt,
                 reference_images=ref,
+                reference_labels=labels,
                 aspect_ratio="1:1",
             )
             results.append(result)
