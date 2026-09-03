@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import api, { pollJob } from '../../api/client';
 import JobProgress from '../JobProgress';
-import { Users, MapPin, Palette, Check, RefreshCw, X, ChevronDown, ChevronUp, AlertTriangle, Edit3, Plus, Trash2, Sparkles, Link, Unlink, Star, Library } from 'lucide-react';
+import { Users, MapPin, Palette, Check, RefreshCw, X, ChevronDown, ChevronUp, AlertTriangle, Edit3, Plus, Trash2, Sparkles, Link, Unlink, Star, Library, Camera } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
 
@@ -221,6 +221,8 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
   const [locMoodEdit, setLocMoodEdit] = useState({}); // {id: mood_notes}
   const [savingLocId, setSavingLocId] = useState(null);
   const [locError, setLocError] = useState('');
+  const [uploadingPhotoLocId, setUploadingPhotoLocId] = useState(null);
+  const [reconvertingLocId, setReconvertingLocId] = useState(null);
 
   const loadSuggestions = async () => {
     setSuggestLoading(true);
@@ -232,6 +234,8 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
         name: l.name || '',
         description: l.description || '',
         mood_notes: '',
+        photoUrl: null,       // 사진 대체 URL (서버 업로드 후)
+        photoPreview: null,   // 로컬 미리보기 URL
       }));
       setSuggestionList(list);
       setShowSuggestEditor(true);
@@ -243,7 +247,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
   };
 
   const addSuggestionItem = () => {
-    setSuggestionList(prev => [...prev, { ref_key: `custom_${Date.now()}`, name: '', description: '', mood_notes: '' }]);
+    setSuggestionList(prev => [...prev, { ref_key: `custom_${Date.now()}`, name: '', description: '', mood_notes: '', photoUrl: null, photoPreview: null }]);
   };
 
   const updateSuggestion = (idx, field, value) => {
@@ -251,7 +255,47 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
   };
 
   const removeSuggestion = (idx) => {
-    setSuggestionList(prev => prev.filter((_, i) => i !== idx));
+    setSuggestionList(prev => {
+      const item = prev[idx];
+      if (item?.photoPreview) URL.revokeObjectURL(item.photoPreview);
+      return prev.filter((_, i) => i !== idx);
+    });
+  };
+
+  const [uploadingSuggestIdx, setUploadingSuggestIdx] = useState(null);
+
+  const uploadSuggestionPhoto = async (idx, file) => {
+    const item = suggestionList[idx];
+    if (!item) return;
+    setUploadingSuggestIdx(idx);
+    setLocError('');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const { data } = await api.post(
+        `/projects/${projectId}/episodes/${episodeId}/locations/upload-photo?ref_key=${encodeURIComponent(item.ref_key)}`,
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } },
+      );
+      const preview = URL.createObjectURL(file);
+      setSuggestionList(prev => prev.map((it, i) =>
+        i === idx ? { ...it, photoUrl: data.url, photoPreview: preview } : it
+      ));
+    } catch (err) {
+      setLocError(err.response?.data?.detail || err.message);
+    } finally {
+      setUploadingSuggestIdx(null);
+    }
+  };
+
+  const clearSuggestionPhoto = (idx) => {
+    setSuggestionList(prev => prev.map((it, i) => {
+      if (i === idx) {
+        if (it.photoPreview) URL.revokeObjectURL(it.photoPreview);
+        return { ...it, photoUrl: null, photoPreview: null };
+      }
+      return it;
+    }));
   };
 
   const generateFromSuggestions = async () => {
@@ -261,7 +305,13 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
     setError('');
     setLocError('');
     try {
-      const { data } = await api.post(`/projects/${projectId}/episodes/${episodeId}/locations`, { locations: valid });
+      // 사진이 있는 항목에 reference_photo_url 포함
+      const payload = valid.map(l => {
+        const out = { ref_key: l.ref_key, name: l.name, description: l.description, mood_notes: l.mood_notes };
+        if (l.photoUrl) out.reference_photo_url = l.photoUrl;
+        return out;
+      });
+      const { data } = await api.post(`/projects/${projectId}/episodes/${episodeId}/locations`, { locations: payload });
       setJob({ job_id: data.job_id, status: 'processing', progress: { done: 0, total: valid.length } });
       await pollJob(data.job_id, setJob);
       setJob(null);
@@ -303,6 +353,48 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
       await loadAssets();
     } catch (err) {
       setJob(null);
+      setLocError(err.response?.data?.detail || err.message);
+    }
+  };
+
+  const uploadLocationPhoto = async (locId, file) => {
+    setUploadingPhotoLocId(locId);
+    setLocError('');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      await api.post(`/locations/${locId}/photo`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setCacheBuster(Date.now());
+      await loadAssets();
+    } catch (err) {
+      setLocError(err.response?.data?.detail || err.message);
+    } finally {
+      setUploadingPhotoLocId(null);
+    }
+  };
+
+  const reconvertLocationPhoto = async (locId) => {
+    setReconvertingLocId(locId);
+    setLocError('');
+    try {
+      await api.post(`/locations/${locId}/reconvert`);
+      setCacheBuster(Date.now());
+      await loadAssets();
+    } catch (err) {
+      setLocError(err.response?.data?.detail || err.message);
+    } finally {
+      setReconvertingLocId(null);
+    }
+  };
+
+  const deleteLocationPhoto = async (locId) => {
+    setLocError('');
+    try {
+      await api.delete(`/locations/${locId}/photo`);
+      await loadAssets();
+    } catch (err) {
       setLocError(err.response?.data?.detail || err.message);
     }
   };
@@ -748,6 +840,39 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
                       className="w-full mt-0.5 px-2.5 py-1.5 text-xs rounded-lg border border-border dark:border-zinc-600 bg-white dark:bg-zinc-800 text-ink-black dark:text-white placeholder-gray-400 dark:placeholder-gray-500 resize-none"
                     />
                   </div>
+
+                  {/* 사진 대체 */}
+                  <div>
+                    {item.photoUrl ? (
+                      <div className="flex items-center gap-2 px-2.5 py-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-300 dark:border-emerald-700 rounded-lg">
+                        <img src={item.photoPreview || imageUrl(item.photoUrl)} alt="참고 사진" className="w-12 h-9 object-cover rounded" />
+                        <span className="flex-1 text-xs font-bold text-emerald-700 dark:text-emerald-400">사진 사용</span>
+                        <button
+                          onClick={() => clearSuggestionPhoto(idx)}
+                          className="p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded transition-colors"
+                          title="사진 취소 (AI 생성으로 되돌리기)"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 border border-dashed border-emerald-300 dark:border-emerald-700 rounded-lg cursor-pointer hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-colors">
+                        <Camera size={12} />
+                        {uploadingSuggestIdx === idx ? '업로드 중...' : '사진으로 대체'}
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png"
+                          className="hidden"
+                          disabled={uploadingSuggestIdx !== null}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) uploadSuggestionPhoto(idx, file);
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
+                    )}
+                  </div>
                 </div>
                 <button onClick={() => removeSuggestion(idx)}
                   className="self-start mt-1 p-1.5 text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
@@ -766,7 +891,14 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
                 disabled={!!job || !suggestionList.filter(l => l.name.trim()).length}
                 className="flex-1 flex items-center justify-center gap-1 px-4 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-colors disabled:opacity-50"
               >
-                레퍼런스 이미지 생성 ({suggestionList.filter(l => l.name.trim()).length}개)
+                {(() => {
+                  const valid = suggestionList.filter(l => l.name.trim());
+                  const photoCount = valid.filter(l => l.photoUrl).length;
+                  const aiCount = valid.length - photoCount;
+                  if (photoCount === 0) return `레퍼런스 이미지 생성 (${valid.length}개)`;
+                  if (aiCount === 0) return `장소 등록 (${photoCount}개 사진 사용)`;
+                  return `레퍼런스 이미지 생성 (${aiCount}개 · ${photoCount}개는 사진 사용)`;
+                })()}
               </button>
             </div>
           </div>
@@ -832,6 +964,77 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
                     rows={2}
                     className="w-full mt-0.5 px-2 py-1.5 text-xs rounded-lg border border-border dark:border-zinc-600 bg-white dark:bg-zinc-800 text-ink-black dark:text-white placeholder-gray-400 dark:placeholder-gray-500 resize-none"
                   />
+                </div>
+
+                {/* 참고 사진 업로드 + 변환본 */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400">
+                    실사 참고 사진 <span className="font-normal">(업로드 시 웹툰 스타일로 자동 변환 · 1컷 비용)</span>
+                  </label>
+                  {l.reference_photo_url ? (
+                    <div className="space-y-2">
+                      {/* 변환본 (메인) + 원본 (작게) */}
+                      <div className="flex items-center gap-2">
+                        {l.converted_photo_url ? (
+                          <div className="cursor-pointer" onClick={() => setLightbox({ url: imageUrl(l.converted_photo_url), label: `${l.name} — 변환본` })}>
+                            <img
+                              src={imageUrl(l.converted_photo_url)}
+                              alt="변환본"
+                              className="w-28 h-20 object-cover rounded-lg border-2 border-emerald-400 dark:border-emerald-600 hover:ring-2 hover:ring-emerald-300 transition-all"
+                            />
+                            <div className="text-[10px] text-center text-emerald-600 dark:text-emerald-400 mt-0.5 font-bold">변환본</div>
+                          </div>
+                        ) : (
+                          <div className="w-28 h-20 rounded-lg border-2 border-dashed border-amber-300 dark:border-amber-700 flex items-center justify-center bg-amber-50/50 dark:bg-amber-900/10">
+                            <span className="text-[10px] text-amber-500 font-bold">변환 필요</span>
+                          </div>
+                        )}
+                        <div className="cursor-pointer" onClick={() => setLightbox({ url: imageUrl(l.reference_photo_url), label: `${l.name} — 원본 사진` })}>
+                          <img
+                            src={imageUrl(l.reference_photo_url)}
+                            alt="원본"
+                            className="w-12 h-9 object-cover rounded border border-gray-300 dark:border-zinc-600 opacity-70 hover:opacity-100 transition-opacity"
+                          />
+                          <div className="text-[9px] text-center text-gray-400 mt-0.5">원본</div>
+                        </div>
+                      </div>
+                      {/* 버튼: 다시 변환 + 삭제 */}
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => reconvertLocationPhoto(l.id)}
+                          disabled={reconvertingLocId === l.id}
+                          className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-700 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors disabled:opacity-50"
+                        >
+                          <RefreshCw size={10} className={reconvertingLocId === l.id ? 'animate-spin' : ''} />
+                          {reconvertingLocId === l.id ? '변환 중...' : '다시 변환'}
+                        </button>
+                        <button
+                          onClick={() => deleteLocationPhoto(l.id)}
+                          className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-red-500 hover:text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                        >
+                          <X size={10} /> 삭제
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-emerald-300 dark:border-emerald-700 rounded-lg cursor-pointer hover:border-emerald-500 dark:hover:border-emerald-500 hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10 transition-colors">
+                      <Camera size={12} className="text-emerald-500" />
+                      <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                        {uploadingPhotoLocId === l.id ? '업로드 + 변환 중...' : '사진 추가'}
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png"
+                        className="hidden"
+                        disabled={uploadingPhotoLocId === l.id}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) uploadLocationPhoto(l.id, file);
+                          e.target.value = '';
+                        }}
+                      />
+                    </label>
+                  )}
                 </div>
 
                 {/* 액션 버튼 */}

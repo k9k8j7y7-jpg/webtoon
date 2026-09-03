@@ -13,6 +13,8 @@ class Location(Base):
     name = Column(String(100), nullable=True)
     description = Column(String(2000), nullable=True)
     mood_notes = Column(Text, nullable=True)
+    reference_photo_url = Column(String(500), nullable=True)
+    converted_photo_url = Column(String(500), nullable=True)
     status = Column(
         Enum("draft", "approved", "invalidated", name="loc_status_enum"),
         default="draft",

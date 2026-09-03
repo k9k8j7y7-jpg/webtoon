@@ -44,6 +44,7 @@ READJUST_INSTRUCTION = """너는 웹툰 콘티 편집자야.
 - 컷 수가 늘면: 중요 장면을 분할하고, 전환 컷을 추가하라.
 - 모든 씬은 최소 2컷을 유지하라.
 - character_id, location_id는 원본 그대로 사용하라.
+- action(지문)에서 인물 위치는 가구 기준으로 명시 (예: '소파에 앉아', '테이블 옆에 서서'). 위치 불명 서술 금지.
 - shot 값: long | full | bust | close_up 중 택1
 - dialogue type: speech | narration | thought 중 택1
 - emphasis: normal | large | full_bleed 중 택1

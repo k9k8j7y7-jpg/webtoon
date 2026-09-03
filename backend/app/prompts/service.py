@@ -6,6 +6,10 @@ A-2/A-3: 캐릭터 앵커링 최우선, 프롬프트 순서 재조정.
 
 # ── 프롬프트 조각 상수 ──
 APPEARANCE_ANCHOR = "MUST keep these features exactly in every panel"
+PLACEMENT_COMMON_SENSE = (
+    "Place characters naturally within the scene: feet on the floor or seated on sofas/chairs. "
+    "NEVER on tables, counters, or floating in air. Respect furniture scale"
+)
 
 
 def _get_char_name(desc) -> str:
@@ -28,6 +32,7 @@ def build_cut_prompt(
     location_desc: str | None,
     style_prompt: str,
     project_rules: dict | None = None,
+    loc_is_photo: bool = False,
 ) -> str:
     """컷 명세로부터 이미지 생성 프롬프트를 조립한다.
 
@@ -89,6 +94,17 @@ def build_cut_prompt(
     if location_desc:
         parts.append(f"Setting: {location_desc}")
 
+    if loc_is_photo:
+        parts.append(
+            f"IMPORTANT: The location reference is a real photograph. "
+            f"Use it ONLY to understand the room's spatial layout, furniture placement, and camera angle. "
+            f"You MUST NOT reproduce its photographic textures, lighting, or realism. "
+            f"REDRAW everything — walls, furniture, floor, background — in {style_prompt} illustration style "
+            f"with visible line art and flat/cel shading. "
+            f"The final image must be 100% hand-drawn illustration. "
+            f"A photograph background with drawn characters is a FAILURE"
+        )
+
     action = cut_spec.get("action")
     if action:
         parts.append(f"Scene: {action}")
@@ -122,6 +138,7 @@ def build_cut_prompt(
             parts.append(f"World: {', '.join(world_rules)}")
 
     # ── 7. 웹툰 기본 지시 ──
+    parts.append(PLACEMENT_COMMON_SENSE)
     parts.append(
         "Webtoon panel illustration, vertical scroll format, clean composition. "
         "DO NOT render any text, letters, words, or speech bubbles in the image. "

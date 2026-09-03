@@ -64,7 +64,8 @@ SYSTEM_INSTRUCTION = """너는 웹툰 대본 작가야.
 - emphasis: normal | large | full_bleed 중 택1
 - transition: null 또는 "scene_break"
 - character_id는 기획안 등장인물의 ref_key를 그대로 사용. 새 키를 만들지 말 것
-- 각 씬에는 최소 2컷 이상"""
+- 각 씬에는 최소 2컷 이상
+- action(지문)에서 인물 위치는 가구 기준으로 명시 (예: '소파에 앉아', '테이블 옆에 서서'). 위치 불명 서술 금지"""
 
 
 async def generate_script(planning: dict, series_context: dict | None = None) -> dict:

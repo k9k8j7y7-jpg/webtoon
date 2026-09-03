@@ -77,23 +77,42 @@ def _get_character_references(episode_id: int, character_ids: list[str], db: Ses
     return ref_images, ref_labels, char_descs
 
 
-def _get_location_reference(episode_id: int, location_id: str, db: Session) -> tuple[bytes | None, str]:
-    """장소 레퍼런스 이미지 + 설명 로드."""
+def _get_location_reference(episode_id: int, location_id: str, db: Session) -> tuple[bytes | None, str, bool]:
+    """장소 레퍼런스 이미지 + 설명 + 사진 여부 로드.
+
+    Returns:
+        (image_bytes, description, is_photo)
+        is_photo=True → 사용자 업로드 실사진 (프롬프트 강화 필요)
+    """
     location = (
         db.query(Location)
         .filter(Location.episode_id == episode_id, Location.ref_key == location_id)
         .first()
     )
     if not location:
-        return None, ""
+        return None, "", False
 
     loc_desc = f"{location.name}. {location.description or ''}"
+
+    # 변환본(일러스트화된 사진) 최우선
+    if location.converted_photo_url:
+        img_bytes = _load_image_bytes(location.converted_photo_url)
+        if img_bytes:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Location '%s' ref: CONVERTED photo (%s, %d bytes)",
+                location.ref_key, location.converted_photo_url, len(img_bytes),
+            )
+            return img_bytes, loc_desc, False  # 변환본은 이미 일러스트 → is_photo=False
+
+    # 원본 사진은 컷 참조로 사용하지 않음 (보관·재변환 전용)
+    # → AI 생성 레퍼런스로 폴백
     loc_img = db.query(LocationImage).filter(LocationImage.location_id == location.id).first()
     if loc_img:
         img_bytes = _load_image_bytes(loc_img.image_url)
-        return img_bytes, loc_desc
+        return img_bytes, loc_desc, False
 
-    return None, loc_desc
+    return None, loc_desc, False
 
 
 async def generate_cut_image(
@@ -113,12 +132,18 @@ async def generate_cut_image(
 
     # 2. 장소 레퍼런스 로드
     location_id = spec.get("location_id")
-    loc_ref, loc_desc = None, ""
+    loc_ref, loc_desc, loc_is_photo = None, "", False
     if location_id:
-        loc_ref, loc_desc = _get_location_reference(episode_id, location_id, db)
+        loc_ref, loc_desc, loc_is_photo = _get_location_reference(episode_id, location_id, db)
         if loc_ref:
             ref_images.append(loc_ref)
-            ref_labels.append("Location background reference")
+            if loc_is_photo:
+                ref_labels.append(
+                    "Location reference photograph — use ONLY for spatial layout and furniture placement, "
+                    "REDRAW everything in illustration style"
+                )
+            else:
+                ref_labels.append("Location background reference")
 
     # 3. 스타일 프롬프트
     style = db.query(Style).filter(Style.episode_id == episode_id).first()
@@ -136,6 +161,7 @@ async def generate_cut_image(
         location_desc=loc_desc,
         style_prompt=style_prompt,
         project_rules=project_rules,
+        loc_is_photo=loc_is_photo,
     )
 
     # 6. 이미지 생성 (레퍼런스 주입 + 앵커링!)

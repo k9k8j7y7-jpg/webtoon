@@ -2,7 +2,7 @@
 
 import re
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -11,7 +11,8 @@ from app.auth.deps import get_current_user
 from app.users.models import User
 from app.projects.models import Project, Episode
 from app.locations.models import Location
-from app.locations.service import generate_location_images
+from app.locations.service import generate_location_images, convert_photo_to_illustration
+from app.storage import upload_image
 from app.jobs import create_job, run_job_in_background
 from app.workflow.gate import get_gate_number
 from app.styles.models import Style, STYLE_PRESETS
@@ -102,6 +103,8 @@ async def get_location(
         "description": location.description,
         "mood_notes": location.mood_notes,
         "status": location.status,
+        "reference_photo_url": location.reference_photo_url,
+        "converted_photo_url": location.converted_photo_url,
         "images": [{"url": img.image_url, "seed": img.seed} for img in location.images],
     }
 
@@ -191,10 +194,126 @@ async def list_locations(
             "name": l.name,
             "mood_notes": l.mood_notes,
             "status": l.status,
+            "reference_photo_url": l.reference_photo_url,
+            "converted_photo_url": l.converted_photo_url,
             "image_count": len(l.images),
         }
         for l in locations
     ]
+
+
+@router.post("/projects/{project_id}/episodes/{episode_id}/locations/upload-photo")
+async def upload_location_photo_pre(
+    project_id: int,
+    episode_id: int,
+    ref_key: str = "",
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """제안 단계에서 장소 사진을 미리 업로드한다 (location 레코드 생성 전)."""
+    _get_episode_for_user(db, project_id, episode_id, current_user.id)
+
+    if file.content_type not in ("image/jpeg", "image/png"):
+        raise HTTPException(status_code=400, detail="JPEG 또는 PNG만 가능합니다")
+
+    contents = await file.read()
+    if len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="5MB 이하만 가능합니다")
+
+    ext = "jpg" if "jpeg" in file.content_type else "png"
+    folder = ref_key or "temp"
+    url = upload_image(
+        image_bytes=contents,
+        path_prefix=f"episodes/{episode_id}/locations/{folder}/photos",
+        filename=f"user_ref.{ext}",
+        mime_type=file.content_type,
+    )
+
+    return {"url": url}
+
+
+@router.post("/locations/{location_id}/photo")
+async def upload_location_photo(
+    location_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """장소 참고 사진 업로드 + 스타일 변환 (JPEG/PNG, 최대 5MB, 1컷 비용)."""
+    location = db.query(Location).filter(Location.id == location_id).first()
+    if not location:
+        raise HTTPException(status_code=404, detail="Location not found")
+
+    if file.content_type not in ("image/jpeg", "image/png"):
+        raise HTTPException(status_code=400, detail="JPEG 또는 PNG만 가능합니다")
+
+    contents = await file.read()
+    if len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="5MB 이하만 가능합니다")
+
+    ext = "jpg" if "jpeg" in file.content_type else "png"
+    url = upload_image(
+        image_bytes=contents,
+        path_prefix=f"episodes/{location.episode_id}/locations/{location.ref_key}/photos",
+        filename=f"user_ref.{ext}",
+        mime_type=file.content_type,
+    )
+    location.reference_photo_url = url
+    location.converted_photo_url = None  # 기존 변환본 초기화
+    db.commit()
+
+    # 즉시 변환
+    style = db.query(Style).filter(Style.episode_id == location.episode_id).first()
+    style_prompt = style.prompt_snippet if style else STYLE_PRESETS["korean_webtoon"]["prompt"]
+    converted_url = await convert_photo_to_illustration(location, style_prompt, db)
+
+    return {
+        "id": location.id,
+        "reference_photo_url": url,
+        "converted_photo_url": converted_url,
+    }
+
+
+@router.post("/locations/{location_id}/reconvert")
+async def reconvert_location_photo(
+    location_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """장소 사진 재변환 (1컷 비용)."""
+    location = db.query(Location).filter(Location.id == location_id).first()
+    if not location:
+        raise HTTPException(status_code=404, detail="Location not found")
+    if not location.reference_photo_url:
+        raise HTTPException(status_code=400, detail="업로드된 사진이 없습니다")
+
+    style = db.query(Style).filter(Style.episode_id == location.episode_id).first()
+    style_prompt = style.prompt_snippet if style else STYLE_PRESETS["korean_webtoon"]["prompt"]
+    converted_url = await convert_photo_to_illustration(location, style_prompt, db)
+
+    return {
+        "id": location.id,
+        "converted_photo_url": converted_url,
+    }
+
+
+@router.delete("/locations/{location_id}/photo")
+async def delete_location_photo(
+    location_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """장소 참고 사진 삭제 (AI 생성 레퍼런스로 되돌림)."""
+    location = db.query(Location).filter(Location.id == location_id).first()
+    if not location:
+        raise HTTPException(status_code=404, detail="Location not found")
+
+    location.reference_photo_url = None
+    location.converted_photo_url = None
+    db.commit()
+
+    return {"id": location.id, "reference_photo_url": None, "converted_photo_url": None}
 
 
 def _get_episode_for_user(db, project_id, episode_id, user_id):
