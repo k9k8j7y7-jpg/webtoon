@@ -312,6 +312,11 @@ async def extract_appearance_from_photos(
             "You are extracting appearance traits from this person's photo(s) for a webtoon illustrator. "
             "Do NOT identify or guess the person's real name or identity. "
             "If multiple photos, extract common features across all photos. "
+            "Extract ONLY permanent/fixed physical traits + outfit. "
+            "INCLUDE the outfit worn in the photo as the character's fixed costume: "
+            "top, bottom, and notable accessories (glasses, hat, scarf, etc.), with colors. "
+            "EXCLUDE momentary states: barefoot/shoes, items held or carried, "
+            "pose/posture, background/setting, lighting conditions, facial expression. "
             "Output JSON only, with these exact keys (use null if not visible):\n"
             "{\n"
             '  "gender": "male" | "female" | "androgynous",\n'

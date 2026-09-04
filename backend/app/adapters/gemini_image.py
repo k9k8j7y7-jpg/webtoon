@@ -82,11 +82,16 @@ class GeminiImageAdapter(ImageAdapter):
             "DO NOT render any text, letters, words, labels, names, or descriptions in the image. "
             "No Korean text, no English text, no signs, no captions. Pure character illustration only"
         )
+        single_char = (
+            "Draw EXACTLY ONE character only. Do NOT create a grid, sprite sheet, "
+            "multi-pose layout, turnaround sheet, or multiple copies of the character. "
+            "Single character, single pose, single frame"
+        )
 
         prompts = [
-            f"Character design sheet, front view, full body. {character_description}. {style_prompt}. White background, character reference sheet, clean lines, detailed. {no_text}.",
-            f"Character expression sheet, happy/smiling expression, bust shot. {character_description}. {style_prompt}. White background, expression reference. {no_text}.",
-            f"Character expression sheet, angry/serious expression, bust shot. {character_description}. {style_prompt}. White background, expression reference. {no_text}.",
+            f"Character design sheet, front view, full body. {character_description}. {style_prompt}. White background, character reference sheet, clean lines, detailed. {single_char}. {no_text}.",
+            f"Character expression sheet, happy/smiling expression, bust shot. {character_description}. {style_prompt}. White background, expression reference. {single_char}. {no_text}.",
+            f"Character expression sheet, angry/serious expression, bust shot. {character_description}. {style_prompt}. White background, expression reference. {single_char}. {no_text}.",
         ]
 
         for i, prompt in enumerate(prompts):
