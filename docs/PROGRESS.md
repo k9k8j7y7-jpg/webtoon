@@ -1,9 +1,18 @@
 # 진행 상태 추적
 
-## 현재: 1-1c 캐릭터 실사진 배포 (2026-09-03)
+## 현재: 표정 시트 격자화 완료 (2026-09-04)
 
-### 1-1c 캐릭터 실사진 → 외형 추출 → 시트 생성 — 배포 완료 (2026-09-03)
-- 1-1c 배포·테스트 통과, 잔여: 시트 복제 수정·추출 순간상태 제외·본 캐릭터 시트 교체 결정
+### 표정 시트 2×3 격자화 — 완료 (2026-09-04)
+- smile/angry 2장 → expressions 1장(2×3 격자: smile, angry, sad, surprised, worried, neutral)
+- step17: character_images.type ENUM에 'expressions' 추가
+- 컷 생성 참조에 표정 시트 포함 (감정 88종→6패널 매핑, 미매핑→neutral+로그)
+- MAX_REF_IMAGES=5 한도 관리 (front→장소→expressions 순)
+- Gate3 카드: expressions 시트 가로 넓게 표시, 레거시 smile/angry도 호환 표시
+- 다음: 기존 캐릭터 시트 교체 (재생성) → 4화 제작
+
+### 1-1c 캐릭터 실사진 → 외형 추출 → 시트 생성 — 완료 (2026-09-04)
+- 사진→외형 추출 프롬프트 강화: 단일 인물 강제(grid/sprite sheet 금지), 순간상태 제외(신발·소지품·자세·배경·조명·표정), 의류 포함(top/bottom/accessories+색상)
+- step16: reference_photos JSON 컬럼, POST/DELETE photos API, Gate3 사진 업로드 UI
 
 ### 1-1 장소 사진 업로드 — 완료 (2026-09-03)
 - 플랜 C: 사진→비전 텍스트 추출→일러스트 생성 (image-to-image 변환 불신뢰 교훈)

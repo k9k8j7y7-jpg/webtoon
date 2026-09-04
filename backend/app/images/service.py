@@ -5,6 +5,7 @@ PRD 4.2~4.4: 캐릭터·장소 레퍼런스 주입 → 일관성 유지.
 """
 
 import os
+import logging
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -21,8 +22,52 @@ from app.storage import upload_image, LOCAL_STORAGE_DIR
 from app.jobs import get_job, update_job, Job
 from app.billing.service import charge_generation
 
+logger = logging.getLogger(__name__)
+
 # 배치 크기: 안정성 확인 후 조정 가능 (5 → 10 등)
 BATCH_SIZE = 5
+
+# 참조 이미지 최대 장수 (Gemini 안전 한도)
+MAX_REF_IMAGES = 5
+
+# 표정 격자 6패널 ↔ 컷 emotion 매핑
+_SMILE_EMOTIONS = frozenset({
+    "happy", "joyful", "cheerful", "delighted", "content", "amused", "relieved",
+    "excited", "playful", "smile", "gentle_smile", "slight_smile", "mischievous",
+    "loving", "fond", "affectionate", "tender", "caring", "kind", "friendly",
+    "supportive", "touched", "energetic", "hopeful", "relieved_happy", "happy_tired",
+    "serene", "peaceful", "cute", "loved",
+})
+_ANGRY_EMOTIONS = frozenset({
+    "angry", "annoyed", "irritable", "frustrated", "exasperated",
+})
+_SAD_EMOTIONS = frozenset({
+    "sad", "devastated", "despair", "empty", "pensive", "pain",
+})
+_SURPRISED_EMOTIONS = frozenset({
+    "surprised", "shocked", "amazed", "astonished", "startled", "realizing",
+})
+_WORRIED_EMOTIONS = frozenset({
+    "worried", "anxious", "nervous", "hesitant", "panicked", "distressed",
+    "desperate", "overwhelmed", "confused", "desperate_resolve",
+})
+
+def _map_emotion_to_panel(emotion: str) -> str:
+    """컷 emotion 값을 6패널 격자 이름으로 매핑. 미매핑 시 neutral + 로그."""
+    e = emotion.lower().strip() if emotion else "neutral"
+    if e in _SMILE_EMOTIONS:
+        return "smile"
+    if e in _ANGRY_EMOTIONS:
+        return "angry"
+    if e in _SAD_EMOTIONS:
+        return "sad"
+    if e in _SURPRISED_EMOTIONS:
+        return "surprised"
+    if e in _WORRIED_EMOTIONS:
+        return "worried"
+    if e != "neutral":
+        logger.warning("Emotion '%s' unmapped → neutral", e)
+    return "neutral"
 
 
 def _load_image_bytes(url: str) -> bytes | None:
@@ -39,11 +84,30 @@ def _load_image_bytes(url: str) -> bytes | None:
     return None
 
 
-def _get_character_references(episode_id: int, character_ids: list[str], db: Session) -> tuple[list[bytes], list[str], dict[str, str]]:
-    """캐릭터 레퍼런스 이미지 + 라벨 + 설명 로드."""
-    ref_images = []
-    ref_labels = []
+def _get_character_references(
+    episode_id: int,
+    character_ids: list[str],
+    db: Session,
+    cut_spec: dict | None = None,
+) -> tuple[list[bytes], list[str], dict[str, str]]:
+    """캐릭터 레퍼런스 이미지 + 라벨 + 설명 로드.
+
+    front 이미지는 항상 포함. expressions 시트는 우선순위에 따라 포함.
+    cut_spec이 있으면 컷의 emotion으로 패널 매핑 라벨을 생성한다.
+    """
+    # 1차: front 수집
+    front_images: list[tuple[str, bytes, str]] = []  # (char_id, bytes, name)
+    # 2차: expressions 수집 (나중에 한도 내에서 추가)
+    expr_images: list[tuple[str, bytes, str, str]] = []  # (char_id, bytes, name, panel)
     char_descs = {}
+
+    # 컷 캐릭터별 emotion 추출
+    cut_emotions: dict[str, str] = {}
+    if cut_spec:
+        for ch in cut_spec.get("characters", []):
+            cid = ch.get("character_id")
+            if cid:
+                cut_emotions[cid] = ch.get("emotion", "neutral")
 
     for char_id in character_ids:
         character = (
@@ -55,14 +119,12 @@ def _get_character_references(episode_id: int, character_ids: list[str], db: Ses
         if not character:
             continue
 
-        # A파트: 한글 description은 컷 프롬프트에 넣지 않음 (렌더링 버그 방지)
-        # 대신 영문 외형 명세(appearance_en)를 주입하여 외형 일관성 강화
         char_descs[char_id] = {
             "name": character.name,
             "appearance_en": character.appearance_en or "",
         }
 
-        # 정면 이미지를 레퍼런스로 주입 (일관성의 핵심)
+        # front 이미지
         front_img = (
             db.query(CharacterImage)
             .filter(CharacterImage.character_id == character.id, CharacterImage.type == "front")
@@ -71,8 +133,45 @@ def _get_character_references(episode_id: int, character_ids: list[str], db: Ses
         if front_img:
             img_bytes = _load_image_bytes(front_img.image_url)
             if img_bytes:
-                ref_images.append(img_bytes)
-                ref_labels.append(f"Character '{char_id}' ({character.name}) - front reference sheet")
+                front_images.append((char_id, img_bytes, character.name or char_id))
+
+        # expressions 격자 시트
+        expr_img = (
+            db.query(CharacterImage)
+            .filter(CharacterImage.character_id == character.id, CharacterImage.type == "expressions")
+            .first()
+        )
+        if expr_img:
+            img_bytes = _load_image_bytes(expr_img.image_url)
+            if img_bytes:
+                panel = _map_emotion_to_panel(cut_emotions.get(char_id, "neutral"))
+                expr_images.append((char_id, img_bytes, character.name or char_id, panel))
+
+    # 우선순위: front 전부 → expressions 순으로 MAX_REF_IMAGES 이내
+    ref_images: list[bytes] = []
+    ref_labels: list[str] = []
+
+    for char_id, img_bytes, name in front_images:
+        ref_images.append(img_bytes)
+        ref_labels.append(f"Character '{char_id}' ({name}) - front reference sheet")
+
+    # 장소 1장 자리 예약 (호출부에서 추가) → 남은 슬롯 계산
+    remaining = MAX_REF_IMAGES - len(ref_images) - 1  # 장소용 1슬롯 예약
+
+    for char_id, img_bytes, name, panel in expr_images:
+        if remaining <= 0:
+            logger.warning(
+                "Ref image limit (%d): skipping expressions sheet for '%s'",
+                MAX_REF_IMAGES, char_id,
+            )
+            break
+        ref_images.append(img_bytes)
+        ref_labels.append(
+            f"Character '{char_id}' ({name}) - expression sheet, 2x3 grid: "
+            f"smile, angry, sad, surprised, worried, neutral (top-left to bottom-right). "
+            f"This cut's emotion maps to '{panel}' panel; draw ONE figure matching that expression, never the grid"
+        )
+        remaining -= 1
 
     return ref_images, ref_labels, char_descs
 
@@ -126,9 +225,9 @@ async def generate_cut_image(
     adapter = get_image_adapter()
     spec = cut.spec
 
-    # 1. 캐릭터 레퍼런스 로드 (이미지 + 라벨)
+    # 1. 캐릭터 레퍼런스 로드 (이미지 + 라벨 — front + expressions)
     char_ids = [c.get("character_id") for c in spec.get("characters", []) if c.get("character_id")]
-    ref_images, ref_labels, char_descs = _get_character_references(episode_id, char_ids, db)
+    ref_images, ref_labels, char_descs = _get_character_references(episode_id, char_ids, db, cut_spec=spec)
 
     # 2. 장소 레퍼런스 로드
     location_id = spec.get("location_id")
@@ -136,14 +235,20 @@ async def generate_cut_image(
     if location_id:
         loc_ref, loc_desc, loc_is_photo = _get_location_reference(episode_id, location_id, db)
         if loc_ref:
-            ref_images.append(loc_ref)
-            if loc_is_photo:
-                ref_labels.append(
-                    "Location reference photograph — use ONLY for spatial layout and furniture placement, "
-                    "REDRAW everything in illustration style"
-                )
+            if len(ref_images) < MAX_REF_IMAGES:
+                ref_images.append(loc_ref)
+                if loc_is_photo:
+                    ref_labels.append(
+                        "Location reference photograph — use ONLY for spatial layout and furniture placement, "
+                        "REDRAW everything in illustration style"
+                    )
+                else:
+                    ref_labels.append("Location background reference")
             else:
-                ref_labels.append("Location background reference")
+                logger.warning(
+                    "Ref image limit (%d): skipping location '%s'",
+                    MAX_REF_IMAGES, location_id,
+                )
 
     # 3. 스타일 프롬프트
     style = db.query(Style).filter(Style.episode_id == episode_id).first()
@@ -267,8 +372,6 @@ async def generate_all_cuts(
     db: Session,
 ):
     """에피소드의 모든 pending 컷 이미지를 배치(5컷씩) 생성한다."""
-    import logging
-    logger = logging.getLogger(__name__)
 
     # cut_id 목록만 먼저 수집 (rollback 시 객체 참조 깨짐 방지)
     cut_ids = [

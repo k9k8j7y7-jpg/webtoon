@@ -55,7 +55,7 @@ class CharacterImage(Base):
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     character_id = Column(BigInteger, ForeignKey("characters.id"), nullable=False, index=True)
-    type = Column(Enum("front", "side", "expression", name="img_type_enum"), nullable=False)
+    type = Column(Enum("front", "side", "expression", "expressions", name="img_type_enum"), nullable=False)
     label = Column(String(50), nullable=True)
     image_url = Column(String(500), nullable=False)
     seed = Column(BigInteger, nullable=True)

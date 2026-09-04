@@ -51,16 +51,16 @@ WEBTOON/
 - **무효화 전파:** 대본 수정 → diff 판정 → 영향 자산/컷만 invalidated
 - **과금:** 구독 할당량 우선 → 초과분 크레딧 차감 (게이트4 승인 시 강제 정지)
 
-## 현재 상태 (2026-09-03)
+## 현재 상태 (2026-09-04)
 
-**전체 완료:** 백엔드 7단계 + 프론트엔드 MVP + 5게이트 전체 + 연작 P1~P6 + 콘티 인라인 수정 + 0-2 appearance_en + 1-8 바이블 수정 + 1-7 지문 AI 재작성 + AI 토큰 상수화 + 0-4 커스텀 폰트 + 캐릭터 이름 편집 + 1-1 장소 사진 업로드 + 인물 배치 상식
+**전체 완료:** 백엔드 7단계 + 프론트엔드 MVP + 5게이트 전체 + 연작 P1~P6 + 콘티 인라인 수정 + 0-2 appearance_en + 1-8 바이블 수정 + 1-7 지문 AI 재작성 + AI 토큰 상수화 + 0-4 커스텀 폰트 + 캐릭터 이름 편집 + 1-1 장소 사진 업로드 + 인물 배치 상식 + 1-1c 캐릭터 사진→시트 + 표정 시트 격자화
 
 **주요 기능 요약:**
 - 게이트 1~5: 기획→대본→자산(캐릭터 7필드+이름 편집/장소 AI 제안·mood_notes)→콘티(컷 수 조정)→이미지(배치 5컷씩/부분 실패 UI)
 - 말풍선: 12종 SVG + CutEditor 드래그 편집 + SFX 효과음 + 커스텀 폰트 (효과음 5종 + 말풍선 2종)
 - Export: 프론트 렌더링 (PNG ZIP/세로/인스타/A4) + 커스텀 폰트 Base64 인라인 + document.fonts.load() 동기화
 - 연작(Series): 바이블→아웃라인→회차 대본 생성→3단계 잠금→revise API→merge/split
-- 캐릭터: 라이브러리 피커 + appearance_en 외형 명세 주입 + 이름 편집(외형 무관, appearance_en 불변)
+- 캐릭터: 라이브러리 피커 + appearance_en 외형 명세 주입 + 이름 편집(외형 무관, appearance_en 불변) + 사진→외형 추출 + 표정 시트 2×3 격자(expressions) + 컷 참조에 표정 시트 포함 + 감정 88종→6패널 매핑
 - 폰트: FONT_CATALOG 단일 소스 (8종, charWidth 실측), woff2 서브셋 파이프라인 (scripts/build-fonts.py)
 - 장소 사진: 업로드→비전 묘사 추출→일러스트 생성 (플랜 C). 제안 단계 사진 대체, 카드 변환본/원본 병기, 다시 변환
 
@@ -69,9 +69,8 @@ WEBTOON/
 **도도 시리즈:** 1~3화 이미지 완료 (사용자 완주)
 
 **다음 세션 시작점:**
-1. ep26 #8 재생성 판정 (배치 상식 지시 효과 확인) → 3화 잔여 컷 정리
-2. 4화 제작 (깨끗한 경로 — 사진 업로드 + 변환 파이프라인 검증 완료)
-3. 1-1c 캐릭터 사진→시트 생성 (reference_images 파라미터 기존재, 업로드 유틸 공용)
+1. 기존 캐릭터 시트 교체 (smile/angry → expressions 격자 재생성)
+2. 4화 제작 (깨끗한 경로 — 사진 업로드 + 변환 + 표정 시트 검증)
 
 **미수집 데이터:** 3화 손본 컷 수 (모델 실험 우선순위 근거 — 사용자 재확인 필요)
 
@@ -80,7 +79,7 @@ WEBTOON/
 - [x] 0-2 캐릭터 외형 명세 주입
 - [x] 0-4 커스텀 폰트 (효과음 5종 + 말풍선 2종 + charWidth 실측)
 - [x] 1-1 장소 사진 업로드 (플랜 C: 비전 묘사 추출→일러스트 생성, step14+15 배포)
-- [ ] 1-1c 캐릭터 사진→시트 (1-1 검증 후 즉시)
+- [x] 1-1c 캐릭터 사진→시트 + 표정 시트 격자화 (step16+17, 감정 매핑, 컷 참조 포함)
 - [ ] 0-5 도도 4화~ 제작 (병행)
 
 ## 개발 규칙
@@ -91,7 +90,7 @@ WEBTOON/
 - **말풍선 렌더러 수정 시:** `composition/service.py`의 `RENDERER_VERSION` 올리고, `frontend/src/utils/bubbleSpec.json` + `backend/app/composition/bubble_spec.json` 동시 업데이트
 - **텍스트 렌더 이원 모드:** 화면=`<foreignObject>` / export=SVG `<text>/<tspan>` (`renderMode='svg-text'`). 수정 시 두 모드 동시 수정 + `node scripts/bubble-shot.mjs` 비교 판정 통과 필수
 - **Gemini:** API 키 `.env`의 `GEMINI_API_KEY`. 이미지 모델 `gemini-2.5-flash-image`, 텍스트 모델 `gemini-2.5-flash`
-- **DB 마이그레이션:** `stepN.sql` + `stepN_down.sql` 쌍. 리허설 up→verify→down→재-up + mysqldump 백업 + 사용자 승인 필수. DB 덤프 .sql 커밋 금지 (stepN은 예외)
+- **DB 마이그레이션:** `stepN.sql` + `stepN_down.sql` 쌍. 리허설 up→verify→down→재-up + mysqldump 백업 + 사용자 승인 필수. DB 덤프 .sql 커밋 금지 (stepN은 예외). 마이그레이션 백업은 데이터 포함(no-data 금지)
 - **마이그레이션 리허설:** 반드시 별도 DB(`project_t_test`)에서만 실행. 운영 DB에는 도도의 "실행해" 승인 후 단 1회 적용. 리허설·테스트 목적으로 운영 테이블에 DDL/DML 실행 금지. `project_t_test`가 없으면 리허설 전에 먼저 생성 (운영 스키마 복제, 데이터 불필요)
 - **캐릭터 구조:** `episode_characters` JOIN이 표준 조회. link시 ref_key 대조, unlink 2단계(409+force), 삭제는 연결 0건만. 연결 캐릭터(`episode_id≠현재`)는 이미지 재생성 스킵. `characters.style`: 불일치 시 ⚠(차단 아님)
 - **캐릭터 ref_key:** 바이블/기획 시점 확정 (영문 snake_case). 시트·대본·컷 전부 이 키 기준. 불일치 시 Gate5 ⚠, 콘티 모달에서 제거/치환. 바이블 인물 이름 ≠ 시트 이름 가능 (ref_key 매칭)

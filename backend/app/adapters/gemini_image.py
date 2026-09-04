@@ -75,7 +75,7 @@ class GeminiImageAdapter(ImageAdapter):
         reference_images: list[bytes] | None = None,
         reference_labels: list[str] | None = None,
     ) -> list[ImageResult]:
-        """캐릭터 시트 생성: 정면 1 + 표정 2 = 총 3장 (MVP 최소)."""
+        """캐릭터 시트 생성: 정면 1장 + 표정 격자 1장 = 총 2장."""
         results = []
 
         no_text = (
@@ -88,27 +88,36 @@ class GeminiImageAdapter(ImageAdapter):
             "Single character, single pose, single frame"
         )
 
-        prompts = [
-            f"Character design sheet, front view, full body. {character_description}. {style_prompt}. White background, character reference sheet, clean lines, detailed. {single_char}. {no_text}.",
-            f"Character expression sheet, happy/smiling expression, bust shot. {character_description}. {style_prompt}. White background, expression reference. {single_char}. {no_text}.",
-            f"Character expression sheet, angry/serious expression, bust shot. {character_description}. {style_prompt}. White background, expression reference. {single_char}. {no_text}.",
-        ]
+        # ── 1. 정면 (single_char 지시 포함) ──
+        front_prompt = (
+            f"Character design sheet, front view, full body. {character_description}. "
+            f"{style_prompt}. White background, character reference sheet, clean lines, detailed. "
+            f"{single_char}. {no_text}."
+        )
+        front_result = await self.generate_image(
+            prompt=front_prompt,
+            reference_images=reference_images,
+            reference_labels=reference_labels,
+            aspect_ratio="1:1",
+        )
+        results.append(front_result)
 
-        for i, prompt in enumerate(prompts):
-            # 첫 장: 사용자 사진 참조 (있으면), 이후: 생성된 정면 참조
-            if results:
-                ref = [results[0].image_bytes]
-                labels = None
-            else:
-                ref = reference_images
-                labels = reference_labels
-            result = await self.generate_image(
-                prompt=prompt,
-                reference_images=ref,
-                reference_labels=labels,
-                aspect_ratio="1:1",
-            )
-            results.append(result)
+        # ── 2. 표정 격자 (2×3, single_char 미적용) ──
+        expr_prompt = (
+            f"Expression sheet of the SAME character: a 2x3 grid of 6 bust-shot panels, "
+            f"plain white background, thin panel borders. "
+            f"Panels in order (top-left to bottom-right): smile, angry, sad, surprised, worried, neutral. "
+            f"Each panel exactly one face. "
+            f"Identical character design, hair, glasses, outfit in every panel. "
+            f"{character_description}. {style_prompt}. {no_text}."
+        )
+        expr_result = await self.generate_image(
+            prompt=expr_prompt,
+            reference_images=[front_result.image_bytes],
+            reference_labels=["Front reference of the character — draw the SAME person in every panel"],
+            aspect_ratio="1:1",
+        )
+        results.append(expr_result)
 
         return results
 

@@ -224,8 +224,7 @@ async def generate_character_sheets(
 
             image_types = [
                 ("front", "정면"),
-                ("expression", "smile"),
-                ("expression", "angry"),
+                ("expressions", "expressions"),
             ]
 
             for img_result, (img_type, label) in zip(sheet_results, image_types):

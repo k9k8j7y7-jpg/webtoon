@@ -884,20 +884,24 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
                   </div>
                 )}
 
-                {c.images && c.images.length > 0 && (
-                  <div className="flex gap-2 mt-2 overflow-x-auto">
-                    {c.images.map((img, idx) => (
-                      <div key={idx} className="flex-shrink-0 cursor-pointer" onClick={() => setLightbox({ url: imageUrl(img.url), label: `${c.name} — ${img.label || img.type}` })}>
-                        <img
-                          src={imageUrl(img.url)}
-                          alt={img.label || img.type}
-                          className="w-20 h-20 object-cover rounded-lg border border-border dark:border-zinc-600 hover:ring-2 hover:ring-purple-400 transition-all"
-                        />
-                        <div className="text-[10px] text-center text-gray-500 dark:text-gray-400 mt-1">{img.label || img.type}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                {c.images && c.images.length > 0 && (() => {
+                  const LABEL_MAP = { '정면': '정면', 'expressions': '표정 시트', 'smile': '😊', 'angry': '😠', 'front': '정면' };
+                  const displayLabel = (img) => LABEL_MAP[img.label] || LABEL_MAP[img.type] || img.label || img.type;
+                  return (
+                    <div className="flex gap-2 mt-2 overflow-x-auto">
+                      {c.images.map((img, idx) => (
+                        <div key={idx} className="flex-shrink-0 cursor-pointer" onClick={() => setLightbox({ url: imageUrl(img.url), label: `${c.name} — ${displayLabel(img)}` })}>
+                          <img
+                            src={imageUrl(img.url)}
+                            alt={displayLabel(img)}
+                            className={`${img.type === 'expressions' ? 'w-40 h-20' : 'w-20 h-20'} object-cover rounded-lg border border-border dark:border-zinc-600 hover:ring-2 hover:ring-purple-400 transition-all`}
+                          />
+                          <div className="text-[10px] text-center text-gray-500 dark:text-gray-400 mt-1">{displayLabel(img)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             ))}
           </div>
