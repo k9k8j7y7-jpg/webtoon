@@ -131,11 +131,15 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
   const [uploadingCharPhoto, setUploadingCharPhoto] = useState(false);
   const [charPhotoExtracted, setCharPhotoExtracted] = useState(false); // 사진 추출 안내 표시
   const [usePhotoReference, setUsePhotoReference] = useState(false);
+  const [charPhotoError, setCharPhotoError] = useState(''); // 사진 업로드 에러 (카드 내 표시)
+
+  const _guessIsAnimal = (c) => /강아지|고양이|포메|개|냥|dog|cat|pet|animal|푸들|말티즈|시츄|햄스터|토끼|rabbit|hamster/i.test((c.detail_notes || '') + (c.name || '') + (c.description || ''));
 
   const openCharEditor = (c) => {
     setEditingChar({
       id: c.id,
       name: c.name,
+      is_animal: c.is_animal ?? _guessIsAnimal(c),
       gender: c.gender || '',
       age_group: c.age_group || '',
       hair_style: c.hair_style || '',
@@ -146,6 +150,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
       reference_photos: c.reference_photos || [],
     });
     setCharPhotoExtracted(false);
+    setCharPhotoError('');
     setUsePhotoReference(false);
   };
 
@@ -155,13 +160,11 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
 
   const uploadCharPhotos = async (charId, files) => {
     setUploadingCharPhoto(true);
-    setError('');
+    setCharPhotoError('');
     try {
       const formData = new FormData();
       for (const file of files) formData.append('files', file);
-      // 동물 판정: description에 동물 관련 키워드가 있으면 is_animal=true
-      const desc = (editingChar?.detail_notes || '') + (editingChar?.name || '');
-      const isAnimal = /강아지|고양이|포메|개|dog|cat|pet|animal|푸들|말티즈|시츄/i.test(desc);
+      const isAnimal = editingChar?.is_animal ?? false;
       const { data } = await api.post(
         `/characters/${charId}/photos?is_animal=${isAnimal}`,
         formData,
@@ -187,7 +190,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
       setCharPhotoExtracted(true);
       setCacheBuster(Date.now());
     } catch (err) {
-      setError(err.response?.data?.detail || err.message);
+      setCharPhotoError(err.response?.data?.detail || err.message);
     } finally {
       setUploadingCharPhoto(false);
     }
@@ -744,7 +747,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
                           </span>
                           <input
                             type="file"
-                            accept="image/jpeg,image/png"
+                            accept="image/jpeg,image/png,image/webp,image/heic"
                             multiple
                             className="hidden"
                             disabled={uploadingCharPhoto}
@@ -755,6 +758,13 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
                             }}
                           />
                         </label>
+                      )}
+                      {/* B: 사진 업로드 에러 — 카드 내 표시 */}
+                      {charPhotoError && (
+                        <p className="text-[11px] font-bold text-red-500 dark:text-red-400 mt-1">
+                          {charPhotoError}
+                          <button onClick={() => setCharPhotoError('')} className="ml-2 text-red-400 hover:text-red-600"><X size={10} className="inline" /></button>
+                        </p>
                       )}
                     </div>
 
@@ -769,6 +779,20 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
                       </div>
                     )}
 
+                    {/* C: 동물 캐릭터 체크박스 */}
+                    <label className="flex items-center gap-2 text-[10px] text-gray-600 dark:text-gray-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={editingChar.is_animal || false}
+                        onChange={e => updateCharField('is_animal', e.target.checked)}
+                        className="rounded border-gray-300 dark:border-zinc-600"
+                      />
+                      <span className="font-bold">동물 캐릭터</span>
+                      <span className="font-normal text-gray-400 dark:text-gray-500">(사진 분석 시 동물용 프롬프트 사용)</span>
+                    </label>
+
+                    {/* 사람 캐릭터: 구조화 필드 */}
+                    {!editingChar.is_animal && (
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400">성별</label>
@@ -855,8 +879,11 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
                         </select>
                       </div>
                     </div>
+                    )}
                     <div>
-                      <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400">고정 외형 메모</label>
+                      <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400">
+                        {editingChar.is_animal ? '외형 설명' : '고정 외형 메모'}
+                      </label>
                       <textarea
                         value={editingChar.detail_notes}
                         onChange={e => updateCharField('detail_notes', e.target.value)}
@@ -989,7 +1016,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
                         {uploadingSuggestIdx === idx ? '업로드 중...' : '사진으로 대체'}
                         <input
                           type="file"
-                          accept="image/jpeg,image/png"
+                          accept="image/jpeg,image/png,image/webp,image/heic"
                           className="hidden"
                           disabled={uploadingSuggestIdx !== null}
                           onChange={(e) => {
@@ -1152,7 +1179,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
                       </span>
                       <input
                         type="file"
-                        accept="image/jpeg,image/png"
+                        accept="image/jpeg,image/png,image/webp,image/heic"
                         className="hidden"
                         disabled={uploadingPhotoLocId === l.id}
                         onChange={(e) => {

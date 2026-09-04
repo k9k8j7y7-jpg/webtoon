@@ -214,20 +214,24 @@ async def upload_location_photo_pre(
     """제안 단계에서 장소 사진을 미리 업로드한다 (location 레코드 생성 전)."""
     _get_episode_for_user(db, project_id, episode_id, current_user.id)
 
-    if file.content_type not in ("image/jpeg", "image/png"):
-        raise HTTPException(status_code=400, detail="JPEG 또는 PNG만 가능합니다")
+    from app.image_util import validate_and_process
 
-    contents = await file.read()
-    if len(contents) > 5 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="5MB 이하만 가능합니다")
+    raw = await file.read()
+    try:
+        processed, mime = validate_and_process(
+            raw,
+            original_content_type=file.content_type or "",
+            original_filename=file.filename or "",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
-    ext = "jpg" if "jpeg" in file.content_type else "png"
     folder = ref_key or "temp"
     url = upload_image(
-        image_bytes=contents,
+        image_bytes=processed,
         path_prefix=f"episodes/{episode_id}/locations/{folder}/photos",
-        filename=f"user_ref.{ext}",
-        mime_type=file.content_type,
+        filename="user_ref.jpg",
+        mime_type=mime,
     )
 
     return {"url": url}
@@ -245,19 +249,23 @@ async def upload_location_photo(
     if not location:
         raise HTTPException(status_code=404, detail="Location not found")
 
-    if file.content_type not in ("image/jpeg", "image/png"):
-        raise HTTPException(status_code=400, detail="JPEG 또는 PNG만 가능합니다")
+    from app.image_util import validate_and_process
 
-    contents = await file.read()
-    if len(contents) > 5 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="5MB 이하만 가능합니다")
+    raw = await file.read()
+    try:
+        processed, mime = validate_and_process(
+            raw,
+            original_content_type=file.content_type or "",
+            original_filename=file.filename or "",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
-    ext = "jpg" if "jpeg" in file.content_type else "png"
     url = upload_image(
-        image_bytes=contents,
+        image_bytes=processed,
         path_prefix=f"episodes/{location.episode_id}/locations/{location.ref_key}/photos",
-        filename=f"user_ref.{ext}",
-        mime_type=file.content_type,
+        filename="user_ref.jpg",
+        mime_type=mime,
     )
     location.reference_photo_url = url
     location.converted_photo_url = None  # 기존 변환본 초기화

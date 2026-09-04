@@ -283,23 +283,28 @@ async def upload_character_photos(
     if len(files) > 3:
         raise HTTPException(status_code=400, detail="최대 3장까지 가능합니다")
 
-    # 파일 검증 + 읽기
+    from app.image_util import validate_and_process
+
+    # 파일 검증 + 처리
     photo_bytes_list: list[bytes] = []
     urls: list[str] = []
     for i, file in enumerate(files):
-        if file.content_type not in ("image/jpeg", "image/png"):
-            raise HTTPException(status_code=400, detail=f"파일 {i+1}: JPEG 또는 PNG만 가능합니다")
-        contents = await file.read()
-        if len(contents) > 5 * 1024 * 1024:
-            raise HTTPException(status_code=400, detail=f"파일 {i+1}: 5MB 이하만 가능합니다")
-        photo_bytes_list.append(contents)
+        raw = await file.read()
+        try:
+            processed, mime = validate_and_process(
+                raw,
+                original_content_type=file.content_type or "",
+                original_filename=file.filename or "",
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=f"파일 {i+1}: {e}")
+        photo_bytes_list.append(processed)
 
-        ext = "jpg" if "jpeg" in file.content_type else "png"
         url = upload_image(
-            image_bytes=contents,
+            image_bytes=processed,
             path_prefix=f"characters/{character_id}/photos",
-            filename=f"ref_{i}.{ext}",
-            mime_type=file.content_type,
+            filename=f"ref_{i}.jpg",
+            mime_type=mime,
         )
         urls.append(url)
 
