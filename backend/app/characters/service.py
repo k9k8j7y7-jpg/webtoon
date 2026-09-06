@@ -301,10 +301,16 @@ async def extract_appearance_from_photos(
             "You are describing this animal character for a webtoon illustrator. "
             "Write a concise Korean description (3~5 sentences) covering: species, breed, "
             "fur color and pattern, body size, distinctive features (ears, tail, markings). "
+            "Also write a single-line English appearance summary (max 80 characters) "
+            "covering species, breed, color, size, and clothing/accessories if any. "
+            "Exclude expression, pose, or momentary state. "
             "Do NOT identify any real person's identity. Do NOT mention breed certification. "
             "If multiple photos, describe common features across all photos. "
             "Output JSON only:\n"
-            '{"description": "한국어 외형 묘사 (종/품종, 털 색, 체형, 특징)"}'
+            "{\n"
+            '  "description": "한국어 외형 묘사 (종/품종, 털 색, 체형, 특징)",\n'
+            '  "appearance_en": "English one-line appearance, max 80 chars"\n'
+            "}"
         )
     else:
         contents.append(
@@ -339,4 +345,14 @@ async def extract_appearance_from_photos(
 
     result = parse_ai_json(response.text, context="extract_appearance")
     logger.warning("Photo appearance extraction: %s", result)
+
+    # 동물: appearance_en 80자 제한 (단어 경계 절단)
+    if is_animal and result.get("appearance_en"):
+        raw = result["appearance_en"].strip().replace("\n", " ")
+        if len(raw) > 80:
+            truncated = raw[:80].rsplit(" ", 1)[0]
+            logger.warning("Animal appearance_en truncated: %d→%d chars", len(raw), len(truncated))
+            raw = truncated
+        result["appearance_en"] = raw
+
     return result

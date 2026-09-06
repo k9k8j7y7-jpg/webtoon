@@ -173,8 +173,9 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
       // 추출 결과로 폼 필드 채움
       const ext = data.extracted || {};
       if (ext.description) {
-        // 동물: description → detail_notes에 채움
+        // 동물: description → detail_notes, appearance_en → appearance_en
         updateCharField('detail_notes', ext.description);
+        if (ext.appearance_en) updateCharField('appearance_en', ext.appearance_en);
       } else {
         // 인물: 구조화 필드 채움
         if (ext.gender) updateCharField('gender', ext.gender);

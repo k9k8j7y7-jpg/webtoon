@@ -315,6 +315,11 @@ async def upload_character_photos(
     # 비전 외형 추출
     extracted = await extract_appearance_from_photos(photo_bytes_list, is_animal=is_animal)
 
+    # 동물: appearance_en을 바로 DB에 저장 (PUT 시 build_appearance_en 재호출 불필요)
+    if is_animal and extracted.get("appearance_en"):
+        character.appearance_en = extracted["appearance_en"]
+        db.commit()
+
     return {
         "id": character.id,
         "reference_photos": urls,
