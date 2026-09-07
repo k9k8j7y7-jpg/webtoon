@@ -14,6 +14,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import BubbleOverlayComponent from '../components/BubbleOverlay';
 import SfxLayerComponent from '../components/SfxLayer';
+import EFFECT_CATALOG from './effectCatalog';
 import { loadFontCSS, collectUsedFonts, ensureFontsLoaded } from './fontEmbed';
 import { computeInitialLayouts } from './bubbleLayout';
 
@@ -59,18 +60,59 @@ export async function renderCutToCanvas(cut, characters, imageUrl, fontCSS) {
   // 1. 베이스 이미지
   ctx.drawImage(img, 0, 0, W, H);
 
-  // 2. SVG 오버레이 (말풍선 + 효과음) — CutEditor 보기모드와 동일한 배치
-  // computeInitialLayouts: bubble_layout이 없는 대사에 기본 배치 할당
+  // 2. SVG 오버레이 (효과 + 말풍선 + 효과음) — CutEditor 보기모드와 동일한 배치
+  // 레이어 순서: 이미지 → 효과 → 말풍선 → 효과음
   const dialogue = computeInitialLayouts(cut.dialogue || []);
   const hasBubbles = dialogue.length > 0;
   const hasSfx = cut.sfx_items?.length > 0;
+  const effectItems = cut.effect_items || [];
+  const hasEffects = effectItems.length > 0;
 
-  if ((hasBubbles || hasSfx) && fontCSS) {
+  // 배경효과 PNG → Base64 변환 (CORS taint 방지)
+  const effectBase64Cache = {};
+  if (hasEffects) {
+    const uniqueIds = [...new Set(effectItems.map(e => e.effect_id))];
+    for (const id of uniqueIds) {
+      const entry = EFFECT_CATALOG.find(e => e.id === id);
+      if (!entry) continue;
+      const effImg = await loadImage(entry.src, false);
+      const tmpCanvas = document.createElement('canvas');
+      tmpCanvas.width = effImg.naturalWidth;
+      tmpCanvas.height = effImg.naturalHeight;
+      const tmpCtx = tmpCanvas.getContext('2d');
+      tmpCtx.drawImage(effImg, 0, 0);
+      effectBase64Cache[id] = {
+        dataUrl: tmpCanvas.toDataURL('image/png'),
+        aspect: effImg.naturalHeight / effImg.naturalWidth,
+      };
+      tmpCanvas.width = 0;
+      tmpCanvas.height = 0;
+    }
+  }
+
+  if (hasBubbles || hasSfx || hasEffects) {
     // viewBox 참조 크기: 화면 비율 유지, 고정 너비
     const refW = REF_WIDTH;
     const refH = Math.round(refW * H / W);
 
     let innerContent = '';
+
+    // 배경효과 (이미지 바로 위, 말풍선·효과음 아래)
+    if (hasEffects) {
+      for (const item of effectItems) {
+        const cached = effectBase64Cache[item.effect_id];
+        if (!cached) continue;
+        const effW = (item.width ?? 1) * refW;
+        const effH = effW * cached.aspect;
+        const cx = (item.x ?? 0.5) * refW;
+        const cy = (item.y ?? 0.5) * refH;
+        const rotation = item.rotation || 0;
+        const opacity = item.opacity ?? 1;
+        const transforms = [`translate(${cx},${cy})`, `rotate(${rotation})`];
+        if (item.flip_h) transforms.push('scale(-1,1)');
+        innerContent += `<g transform="${transforms.join(' ')}"><image href="${cached.dataUrl}" x="${-effW/2}" y="${-effH/2}" width="${effW}" height="${effH}" opacity="${opacity}"/></g>`;
+      }
+    }
 
     if (hasBubbles) {
       const bubbleSvg = renderToStaticMarkup(
@@ -99,9 +141,10 @@ export async function renderCutToCanvas(cut, characters, imageUrl, fontCSS) {
     if (innerContent) {
       // viewBox = 참조 크기 / width·height = 원본 해상도
       // → SVG 벡터 스케일링으로 고해상도 출력
+      const defsContent = fontCSS ? `<defs><style>${fontCSS}</style></defs>` : '';
       const svgString = [
-        `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${refW} ${refH}">`,
-        `<defs><style>${fontCSS}</style></defs>`,
+        `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}" height="${H}" viewBox="0 0 ${refW} ${refH}">`,
+        defsContent,
         innerContent,
         `</svg>`,
       ].join('');
