@@ -140,6 +140,7 @@ async def list_cuts(
             "action": (c.spec or {}).get("action"),
             "dialogue": (c.spec or {}).get("dialogue", []),
             "sfx_items": (c.spec or {}).get("sfx_items", []),
+            "effect_items": (c.spec or {}).get("effect_items", []),
             "emphasis": (c.spec or {}).get("emphasis"),
         }
         for c in cuts
@@ -207,9 +208,48 @@ async def approve_storyboard(
     }
 
 
+VALID_EFFECT_IDS = {
+    "focus_thin", "focus_burst", "scribble_burst",
+    "speed_diagonal", "speed_horizontal", "line_fall",
+    "spark_surprise", "drip_feeling", "sparkle", "heart",
+}
+
+
+def _validate_effect_items(items: list[dict]) -> None:
+    """effect_items 배열 검증. 위반 시 HTTPException(400)."""
+    for i, item in enumerate(items):
+        eid = item.get("effect_id")
+        if eid not in VALID_EFFECT_IDS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"effect_items[{i}]: invalid effect_id '{eid}'. "
+                       f"Must be one of: {', '.join(sorted(VALID_EFFECT_IDS))}",
+            )
+        for field in ("x", "y", "width", "opacity"):
+            val = item.get(field)
+            if val is not None and not (0 <= float(val) <= 1):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"effect_items[{i}].{field}: {val} out of range 0~1",
+                )
+        rotation = item.get("rotation")
+        if rotation is not None and not (0 <= float(rotation) <= 360):
+            raise HTTPException(
+                status_code=400,
+                detail=f"effect_items[{i}].rotation: {rotation} out of range 0~360",
+            )
+        flip_h = item.get("flip_h")
+        if flip_h is not None and not isinstance(flip_h, bool):
+            raise HTTPException(
+                status_code=400,
+                detail=f"effect_items[{i}].flip_h: must be boolean",
+            )
+
+
 class DialogueUpdateRequest(BaseModel):
     dialogue: list[dict]
     sfx_items: list[dict] | None = None  # 효과음 요소 (선택, 없으면 기존 유지)
+    effect_items: list[dict] | None = None  # 배경효과 요소 (선택, 없으면 기존 유지)
 
 
 @router.put("/cuts/{cut_id}/dialogue")
@@ -228,6 +268,9 @@ async def update_cut_dialogue(
     spec["dialogue"] = body.dialogue
     if body.sfx_items is not None:
         spec["sfx_items"] = body.sfx_items
+    if body.effect_items is not None:
+        _validate_effect_items(body.effect_items)
+        spec["effect_items"] = body.effect_items
     cut.spec = spec
 
     # 원본 이미지 위에 재조판 (말풍선만, 효과음은 프론트엔드 SVG로 렌더링)
@@ -245,6 +288,7 @@ async def update_cut_dialogue(
         "composed_image_url": cut.composed_image_url,
         "dialogue": body.dialogue,
         "sfx_items": spec.get("sfx_items", []),
+        "effect_items": spec.get("effect_items", []),
     }
 
 

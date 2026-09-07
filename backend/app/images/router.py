@@ -159,6 +159,11 @@ async def update_dialogue(
     sfx_items = body.get("sfx_items")
     if sfx_items is not None:
         spec["sfx_items"] = sfx_items
+    effect_items = body.get("effect_items")
+    if effect_items is not None:
+        from app.storyboard.router import _validate_effect_items
+        _validate_effect_items(effect_items)
+        spec["effect_items"] = effect_items
     cut.spec = spec
 
     # 원본 이미지 위에 재조판 (12종 말풍선 자동 매핑)
