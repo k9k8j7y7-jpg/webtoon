@@ -6,6 +6,7 @@ import { resolveBubbleStyle } from '../../utils/bubbleMapping';
 import { Image, RefreshCw, RotateCcw, Download, Check, AlertTriangle, MessageSquare, Save, X, ZoomIn, ChevronLeft, ChevronRight, Pencil, SlidersHorizontal, ExternalLink } from 'lucide-react';
 import CutEditor from '../CutEditor';
 import SfxLayer from '../SfxLayer';
+import EffectLayer from '../EffectLayer';
 import ExportProgressModal from '../ExportProgressModal';
 import { exportAsPNGZip, exportAsVertical, exportAsInstagram, exportAsA4Single, exportAsA4Grid } from '../../utils/exportRenderer';
 
@@ -32,6 +33,10 @@ function CutImageWithBubbles({ cut, imageUrl, onZoom }) {
         className={`w-full h-full object-cover ${cut.status === 'invalidated' ? 'opacity-50' : ''}`}
         onLoad={handleImageLoad}
       />
+      {/* 배경효과 오버레이 */}
+      {dims.w > 0 && (
+        <EffectLayer effectItems={cut.effect_items} width={dims.w} height={dims.h} />
+      )}
       {/* SVG 말풍선 오버레이 */}
       {dims.w > 0 && cut.dialogue && cut.dialogue.length > 0 && (
         <BubbleOverlay
@@ -89,6 +94,9 @@ function LightboxImageWithBubbles({ cut, imgSrc }) {
         className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg shadow-2xl"
         onLoad={handleImageLoad}
       />
+      {dims.w > 0 && (
+        <EffectLayer effectItems={cut.effect_items} width={dims.w} height={dims.h} />
+      )}
       {dims.w > 0 && cut.dialogue && cut.dialogue.length > 0 && (
         <BubbleOverlay
           dialogue={cut.dialogue}
@@ -1007,7 +1015,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
         const hasNext = editCutIndex < cuts.length - 1 && cuts[editCutIndex + 1]?.image_url;
         return (
           <CutEditor
-            cut={{ ...cut, dialogue: cut.dialogue || [], sfx_items: cut.sfx_items || [] }}
+            cut={{ ...cut, dialogue: cut.dialogue || [], sfx_items: cut.sfx_items || [], effect_items: cut.effect_items || [] }}
             imageUrl={imageUrl(getCutImageUrl(cut))}
             characters={cut.characters || []}
             charNameMap={charNameMap}

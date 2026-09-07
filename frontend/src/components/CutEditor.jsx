@@ -14,10 +14,12 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import api from '../api/client';
 import BubbleOverlay, { BUBBLE_CONFIGS, SingleBubble, BubbleMiniIcon, wrapText, computeSingleBubbleGeo, CHAR_WIDTH } from './BubbleOverlay';
 import SfxLayer from './SfxLayer';
+import EffectLayer from './EffectLayer';
+import EFFECT_CATALOG from '../utils/effectCatalog';
 import { resolveBubbleStyle } from '../utils/bubbleMapping';
 import bubbleSpec from '../utils/bubbleSpec.json';
 import { getFontById, getFontsByUsage } from '../utils/fontCatalog';
-import { X, Save, Pencil, Eye, Info, Zap, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, Save, Pencil, Eye, Info, Zap, Sparkles, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { computeInitialLayouts } from '../utils/bubbleLayout';
 
 // ── 꼬리 방향 선택지 ──
@@ -84,8 +86,11 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
   const [mode, setMode] = useState('view');
   const [bubbles, setBubbles] = useState(() => (cut.dialogue || []).map(d => ({ ...d })));
   const [sfxItems, setSfxItems] = useState(() => (cut.sfx_items || []).map(s => ({ ...s })));
+  const [effectItems, setEffectItems] = useState(() => (cut.effect_items || []).map(e => ({ ...e })));
   const [selectedIdx, setSelectedIdx] = useState(null);     // 선택된 말풍선 인덱스
   const [selectedSfxIdx, setSelectedSfxIdx] = useState(null); // 선택된 효과음 인덱스
+  const [selectedEffectIdx, setSelectedEffectIdx] = useState(null); // 선택된 배경효과 인덱스
+  const [showEffectPicker, setShowEffectPicker] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [openPalette, setOpenPalette] = useState(false);
@@ -107,6 +112,9 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
   const resizeRef    = useRef(null); // 말풍선 너비 리사이즈
   const sfxDragRef   = useRef(null); // 효과음 드래그
   const rotateRef    = useRef(null); // 효과음 회전
+  const effectDragRef   = useRef(null); // 배경효과 드래그
+  const effectRotateRef = useRef(null); // 배경효과 회전
+  const effectAspects   = useRef({}); // 효과 이미지 종횡비 캐시
 
   // 컨테이너 실측 → 이미지 표시 크기 계산
   const recalcSize = useCallback(() => {
@@ -149,25 +157,39 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
     return () => ro.disconnect();
   }, [recalcSize]);
 
+  // ── 배경효과 이미지 종횡비 프리로드 ──
+  useEffect(() => {
+    EFFECT_CATALOG.forEach(entry => {
+      if (effectAspects.current[entry.id]) return;
+      const img = new Image();
+      img.onload = () => { effectAspects.current[entry.id] = img.naturalHeight / img.naturalWidth; };
+      img.src = entry.src;
+    });
+  }, []);
+
   // ── 모드 전환 ────────────────────────────────────────────
 
   const enterEditMode = () => {
     setBubbles(computeInitialLayouts(cut.dialogue || []));
     setSfxItems((cut.sfx_items || []).map(s => ({ ...s })));
+    setEffectItems((cut.effect_items || []).map(e => ({ ...e })));
     setSelectedIdx(null);
     setSelectedSfxIdx(null);
+    setSelectedEffectIdx(null);
+    setShowEffectPicker(false);
     setMode('edit');
-
   };
 
   const cancelEdit = () => {
     setBubbles((cut.dialogue || []).map(d => ({ ...d })));
     setSfxItems((cut.sfx_items || []).map(s => ({ ...s })));
+    setEffectItems((cut.effect_items || []).map(e => ({ ...e })));
     setSelectedIdx(null);
     setSelectedSfxIdx(null);
+    setSelectedEffectIdx(null);
     setOpenPalette(false);
+    setShowEffectPicker(false);
     setMode('view');
-
   };
 
   // ── 저장 ─────────────────────────────────────────────────
@@ -179,6 +201,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
       await api.put(`/cuts/${cut.cut_id}/dialogue`, {
         dialogue: bubbles,
         sfx_items: sfxItems,
+        effect_items: effectItems,
       });
       if (onSave) await onSave();
       setMode('view');
@@ -238,6 +261,37 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
     setSelectedSfxIdx(null);
   };
 
+  // ── 배경효과 업데이트 ──────────────────────────────────
+
+  const updateEffectItem = useCallback((idx, updates) => {
+    setEffectItems(prev => prev.map((e, i) => i === idx ? { ...e, ...updates } : e));
+  }, []);
+
+  const handleAddEffect = (effectId) => {
+    const entry = EFFECT_CATALOG.find(e => e.id === effectId);
+    if (!entry) return;
+    const newItem = {
+      effect_id: effectId,
+      x: 0.5,
+      y: 0.5,
+      width: entry.category === 'full' ? 1.0 : 0.3,
+      rotation: 0,
+      opacity: 0.8,
+      flip_h: false,
+    };
+    const newIdx = effectItems.length;
+    setEffectItems(prev => [...prev, newItem]);
+    setSelectedEffectIdx(newIdx);
+    setSelectedIdx(null);
+    setSelectedSfxIdx(null);
+    setShowEffectPicker(false);
+  };
+
+  const handleDeleteEffect = (idx) => {
+    setEffectItems(prev => prev.filter((_, i) => i !== idx));
+    setSelectedEffectIdx(null);
+  };
+
   const handleDeleteBubble = (idx) => {
     setBubbles(prev => prev.filter((_, i) => i !== idx));
     setSelectedIdx(null);
@@ -250,7 +304,9 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
     if (e.touches) e.preventDefault();
     setSelectedIdx(idx);
     setSelectedSfxIdx(null);
+    setSelectedEffectIdx(null);
     setOpenPalette(false);
+    setShowEffectPicker(false);
     dragMoved.current = false;
 
     const b = bubbles[idx];
@@ -315,7 +371,9 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
     if (e.touches) e.preventDefault();
     setSelectedSfxIdx(idx);
     setSelectedIdx(null);
+    setSelectedEffectIdx(null);
     setOpenPalette(false);
+    setShowEffectPicker(false);
     dragMoved.current = false;
 
     const sfx = sfxItems[idx];
@@ -377,14 +435,84 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
     ));
   }, []);
 
+  // ── 배경효과 드래그 ────────────────────────────────────────
+
+  const handleEffectPointerDown = (e, idx) => {
+    e.stopPropagation();
+    if (e.touches) e.preventDefault();
+    setSelectedEffectIdx(idx);
+    setSelectedIdx(null);
+    setSelectedSfxIdx(null);
+    setOpenPalette(false);
+    setShowEffectPicker(false);
+    dragMoved.current = false;
+
+    const item = effectItems[idx];
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    effectDragRef.current = {
+      idx,
+      startX: clientX, startY: clientY,
+      origX: item.x ?? 0.5, origY: item.y ?? 0.5,
+    };
+  };
+
+  const applyEffectDrag = useCallback((clientX, clientY) => {
+    const ed = effectDragRef.current;
+    if (!ed) return;
+    const { w, h } = imgSizeRef.current;
+    if (!w || !h) return;
+    if (Math.hypot(clientX - ed.startX, clientY - ed.startY) < DRAG_THRESHOLD) return;
+    dragMoved.current = true;
+    const dx = (clientX - ed.startX) / w;
+    const dy = (clientY - ed.startY) / h;
+    setEffectItems(prev => prev.map((item, i) => i !== ed.idx ? item : {
+      ...item,
+      x: Math.max(0, Math.min(1, ed.origX + dx)),
+      y: Math.max(0, Math.min(1, ed.origY + dy)),
+    }));
+  }, []);
+
+  // ── 배경효과 회전 ────────────────────────────────────────
+
+  const handleEffectRotateStart = (e, idx) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const item = effectItems[idx];
+    const imgRect = imgRef.current?.getBoundingClientRect();
+    if (!imgRect) return;
+    const { w, h } = imgSizeRef.current;
+    const centerX = imgRect.left + (item.x ?? 0.5) * w;
+    const centerY = imgRect.top + (item.y ?? 0.5) * h;
+    const startAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * 180 / Math.PI;
+    effectRotateRef.current = {
+      idx, centerX, centerY,
+      startAngle,
+      origRotation: item.rotation || 0,
+    };
+  };
+
+  const applyEffectRotate = useCallback((clientX, clientY) => {
+    const er = effectRotateRef.current;
+    if (!er) return;
+    const angle = Math.atan2(clientY - er.centerY, clientX - er.centerX) * 180 / Math.PI;
+    let newRotation = er.origRotation + (angle - er.startAngle);
+    newRotation = ((newRotation % 360) + 360) % 360;
+    setEffectItems(prev => prev.map((item, i) =>
+      i === er.idx ? { ...item, rotation: Math.round(newRotation) } : item
+    ));
+  }, []);
+
   // ── window 이벤트 (mousemove/mouseup/touch) ───────────────
 
   const handleMouseMove = useCallback((e) => {
-    if (dragRef.current)    applyDrag(e.clientX, e.clientY);
+    if (dragRef.current)         applyDrag(e.clientX, e.clientY);
     else if (sfxDragRef.current) applySfxDrag(e.clientX, e.clientY);
+    else if (effectDragRef.current) applyEffectDrag(e.clientX, e.clientY);
     else if (resizeRef.current)  applyResize(e.clientX);
     else if (rotateRef.current)  applyRotate(e.clientX, e.clientY);
-  }, [applyDrag, applySfxDrag, applyResize, applyRotate]);
+    else if (effectRotateRef.current) applyEffectRotate(e.clientX, e.clientY);
+  }, [applyDrag, applySfxDrag, applyEffectDrag, applyResize, applyRotate, applyEffectRotate]);
 
   const handleMouseUp = useCallback((e) => {
     // 말풍선 드래그 클릭 판정
@@ -402,17 +530,29 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
       if (dist < DRAG_THRESHOLD) setSelectedSfxIdx(sd.idx);
     }
     sfxDragRef.current = null;
+
+    // 배경효과 드래그 클릭 판정
+    const ed = effectDragRef.current;
+    if (ed) {
+      const dist = Math.hypot((e?.clientX ?? ed.startX) - ed.startX, (e?.clientY ?? ed.startY) - ed.startY);
+      if (dist < DRAG_THRESHOLD) setSelectedEffectIdx(ed.idx);
+    }
+    effectDragRef.current = null;
+
     resizeRef.current = null;
     rotateRef.current = null;
-  }, [setSelectedIdx, setSelectedSfxIdx]);
+    effectRotateRef.current = null;
+  }, [setSelectedIdx, setSelectedSfxIdx, setSelectedEffectIdx]);
 
   const handleTouchMove = useCallback((e) => {
     if (!e.touches?.length) return;
     e.preventDefault();
     const t = e.touches[0];
-    if (dragRef.current)     applyDrag(t.clientX, t.clientY);
-    else if (sfxDragRef.current) applySfxDrag(t.clientX, t.clientY);
-  }, [applyDrag, applySfxDrag]);
+    if (dragRef.current)            applyDrag(t.clientX, t.clientY);
+    else if (sfxDragRef.current)    applySfxDrag(t.clientX, t.clientY);
+    else if (effectDragRef.current) applyEffectDrag(t.clientX, t.clientY);
+    else if (effectRotateRef.current) applyEffectRotate(t.clientX, t.clientY);
+  }, [applyDrag, applySfxDrag, applyEffectDrag, applyEffectRotate]);
 
   const handleTouchEnd = useCallback((e) => {
     const t = e.changedTouches?.[0];
@@ -428,9 +568,17 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
       if (Math.hypot(t.clientX - sd.startX, t.clientY - sd.startY) < DRAG_THRESHOLD) setSelectedSfxIdx(sd.idx);
     }
     sfxDragRef.current = null;
+
+    const ed = effectDragRef.current;
+    if (ed && t) {
+      if (Math.hypot(t.clientX - ed.startX, t.clientY - ed.startY) < DRAG_THRESHOLD) setSelectedEffectIdx(ed.idx);
+    }
+    effectDragRef.current = null;
+
     resizeRef.current = null;
     rotateRef.current = null;
-  }, [setSelectedIdx, setSelectedSfxIdx]);
+    effectRotateRef.current = null;
+  }, [setSelectedIdx, setSelectedSfxIdx, setSelectedEffectIdx]);
 
   useEffect(() => {
     window.addEventListener('mousemove', handleMouseMove);
@@ -461,6 +609,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
 
   const selectedBubble  = selectedIdx !== null ? bubbles[selectedIdx] : null;
   const selectedSfxItem = selectedSfxIdx !== null ? sfxItems[selectedSfxIdx] : null;
+  const selectedEffectItem = selectedEffectIdx !== null ? effectItems[selectedEffectIdx] : null;
   const { w: imgW, h: imgH } = imgSizeState;
 
   // ──────────────────────────────────────────────────────────────
@@ -470,7 +619,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
   return (
     <div
       className="fixed inset-0 z-50 bg-black flex flex-col"
-      onClick={() => { setSelectedIdx(null); setSelectedSfxIdx(null); setOpenPalette(false); }}
+      onClick={() => { setSelectedIdx(null); setSelectedSfxIdx(null); setSelectedEffectIdx(null); setOpenPalette(false); setShowEffectPicker(false); }}
     >
       {/* ── 상단 바 ── */}
       <div
@@ -508,6 +657,15 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
           )}
           {mode === 'edit' && (
             <>
+              {/* 배경효과 추가 버튼 */}
+              <button
+                onClick={() => setShowEffectPicker(p => !p)}
+                className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold transition-colors shadow-sm ${
+                  showEffectPicker ? 'bg-cyan-500 text-white' : 'bg-cyan-600 hover:bg-cyan-700 text-white'
+                }`}
+              >
+                <Sparkles size={12} /> 배경효과
+              </button>
               {/* 효과음 추가 버튼 */}
               <button
                 onClick={handleAddSfx}
@@ -559,13 +717,16 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
           {/* 보기 모드: 읽기 전용 오버레이 */}
           {mode === 'view' && imgW > 0 && (
             <>
+              <EffectLayer effectItems={effectItems} width={imgW} height={imgH} />
               <BubbleOverlay dialogue={bubbles} characters={characters} width={imgW} height={imgH} />
               <SfxLayer sfxItems={sfxItems} width={imgW} height={imgH} />
             </>
           )}
 
-          {/* 편집 모드: 인터랙티브 SVG */}
+          {/* 편집 모드: 효과 레이어 + 인터랙티브 SVG */}
           {mode === 'edit' && imgW > 0 && (
+            <>
+            <EffectLayer effectItems={effectItems} width={imgW} height={imgH} />
             <svg
               className="absolute inset-0"
               width={imgW} height={imgH}
@@ -583,9 +744,73 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                   if (dragMoved.current) { dragMoved.current = false; return; }
                   setSelectedIdx(null);
                   setSelectedSfxIdx(null);
+                  setSelectedEffectIdx(null);
                   setOpenPalette(false);
+                  setShowEffectPicker(false);
                 }}
               />
+
+              {/* ── 배경효과 히트박스 (이미지는 EffectLayer가 렌더, 여기는 조작 전용) ── */}
+              {effectItems.map((item, i) => {
+                const entry = EFFECT_CATALOG.find(e => e.id === item.effect_id);
+                if (!entry) return null;
+                const px = (item.x ?? 0.5) * imgW;
+                const py = (item.y ?? 0.5) * imgH;
+                const effW = (item.width ?? 1) * imgW;
+                const aspect = effectAspects.current[item.effect_id] || (entry.category === 'full' ? 16/9 : 1);
+                const effH = effW * aspect;
+                const rotation = item.rotation || 0;
+                const isSelected = selectedEffectIdx === i;
+
+                return (
+                  <g key={`eff-${i}`} transform={`translate(${px}, ${py}) rotate(${rotation})`}>
+                    {/* 선택 테두리 */}
+                    {isSelected && (
+                      <rect x={-effW/2-4} y={-effH/2-4} width={effW+8} height={effH+8}
+                        fill="none" stroke="#06b6d4" strokeWidth={2}
+                        strokeDasharray="6,3" rx={4} style={{ pointerEvents: 'none' }} />
+                    )}
+
+                    {/* 드래그 히트박스 */}
+                    <rect
+                      x={-effW/2} y={-effH/2} width={effW} height={effH}
+                      fill="transparent" style={{ cursor: 'grab', pointerEvents: 'all' }}
+                      onMouseDown={e => handleEffectPointerDown(e, i)}
+                      onTouchStart={e => { e.preventDefault(); handleEffectPointerDown(e, i); }}
+                      onClick={e => {
+                        e.stopPropagation();
+                        dragMoved.current = false;
+                        setSelectedEffectIdx(i);
+                        setSelectedIdx(null);
+                        setSelectedSfxIdx(null);
+                        setShowEffectPicker(false);
+                      }}
+                    />
+
+                    {/* 라벨 */}
+                    <text x={-effW/2+2} y={-effH/2-6}
+                      fill={isSelected ? '#06b6d4' : 'rgba(6,182,212,0.45)'}
+                      fontSize={8} fontWeight="bold"
+                      stroke="rgba(0,0,0,0.5)" strokeWidth={0.8} paintOrder="stroke"
+                      style={{ pointerEvents: 'none' }}>
+                      FX{i+1}
+                    </text>
+
+                    {/* 회전 핸들 (선택 시) */}
+                    {isSelected && (
+                      <g>
+                        <line x1="0" y1={-effH/2-4} x2="0" y2={-effH/2-28}
+                          stroke="#06b6d4" strokeWidth={1.5} style={{ pointerEvents: 'none' }} />
+                        <circle cx="0" cy={-effH/2-32} r={10} fill="#06b6d4" opacity={0.9}
+                          style={{ cursor: 'crosshair', pointerEvents: 'all' }}
+                          onMouseDown={e => handleEffectRotateStart(e, i)} />
+                        <text x="0" y={-effH/2-28} textAnchor="middle" dominantBaseline="middle"
+                          fill="white" fontSize={13} style={{ pointerEvents: 'none' }}>↻</text>
+                      </g>
+                    )}
+                  </g>
+                );
+              })}
 
               {/* ── 말풍선들 ── */}
               {bubbles.map((b, i) => {
@@ -638,7 +863,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                       fill="transparent" style={{ cursor: 'grab', pointerEvents: 'all' }}
                       onMouseDown={e => handleBubblePointerDown(e, i)}
                       onTouchStart={e => { e.preventDefault(); handleBubblePointerDown(e, i); }}
-                      onClick={e => { e.stopPropagation(); dragMoved.current = false; setSelectedIdx(i); setSelectedSfxIdx(null); setOpenPalette(false); }}
+                      onClick={e => { e.stopPropagation(); dragMoved.current = false; setSelectedIdx(i); setSelectedSfxIdx(null); setSelectedEffectIdx(null); setOpenPalette(false); }}
                     />
                     <text x={gx+4} y={gy-5} fill={isSelected ? '#a855f7' : 'rgba(255,255,255,0.5)'}
                       fontSize={9} fontWeight="bold"
@@ -706,6 +931,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                         dragMoved.current = false;
                         setSelectedSfxIdx(i);
                         setSelectedIdx(null);
+                        setSelectedEffectIdx(null);
                         setOpenPalette(false);
                       }}
                     />
@@ -735,6 +961,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                 );
               })}
             </svg>
+            </>
           )}
         </div>
 
@@ -1059,11 +1286,113 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
             </div>
           )}
 
+          {/* 배경효과 선택 패널 */}
+          {!selectedBubble && !selectedSfxItem && selectedEffectItem && (
+            <div className="px-4 py-3 space-y-2.5">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-cyan-400 flex items-center gap-1">
+                  <Sparkles size={12} /> {EFFECT_CATALOG.find(e => e.id === selectedEffectItem.effect_id)?.name || 'FX'} ({selectedEffectIdx + 1})
+                </span>
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                  EFFECT_CATALOG.find(e => e.id === selectedEffectItem.effect_id)?.category === 'full'
+                    ? 'bg-cyan-900/50 text-cyan-300' : 'bg-teal-900/50 text-teal-300'
+                }`}>
+                  {EFFECT_CATALOG.find(e => e.id === selectedEffectItem.effect_id)?.category === 'full' ? '전체' : '부분'}
+                </span>
+                <button
+                  onClick={() => handleDeleteEffect(selectedEffectIdx)}
+                  className="ml-auto flex items-center gap-1 text-xs font-bold text-red-400 hover:text-red-300 transition-colors"
+                >
+                  <Trash2 size={12} /> 삭제
+                </button>
+              </div>
+
+              <div className="flex items-start gap-4 flex-wrap">
+                {/* 크기 (너비) */}
+                <div className="shrink-0">
+                  <p className="text-[10px] text-zinc-500 font-bold mb-1">
+                    크기 {Math.round((selectedEffectItem.width ?? 1) * 100)}%
+                  </p>
+                  <input type="range" min={10} max={150} step={1}
+                    value={Math.round((selectedEffectItem.width ?? 1) * 100)}
+                    onChange={e => updateEffectItem(selectedEffectIdx, { width: Number(e.target.value) / 100 })}
+                    className="w-28 accent-cyan-500 cursor-pointer" />
+                </div>
+
+                {/* 회전 */}
+                <div className="shrink-0">
+                  <p className="text-[10px] text-zinc-500 font-bold mb-1">
+                    회전 {selectedEffectItem.rotation || 0}°
+                  </p>
+                  <input type="range" min={0} max={360} step={1}
+                    value={selectedEffectItem.rotation || 0}
+                    onChange={e => updateEffectItem(selectedEffectIdx, { rotation: Number(e.target.value) })}
+                    className="w-28 accent-cyan-500 cursor-pointer" />
+                </div>
+
+                {/* 불투명도 */}
+                <div className="shrink-0">
+                  <p className="text-[10px] text-zinc-500 font-bold mb-1">
+                    불투명도 {Math.round((selectedEffectItem.opacity ?? 1) * 100)}%
+                  </p>
+                  <input type="range" min={10} max={100} step={5}
+                    value={Math.round((selectedEffectItem.opacity ?? 1) * 100)}
+                    onChange={e => updateEffectItem(selectedEffectIdx, { opacity: Number(e.target.value) / 100 })}
+                    className="w-28 accent-cyan-500 cursor-pointer" />
+                </div>
+
+                {/* 좌우 반전 */}
+                <div className="shrink-0">
+                  <p className="text-[10px] text-zinc-500 font-bold mb-1">좌우 반전</p>
+                  <button
+                    onClick={() => updateEffectItem(selectedEffectIdx, { flip_h: !selectedEffectItem.flip_h })}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                      selectedEffectItem.flip_h ? 'bg-cyan-600 text-white' : 'bg-zinc-700 text-zinc-400 hover:bg-zinc-600'
+                    }`}
+                  >
+                    ↔ {selectedEffectItem.flip_h ? 'ON' : 'OFF'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 배경효과 피커 */}
+          {showEffectPicker && !selectedBubble && !selectedSfxItem && !selectedEffectItem && (
+            <div className="px-4 py-3 space-y-2">
+              <p className="text-xs font-bold text-cyan-400 flex items-center gap-1">
+                <Sparkles size={12} /> 배경효과 선택
+              </p>
+              <p className="text-[10px] text-zinc-500 font-bold">전체 (컷 전체 덮기)</p>
+              <div className="flex gap-2 flex-wrap">
+                {EFFECT_CATALOG.filter(e => e.category === 'full').map(entry => (
+                  <button key={entry.id} onClick={() => handleAddEffect(entry.id)}
+                    className="flex flex-col items-center gap-1 p-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-cyan-500 rounded-lg transition-colors"
+                  >
+                    <img src={entry.src} alt={entry.name} className="w-10 h-16 object-contain opacity-80" draggable={false} />
+                    <span className="text-[10px] text-zinc-400 font-bold">{entry.name}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-zinc-500 font-bold mt-1">부분 (포인트 배치)</p>
+              <div className="flex gap-2 flex-wrap">
+                {EFFECT_CATALOG.filter(e => e.category === 'partial').map(entry => (
+                  <button key={entry.id} onClick={() => handleAddEffect(entry.id)}
+                    className="flex flex-col items-center gap-1 p-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-cyan-500 rounded-lg transition-colors"
+                  >
+                    <img src={entry.src} alt={entry.name} className="w-10 h-10 object-contain opacity-80" draggable={false} />
+                    <span className="text-[10px] text-zinc-400 font-bold">{entry.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* 아무것도 선택 안 됨 */}
-          {!selectedBubble && !selectedSfxItem && (
+          {!selectedBubble && !selectedSfxItem && !selectedEffectItem && !showEffectPicker && (
             <div className="flex items-center justify-center gap-1.5 py-3 text-xs text-zinc-500 font-bold">
               <Info size={13} />
-              말풍선 또는 효과음을 클릭하면 편집할 수 있습니다
+              말풍선, 효과음, 배경효과를 클릭하면 편집할 수 있습니다
             </div>
           )}
         </div>
