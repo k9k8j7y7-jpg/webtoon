@@ -225,13 +225,19 @@ def _validate_effect_items(items: list[dict]) -> None:
                 detail=f"effect_items[{i}]: invalid effect_id '{eid}'. "
                        f"Must be one of: {', '.join(sorted(VALID_EFFECT_IDS))}",
             )
-        for field in ("x", "y", "width", "opacity"):
+        for field in ("x", "y", "opacity"):
             val = item.get(field)
             if val is not None and not (0 <= float(val) <= 1):
                 raise HTTPException(
                     status_code=400,
                     detail=f"effect_items[{i}].{field}: {val} out of range 0~1",
                 )
+        w_val = item.get("width")
+        if w_val is not None and not (0 < float(w_val) <= 2):
+            raise HTTPException(
+                status_code=400,
+                detail=f"effect_items[{i}].width: {w_val} out of range (0,2]",
+            )
         rotation = item.get("rotation")
         if rotation is not None and not (0 <= float(rotation) <= 360):
             raise HTTPException(
