@@ -1,31 +1,92 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
 import { Sparkles } from 'lucide-react';
 
+const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
+
+// 각 소셜 로그인 authorize URL 생성
+function getOAuthUrl(provider) {
+  const redirectUri = `${window.location.origin}${API_BASE}/login/callback/${provider}`;
+
+  switch (provider) {
+    case 'google':
+      return (
+        'https://accounts.google.com/o/oauth2/v2/auth?' +
+        new URLSearchParams({
+          client_id: '1053245765681-71q13teq6gr4b508kg2opojvfc9688ll.apps.googleusercontent.com',
+          redirect_uri: redirectUri,
+          response_type: 'code',
+          scope: 'openid email profile',
+          access_type: 'offline',
+          prompt: 'consent',
+        })
+      );
+    case 'kakao':
+      return (
+        'https://kauth.kakao.com/oauth/authorize?' +
+        new URLSearchParams({
+          client_id: '1316c318e09c0f8c8a39cb445d549fd5',
+          redirect_uri: redirectUri,
+          response_type: 'code',
+        })
+      );
+    case 'naver':
+      return (
+        'https://nid.naver.com/oauth2.0/authorize?' +
+        new URLSearchParams({
+          client_id: '7g4chvn9py7SOHj_tXUu',
+          redirect_uri: redirectUri,
+          response_type: 'code',
+          state: 'projectt',
+        })
+      );
+    default:
+      return '#';
+  }
+}
+
+const providers = [
+  {
+    id: 'kakao',
+    name: '카카오로 시작하기',
+    bg: 'bg-[#FEE500]',
+    text: 'text-[#191919]',
+    hoverBg: 'hover:bg-[#F5DC00]',
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-5 h-5" fill="#191919">
+        <path d="M12 3C6.48 3 2 6.54 2 10.84c0 2.77 1.86 5.21 4.66 6.6l-1.2 4.37c-.1.38.33.68.65.46l5.1-3.36c.26.02.52.03.79.03 5.52 0 10-3.54 10-7.9S17.52 3 12 3z" />
+      </svg>
+    ),
+  },
+  {
+    id: 'google',
+    name: 'Google로 시작하기',
+    bg: 'bg-white',
+    text: 'text-gray-700',
+    hoverBg: 'hover:bg-gray-50',
+    border: 'border-2 border-gray-200',
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-5 h-5">
+        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" />
+        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+      </svg>
+    ),
+  },
+  {
+    id: 'naver',
+    name: '네이버로 시작하기',
+    bg: 'bg-[#03C75A]',
+    text: 'text-white',
+    hoverBg: 'hover:bg-[#02b351]',
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-5 h-5" fill="white">
+        <path d="M16.27 3v8.42L7.73 3H3v18h4.73v-8.42L16.27 21H21V3z" />
+      </svg>
+    ),
+  },
+];
+
 export default function LoginPage() {
-  const { login } = useAuth();
-  const navigate = useNavigate();
-  const [token, setToken] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  // MVP: 직접 토큰 입력 (OAuth UI는 추후)
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    if (!token.trim()) return;
-    setLoading(true);
-    setError('');
-    try {
-      await login(token.trim());
-      navigate('/');
-    } catch {
-      setError('유효하지 않은 토큰입니다.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-transparent flex items-center justify-center p-4">
       <div className="bg-white/80 dark:bg-surface-dark/80 backdrop-blur-sm border-2 border-border dark:border-zinc-800 rounded-2xl shadow-md p-8 w-full max-w-md">
@@ -37,32 +98,22 @@ export default function LoginPage() {
           <p className="text-gray-500 dark:text-gray-400 mt-1">AI 웹툰 생성 서비스</p>
         </div>
 
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-              인증 토큰
-            </label>
-            <input
-              type="text"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              placeholder="JWT 토큰을 입력하세요"
-              className="w-full px-4 py-2 border-2 border-border dark:border-zinc-700 bg-transparent rounded-xl text-ink-black dark:text-white focus:outline-none focus:border-comic-orange focus:ring-4 focus:ring-comic-orange/20 transition-all font-bold text-sm"
-            />
-          </div>
-          {error && <p className="text-red-500 dark:text-red-400 text-sm font-bold">{error}</p>}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-2.5 bg-ink-black text-white dark:bg-white dark:text-ink-black rounded-full font-bold hover:bg-comic-blue dark:hover:bg-comic-orange hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50"
-          >
-            {loading ? '로그인 중...' : '로그인'}
-          </button>
-        </form>
+        <div className="space-y-3">
+          {providers.map((p) => (
+            <a
+              key={p.id}
+              href={getOAuthUrl(p.id)}
+              className={`flex items-center justify-center gap-3 w-full py-3 rounded-xl font-bold text-sm transition-all hover:-translate-y-0.5 shadow-sm ${p.bg} ${p.text} ${p.hoverBg} ${p.border || ''}`}
+            >
+              {p.icon}
+              {p.name}
+            </a>
+          ))}
+        </div>
 
         <div className="mt-6 pt-6 border-t-2 border-border dark:border-zinc-800">
-          <p className="text-xs text-gray-400 dark:text-zinc-500 text-center font-bold">
-            MVP — OAuth 로그인은 추후 연동 예정
+          <p className="text-xs text-gray-400 dark:text-zinc-500 text-center">
+            로그인 시 서비스 이용약관에 동의합니다
           </p>
         </div>
       </div>

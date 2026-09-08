@@ -7,6 +7,7 @@ import ProjectPage from './pages/ProjectPage';
 import WorkflowPage from './pages/WorkflowPage';
 import SeriesPage from './pages/SeriesPage';
 import BubbleTestPage from './pages/BubbleTestPage';
+import OAuthCallbackPage from './pages/OAuthCallbackPage';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -23,6 +24,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
+      <Route path="/login/callback/:provider" element={<OAuthCallbackPage />} />
       <Route path="/bubble-test" element={<BubbleTestPage />} />
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route path="/" element={<DashboardPage />} />
