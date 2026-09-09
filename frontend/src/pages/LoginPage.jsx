@@ -1,4 +1,5 @@
 import { Sparkles } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
 
@@ -94,7 +95,7 @@ export default function LoginPage() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-comic-orange/10 rounded-2xl mb-4">
             <Sparkles size={32} className="text-comic-orange" />
           </div>
-          <h1 className="text-2xl font-bold font-serif text-ink-black dark:text-white">Project T</h1>
+          <h1 className="text-2xl font-bold font-serif text-ink-black dark:text-white">EziToon</h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">AI 웹툰 생성 서비스</p>
         </div>
 
@@ -113,7 +114,7 @@ export default function LoginPage() {
 
         <div className="mt-6 pt-6 border-t-2 border-border dark:border-zinc-800">
           <p className="text-xs text-gray-400 dark:text-zinc-500 text-center">
-            로그인 시 서비스 이용약관에 동의합니다
+            로그인 시 <Link to="/terms" className="underline hover:text-comic-orange">이용약관</Link> 및 <Link to="/privacy" className="underline hover:text-comic-orange">개인정보처리방침</Link>에 동의합니다 · <Link to="/faq" className="underline hover:text-comic-orange">FAQ</Link>
           </p>
         </div>
       </div>
