@@ -1,17 +1,18 @@
 import { Outlet, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { LogOut, Sparkles, CreditCard } from 'lucide-react';
+import { LogOut, Sparkles, Package, Bell, HelpCircle } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import api from '../api/client';
+import NoticeBar from './NoticeBar';
 
 export default function Layout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [credits, setCredits] = useState(null);
+  const [packets, setPackets] = useState(null);
 
   useEffect(() => {
     if (user) {
-      api.get('/me/credits').then(({ data }) => setCredits(data)).catch(() => {});
+      api.get('/me/packets').then(({ data }) => setPackets(data)).catch(() => {});
     }
   }, [user]);
 
@@ -22,23 +23,32 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen bg-transparent">
+      <NoticeBar />
       <header className="bg-white/75 dark:bg-zinc-900/75 backdrop-blur-md border-b border-border dark:border-zinc-800 sticky top-0 z-50 transition-colors duration-200">
         <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2 text-xl font-bold font-serif text-ink-black dark:text-white no-underline hover:text-comic-orange transition-colors">
             <Sparkles size={22} className="text-comic-blue" />
-            Project T
+            EziToon
           </Link>
           <div className="flex items-center gap-2 md:gap-4">
-            {credits && (
-              <div className="flex items-center gap-1 md:gap-1.5 text-xs md:text-sm font-bold text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                <CreditCard size={14} className="text-comic-orange shrink-0" />
-                <span>{credits.balance}<span className="hidden md:inline"> 크레딧</span></span>
-                <span className="text-gray-300 dark:text-zinc-700">|</span>
-                <span>{credits.subscription.cut_quota - credits.subscription.cut_used}<span className="hidden md:inline">컷 남음</span><span className="md:hidden">컷</span></span>
+            {/* 패킷 배지 */}
+            {packets != null && (
+              <div className="flex items-center gap-1.5 text-xs md:text-sm font-bold text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                <Package size={14} className="text-comic-orange shrink-0" />
+                <span>{packets.balance}<span className="hidden md:inline"> 패킷</span></span>
               </div>
             )}
+            {/* FAQ */}
+            <Link to="/faq" className="p-1.5 text-gray-400 hover:text-comic-orange rounded transition-colors shrink-0" title="자주 묻는 질문">
+              <HelpCircle size={18} />
+            </Link>
+            {/* 알림 종 자리 (2차 구현) */}
+            <button className="p-1.5 text-gray-300 dark:text-zinc-600 cursor-default shrink-0" disabled title="알림 (준비 중)">
+              <Bell size={18} />
+            </button>
+            {/* 프로필 */}
             <span className="hidden md:inline text-sm font-bold text-gray-600 dark:text-gray-300 whitespace-nowrap">{user?.display_name || user?.email}</span>
-            <button onClick={handleLogout} className="p-1.5 text-gray-400 hover:text-comic-orange rounded transition-colors shrink-0">
+            <button onClick={handleLogout} className="p-1.5 text-gray-400 hover:text-comic-orange rounded transition-colors shrink-0" title="로그아웃">
               <LogOut size={18} />
             </button>
           </div>
