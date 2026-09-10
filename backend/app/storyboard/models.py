@@ -58,5 +58,6 @@ class GenerationLog(Base):
     model_tier = Column(Enum("flash", "pro", name="model_tier_enum"), default="flash")
     cost_usd = Column(Numeric(10, 5), nullable=False, default=0)
     credits_charged = Column(Integer, nullable=False, default=0)
+    packets_charged = Column(Integer, nullable=False, default=0)
     seed = Column(BigInteger, nullable=True)
     created_at = Column(DateTime, nullable=False, server_default=func.now())

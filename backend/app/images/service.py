@@ -20,7 +20,8 @@ from app.adapters.gemini_image import get_image_adapter
 from app.prompts.service import build_cut_prompt
 from app.storage import upload_image, LOCAL_STORAGE_DIR
 from app.jobs import get_job, update_job, Job
-from app.billing.service import charge_generation
+from app.billing.service import charge_generation  # legacy — 비활성화 (3단계)
+from app.packets.service import charge_packets, refund_packets
 
 logger = logging.getLogger(__name__)
 
@@ -344,17 +345,21 @@ async def generate_cut_image(
         model=result.model,
         model_tier="flash",
         cost_usd=0.02,  # 실측 전 추정값
-        credits_charged=2,
+        credits_charged=0,  # legacy 크레딧 비활성화
+        packets_charged=1,
         seed=result.seed,
     )
     db.add(log)
     db.flush()
 
-    # 11. 과금 차감 (구독 할당량 우선 → 크레딧)
-    try:
-        charge_generation(user_id, 2, log.id, db)
-    except Exception:
-        pass  # 과금 실패해도 이미지 생성은 유지 (MVP)
+    # 11. 패킷 차감 (3단계: 컷 1패킷)
+    charge_packets(user_id, 1, "generation", log.id, db)
+
+    # legacy 크레딧 차감 비활성화 (롤백 대비 코드 보존)
+    # try:
+    #     charge_generation(user_id, 2, log.id, db)
+    # except Exception:
+    #     pass
 
     return {
         "cut_id": cut.cut_id,
@@ -383,6 +388,10 @@ async def generate_all_cuts(
     ]
 
     total = len(cut_ids)
+
+    # 패킷 사전 확인 (배치 전체 필요량)
+    from app.packets.service import require_packets
+    require_packets(user_id, total, db)
     logger.warning("generate_all_cuts START: episode=%s, total=%s, cut_ids=%s", episode_id, total, cut_ids)
     results = []
     failed_cuts = []

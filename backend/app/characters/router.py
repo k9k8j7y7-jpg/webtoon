@@ -19,6 +19,7 @@ from app.workflow.gate import get_gate_number
 from app.workflow.service import invalidate_asset
 from app.styles.models import Style, STYLE_PRESETS
 from app.storyboard.models import CutAssetRef
+from app.packets.service import require_packets
 
 router = APIRouter(tags=["gate3-characters"])
 
@@ -49,6 +50,22 @@ async def create_characters(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No characters found in planning data",
         )
+
+    # 패킷 사전 확인: 생성 대상 캐릭터 수 × 2패킷 (피커 연결 캐릭터는 스킵)
+    gen_count = 0
+    for cd in characters_data:
+        rk = cd.get("ref_key", "")
+        linked = (
+            db.query(Character)
+            .join(EpisodeCharacter, EpisodeCharacter.character_id == Character.id)
+            .filter(EpisodeCharacter.episode_id == episode_id, Character.ref_key == rk,
+                    Character.episode_id != episode_id)
+            .first()
+        )
+        if not linked:
+            gen_count += 1
+    if gen_count > 0:
+        require_packets(current_user.id, gen_count * 2, db)
 
     # 스타일 프롬프트 (에피소드에 선택된 스타일 사용, 미선택 시 기본값)
     style = db.query(Style).filter(Style.episode_id == episode_id).first()
@@ -232,6 +249,9 @@ async def regenerate_character(
         raise HTTPException(status_code=404, detail="Character not found")
 
     use_photo = (body.use_photo_reference if body else False) and bool(character.reference_photos)
+
+    # 패킷 사전 확인: 캐릭터 시트 재생성 = 2패킷
+    require_packets(current_user.id, 2, db)
 
     # 관련 컷 무효화 (State-Model 3.4)
     inv = invalidate_asset(character.episode_id, "character", character.ref_key, db)

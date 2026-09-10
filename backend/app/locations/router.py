@@ -16,6 +16,7 @@ from app.storage import upload_image
 from app.jobs import create_job, run_job_in_background
 from app.workflow.gate import get_gate_number
 from app.styles.models import Style, STYLE_PRESETS
+from app.packets.service import require_packets
 
 router = APIRouter(tags=["gate3-locations"])
 
@@ -67,6 +68,11 @@ async def create_locations(
 
     if not locations_data:
         raise HTTPException(status_code=400, detail="No locations found")
+
+    # 패킷 사전 확인: 사진 대체 아닌 장소만 1패킷씩
+    gen_loc_count = sum(1 for l in locations_data if not l.get("reference_photo_url"))
+    if gen_loc_count > 0:
+        require_packets(current_user.id, gen_loc_count, db)
 
     style = db.query(Style).filter(Style.episode_id == episode_id).first()
     style_prompt = style.prompt_snippet if style else STYLE_PRESETS["korean_webtoon"]["prompt"]
@@ -153,6 +159,9 @@ async def regenerate_location(
     location = db.query(Location).filter(Location.id == location_id).first()
     if not location:
         raise HTTPException(status_code=404, detail="Location not found")
+
+    # 패킷 사전 확인: 장소 재생성 = 1패킷
+    require_packets(current_user.id, 1, db)
 
     style = db.query(Style).filter(Style.episode_id == location.episode_id).first()
     style_prompt = style.prompt_snippet if style else STYLE_PRESETS["korean_webtoon"]["prompt"]
@@ -244,10 +253,13 @@ async def upload_location_photo(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """장소 참고 사진 업로드 + 스타일 변환 (JPEG/PNG, 최대 5MB, 1컷 비용)."""
+    """장소 참고 사진 업로드 + 스타일 변환 (JPEG/PNG, 최대 5MB, 1패킷)."""
     location = db.query(Location).filter(Location.id == location_id).first()
     if not location:
         raise HTTPException(status_code=404, detail="Location not found")
+
+    # 패킷 사전 확인: 사진→일러스트 = 1패킷
+    require_packets(current_user.id, 1, db)
 
     from app.image_util import validate_and_process
 
@@ -289,12 +301,15 @@ async def reconvert_location_photo(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """장소 사진 재변환 (1컷 비용)."""
+    """장소 사진 재변환 (1패킷)."""
     location = db.query(Location).filter(Location.id == location_id).first()
     if not location:
         raise HTTPException(status_code=404, detail="Location not found")
     if not location.reference_photo_url:
         raise HTTPException(status_code=400, detail="업로드된 사진이 없습니다")
+
+    # 패킷 사전 확인: 사진→일러스트 재변환 = 1패킷
+    require_packets(current_user.id, 1, db)
 
     style = db.query(Style).filter(Style.episode_id == location.episode_id).first()
     style_prompt = style.prompt_snippet if style else STYLE_PRESETS["korean_webtoon"]["prompt"]

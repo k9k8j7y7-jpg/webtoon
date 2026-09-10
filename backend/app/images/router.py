@@ -12,6 +12,7 @@ from app.storyboard.models import Cut
 from app.images.service import generate_all_cuts, generate_cut_image
 from app.jobs import create_job, run_job_in_background
 from app.workflow.gate import get_gate_number
+from app.packets.service import require_packets
 
 router = APIRouter(tags=["gate5-images"])
 
@@ -44,6 +45,9 @@ async def generate_images(
     )
     if cuts_count == 0:
         raise HTTPException(status_code=400, detail="No pending cuts to generate")
+
+    # 패킷 사전 확인: 컷 1개 = 1패킷
+    require_packets(current_user.id, cuts_count, db)
 
     job = create_job(total=cuts_count)
 
@@ -83,6 +87,9 @@ async def regenerate_cut(
     episode = db.query(Episode).filter(Episode.id == cut.episode_id).first()
     if not episode:
         raise HTTPException(status_code=404, detail="Episode not found")
+
+    # 패킷 사전 확인: 재생성 1컷 = 1패킷
+    require_packets(current_user.id, 1, db)
 
     # 재생성 파라미터 적용
     if body and body.params:
@@ -138,7 +145,7 @@ async def regenerate_cut(
 
     run_job_in_background(background_tasks, job.job_id, _regen())
 
-    return {"job_id": job.job_id, "credits_will_charge": 2}
+    return {"job_id": job.job_id, "packets_will_charge": 1}
 
 
 @router.put("/cuts/{cut_id}/dialogue")

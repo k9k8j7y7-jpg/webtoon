@@ -11,6 +11,7 @@ import OAuthCallbackPage from './pages/OAuthCallbackPage';
 import PrivacyPage from './pages/PrivacyPage';
 import TermsPage from './pages/TermsPage';
 import FaqPage from './pages/FaqPage';
+import PacketsPage from './pages/PacketsPage';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -37,6 +38,7 @@ function AppRoutes() {
         <Route path="/projects/:projectId" element={<ProjectPage />} />
         <Route path="/projects/:projectId/episodes/:episodeId/workflow" element={<WorkflowPage />} />
         <Route path="/projects/:projectId/series/:seriesId" element={<SeriesPage />} />
+        <Route path="/packets" element={<PacketsPage />} />
       </Route>
     </Routes>
   );

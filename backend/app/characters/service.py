@@ -15,6 +15,7 @@ from app.images.service import _load_image_bytes
 from app.storage import upload_image
 from app.jobs import get_job, update_job
 from app.database import SessionLocal
+from app.packets.service import charge_packets, refund_packets
 
 logger = logging.getLogger(__name__)
 
@@ -259,6 +260,29 @@ async def generate_character_sheets(
                     character.appearance_en = character.appearance_en.strip().replace("\n", " ")
                 except Exception as e:
                     logger.warning("appearance_en init failed for %s: %s", ref_key, e)
+
+            # 패킷 차감: 캐릭터 시트 = 2패킷 (정면 1 + 표정 1)
+            from app.storyboard.models import GenerationLog
+            gen_log = GenerationLog(
+                episode_id=episode_id,
+                project_id=project_id or 0,
+                user_id=0,  # BackgroundTask — user_id 추적은 라우터에서
+                kind="character",
+                model="gemini-2.5-flash-image",
+                model_tier="flash",
+                cost_usd=0.04,
+                credits_charged=0,
+                packets_charged=2,
+            )
+            db.add(gen_log)
+            db.flush()
+            # user_id는 함수 인자에 없으므로 episode → project → user_id로 조회
+            from app.projects.models import Episode as Ep, Project as Prj
+            ep = db.query(Ep).filter(Ep.id == episode_id).first()
+            prj = db.query(Prj).filter(Prj.id == ep.project_id).first() if ep else None
+            owner_id = prj.user_id if prj else 0
+            if owner_id:
+                charge_packets(owner_id, 2, "generation", gen_log.id, db)
 
             results.append({"ref_key": ref_key, "name": name, "status": "generated"})
 

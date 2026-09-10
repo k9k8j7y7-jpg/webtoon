@@ -71,6 +71,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
       setStyleChanged(false);
       setCacheBuster(Date.now());
       await loadAssets();
+      window.dispatchEvent(new Event('packets:refresh'));
       // 연결 캐릭터 스킵 안내
       const skipped = jobResult?.result?.skipped;
       if (skipped && skipped.length > 0) {
@@ -78,7 +79,12 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
       }
     } catch (err) {
       setJob(null);
-      setError(err.response?.data?.detail || err.message);
+      const detail = err.response?.data?.detail;
+      if (err.response?.status === 402 && detail?.message) {
+        setError(`${detail.message} (잔량 ${detail.balance}, 필요 ${detail.needed})`);
+      } else {
+        setError(typeof detail === 'string' ? detail : detail?.message || err.message);
+      }
     }
   };
 
@@ -93,9 +99,15 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
       setStyleChanged(false);
       setCacheBuster(Date.now());
       await loadAssets();
+      window.dispatchEvent(new Event('packets:refresh'));
     } catch (err) {
       setJob(null);
-      setError(err.response?.data?.detail || err.message);
+      const detail = err.response?.data?.detail;
+      if (err.response?.status === 402 && detail?.message) {
+        setError(`${detail.message} (잔량 ${detail.balance}, 필요 ${detail.needed})`);
+      } else {
+        setError(typeof detail === 'string' ? detail : detail?.message || err.message);
+      }
     }
   };
 
@@ -271,9 +283,15 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
       setJob(null);
       setCacheBuster(Date.now());
       await loadAssets();
+      window.dispatchEvent(new Event('packets:refresh'));
     } catch (err) {
       setJob(null);
-      setError(err.response?.data?.detail || err.message);
+      const detail = err.response?.data?.detail;
+      if (err.response?.status === 402 && detail?.message) {
+        setError(`${detail.message} (잔량 ${detail.balance}, 필요 ${detail.needed})`);
+      } else {
+        setError(typeof detail === 'string' ? detail : detail?.message || err.message);
+      }
     }
   };
 
@@ -381,9 +399,15 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
       setShowSuggestEditor(false);
       setCacheBuster(Date.now());
       await loadAssets();
+      window.dispatchEvent(new Event('packets:refresh'));
     } catch (err) {
       setJob(null);
-      setLocError(err.response?.data?.detail || err.message);
+      const detail = err.response?.data?.detail;
+      if (err.response?.status === 402 && detail?.message) {
+        setLocError(`${detail.message} (잔량 ${detail.balance}, 필요 ${detail.needed})`);
+      } else {
+        setLocError(typeof detail === 'string' ? detail : detail?.message || err.message);
+      }
     }
   };
 
@@ -414,9 +438,15 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
       setJob(null);
       setCacheBuster(Date.now());
       await loadAssets();
+      window.dispatchEvent(new Event('packets:refresh'));
     } catch (err) {
       setJob(null);
-      setLocError(err.response?.data?.detail || err.message);
+      const detail = err.response?.data?.detail;
+      if (err.response?.status === 402 && detail?.message) {
+        setLocError(`${detail.message} (잔량 ${detail.balance}, 필요 ${detail.needed})`);
+      } else {
+        setLocError(typeof detail === 'string' ? detail : detail?.message || err.message);
+      }
     }
   };
 
@@ -431,8 +461,14 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
       });
       setCacheBuster(Date.now());
       await loadAssets();
+      window.dispatchEvent(new Event('packets:refresh'));
     } catch (err) {
-      setLocError(err.response?.data?.detail || err.message);
+      const detail = err.response?.data?.detail;
+      if (err.response?.status === 402 && detail?.message) {
+        setLocError(`${detail.message} (잔량 ${detail.balance}, 필요 ${detail.needed})`);
+      } else {
+        setLocError(typeof detail === 'string' ? detail : detail?.message || err.message);
+      }
     } finally {
       setUploadingPhotoLocId(null);
     }
@@ -445,8 +481,14 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
       await api.post(`/locations/${locId}/reconvert`);
       setCacheBuster(Date.now());
       await loadAssets();
+      window.dispatchEvent(new Event('packets:refresh'));
     } catch (err) {
-      setLocError(err.response?.data?.detail || err.message);
+      const detail = err.response?.data?.detail;
+      if (err.response?.status === 402 && detail?.message) {
+        setLocError(`${detail.message} (잔량 ${detail.balance}, 필요 ${detail.needed})`);
+      } else {
+        setLocError(typeof detail === 'string' ? detail : detail?.message || err.message);
+      }
     } finally {
       setReconvertingLocId(null);
     }
@@ -653,7 +695,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
               disabled={!!job || !hasStyle}
               className="flex items-center gap-1 px-4 py-2 bg-purple-600 text-white rounded-full text-xs font-bold hover:bg-purple-700 hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50"
             >
-              {hasCharacters ? <><RefreshCw size={12} /> 재생성</> : '+ 새 캐릭터 생성'}
+              {hasCharacters ? <><RefreshCw size={12} /> 재생성 (1인 2패킷)</> : '+ 새 캐릭터 생성 (1인 2패킷)'}
             </button>
           </div>
         </div>
@@ -902,7 +944,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
                       </button>
                       <button onClick={() => saveAndRegenerate(c.id)} disabled={savingChar || !!job}
                         className="flex-1 px-3 py-1.5 text-xs font-bold bg-comic-orange text-white rounded-full hover:bg-orange-600 transition-colors disabled:opacity-50">
-                        조건 저장 + 재생성
+                        조건 저장 + 재생성 (2패킷)
                       </button>
                       <button onClick={() => setEditingChar(null)}
                         className="px-3 py-1.5 text-xs font-bold text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
@@ -1051,9 +1093,10 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
                   const valid = suggestionList.filter(l => l.name.trim());
                   const photoCount = valid.filter(l => l.photoUrl).length;
                   const aiCount = valid.length - photoCount;
-                  if (photoCount === 0) return `레퍼런스 이미지 생성 (${valid.length}개)`;
+                  const packetLabel = aiCount > 0 ? ` · ${aiCount}패킷` : '';
+                  if (photoCount === 0) return `레퍼런스 이미지 생성 (${valid.length}개${packetLabel})`;
                   if (aiCount === 0) return `장소 등록 (${photoCount}개 사진 사용)`;
-                  return `레퍼런스 이미지 생성 (${aiCount}개 · ${photoCount}개는 사진 사용)`;
+                  return `레퍼런스 이미지 생성 (${aiCount}개${packetLabel} · ${photoCount}개는 사진 사용)`;
                 })()}
               </button>
             </div>
@@ -1125,7 +1168,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
                 {/* 참고 사진 업로드 + 변환본 */}
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400">
-                    실사 참고 사진 <span className="font-normal">(업로드 시 웹툰 스타일로 자동 변환 · 1컷 비용)</span>
+                    실사 참고 사진 <span className="font-normal">(업로드 시 웹툰 스타일로 자동 변환 · 1패킷)</span>
                   </label>
                   {l.reference_photo_url ? (
                     <div className="space-y-2">
@@ -1162,7 +1205,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
                           className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-700 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors disabled:opacity-50"
                         >
                           <RefreshCw size={10} className={reconvertingLocId === l.id ? 'animate-spin' : ''} />
-                          {reconvertingLocId === l.id ? '변환 중...' : '다시 변환'}
+                          {reconvertingLocId === l.id ? '변환 중...' : '다시 변환 (1패킷)'}
                         </button>
                         <button
                           onClick={() => deleteLocationPhoto(l.id)}
@@ -1209,7 +1252,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
                     disabled={!!job}
                     className="flex items-center gap-1 px-3 py-1 text-xs font-bold text-gray-600 dark:text-gray-300 border border-border dark:border-zinc-600 rounded-full hover:border-emerald-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors disabled:opacity-50"
                   >
-                    <RefreshCw size={10} /> 재생성
+                    <RefreshCw size={10} /> 재생성 (1패킷)
                   </button>
                 </div>
               </div>

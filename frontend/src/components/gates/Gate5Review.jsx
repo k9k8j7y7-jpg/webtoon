@@ -165,6 +165,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
       setJob(null);
       setCacheBuster(Date.now());
       await loadCuts();
+      window.dispatchEvent(new Event('packets:refresh'));
       // 부분 실패 처리
       if (result?.status === 'completed_partial' && result?.failed?.length > 0) {
         setPartialResult({
@@ -175,11 +176,13 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
       }
     } catch (err) {
       setJob(null);
-      const msg = err.response?.data?.detail || err.message;
-      if (msg === 'Network Error') {
+      const detail = err.response?.data?.detail;
+      if (err.response?.status === 402 && detail?.message) {
+        setError(`${detail.message} (잔량 ${detail.balance}, 필요 ${detail.needed})`);
+      } else if (typeof detail === 'string' && detail === 'Network Error' || err.message === 'Network Error') {
         setError('일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
       } else {
-        setError(msg);
+        setError(typeof detail === 'string' ? detail : detail?.message || err.message);
       }
     }
   };
@@ -194,13 +197,16 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
       setJob(null);
       setCacheBuster(Date.now());
       await loadCuts();
+      window.dispatchEvent(new Event('packets:refresh'));
     } catch (err) {
       setJob(null);
-      const msg = err.response?.data?.detail || err.message;
-      if (msg === 'Network Error') {
+      const detail = err.response?.data?.detail;
+      if (err.response?.status === 402 && detail?.message) {
+        setError(`${detail.message} (잔량 ${detail.balance}, 필요 ${detail.needed})`);
+      } else if (typeof detail === 'string' && detail === 'Network Error' || err.message === 'Network Error') {
         setError('일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
       } else {
-        setError(msg);
+        setError(typeof detail === 'string' ? detail : detail?.message || err.message);
       }
     }
   };
@@ -473,7 +479,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
                 disabled={!!job}
                 className="flex items-center gap-1 px-4 py-2 bg-ink-black dark:bg-white dark:text-ink-black text-white rounded-full text-xs font-bold hover:bg-comic-blue dark:hover:bg-comic-orange hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50"
               >
-                <Image size={12} /> {pendingCuts.length}컷 생성
+                <Image size={12} /> {pendingCuts.length}컷 생성 ({pendingCuts.length}패킷)
               </button>
             )}
             {hasImages && (
@@ -596,7 +602,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
                       title="재생성"
                       className="flex items-center gap-1 px-2 py-1 bg-comic-blue/10 text-comic-blue rounded-full font-bold shadow-sm hover:bg-comic-blue/20 text-[11px] disabled:opacity-50 transition-colors"
                     >
-                      <RefreshCw size={11} /> 재생성
+                      <RefreshCw size={11} /> 재생성 (1패킷)
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); handleRevert(cut.cut_id); }}

@@ -12,6 +12,7 @@ from app.storage import upload_image
 from app.images.service import _load_image_bytes
 from app.jobs import get_job, update_job
 from app.database import SessionLocal
+from app.packets.service import charge_packets
 
 
 async def generate_location_images(
@@ -87,6 +88,29 @@ async def generate_location_images(
                     seed=img_result.seed,
                 )
                 db.add(loc_img)
+
+                # 패킷 차감: 장소 레퍼런스 = 1패킷
+                from app.storyboard.models import GenerationLog
+                from app.projects.models import Episode as Ep, Project as Prj
+                ep = db.query(Ep).filter(Ep.id == episode_id).first()
+                prj = db.query(Prj).filter(Prj.id == ep.project_id).first() if ep else None
+                owner_id = prj.user_id if prj else 0
+                if owner_id:
+                    gen_log = GenerationLog(
+                        episode_id=episode_id,
+                        project_id=ep.project_id if ep else 0,
+                        user_id=owner_id,
+                        kind="location",
+                        model="gemini-2.5-flash-image",
+                        model_tier="flash",
+                        cost_usd=0.02,
+                        credits_charged=0,
+                        packets_charged=1,
+                    )
+                    db.add(gen_log)
+                    db.flush()
+                    charge_packets(owner_id, 1, "generation", gen_log.id, db)
+
                 results.append({"ref_key": ref_key, "name": name, "status": "generated"})
 
             except Exception as e:
@@ -168,6 +192,29 @@ async def convert_photo_to_illustration(
     )
 
     location.converted_photo_url = url
+
+    # 패킷 차감: 사진→일러스트 = 1패킷
+    from app.storyboard.models import GenerationLog
+    from app.projects.models import Episode as Ep, Project as Prj
+    ep = db.query(Ep).filter(Ep.id == location.episode_id).first()
+    prj = db.query(Prj).filter(Prj.id == ep.project_id).first() if ep else None
+    owner_id = prj.user_id if prj else 0
+    if owner_id:
+        gen_log = GenerationLog(
+            episode_id=location.episode_id,
+            project_id=ep.project_id if ep else 0,
+            user_id=owner_id,
+            kind="location",
+            model="gemini-2.5-flash-image",
+            model_tier="flash",
+            cost_usd=0.02,
+            credits_charged=0,
+            packets_charged=1,
+        )
+        db.add(gen_log)
+        db.flush()
+        charge_packets(owner_id, 1, "generation", gen_log.id, db)
+
     db.commit()
 
     return url

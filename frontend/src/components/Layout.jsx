@@ -1,7 +1,7 @@
 import { Outlet, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { LogOut, Sparkles, Package, Bell, HelpCircle } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import api from '../api/client';
 import NoticeBar from './NoticeBar';
 
@@ -10,11 +10,19 @@ export default function Layout() {
   const navigate = useNavigate();
   const [packets, setPackets] = useState(null);
 
-  useEffect(() => {
+  const refreshPackets = useCallback(() => {
     if (user) {
       api.get('/me/packets').then(({ data }) => setPackets(data)).catch(() => {});
     }
   }, [user]);
+
+  useEffect(() => {
+    refreshPackets();
+    // 생성 완료 후 패킷 배지 갱신 이벤트 수신
+    const handler = () => refreshPackets();
+    window.addEventListener('packets:refresh', handler);
+    return () => window.removeEventListener('packets:refresh', handler);
+  }, [refreshPackets]);
 
   const handleLogout = () => {
     logout();
@@ -31,12 +39,12 @@ export default function Layout() {
             EziToon
           </Link>
           <div className="flex items-center gap-2 md:gap-4">
-            {/* 패킷 배지 */}
+            {/* 패킷 배지 (클릭 → 패킷 현황 페이지) */}
             {packets != null && (
-              <div className="flex items-center gap-1.5 text-xs md:text-sm font-bold text-gray-500 dark:text-gray-400 whitespace-nowrap">
+              <Link to="/packets" className="flex items-center gap-1.5 text-xs md:text-sm font-bold text-gray-500 dark:text-gray-400 whitespace-nowrap hover:text-comic-orange transition-colors no-underline">
                 <Package size={14} className="text-comic-orange shrink-0" />
                 <span>{packets.balance}<span className="hidden md:inline"> 패킷</span></span>
-              </div>
+              </Link>
             )}
             {/* FAQ */}
             <Link to="/faq" className="p-1.5 text-gray-400 hover:text-comic-orange rounded transition-colors shrink-0" title="자주 묻는 질문">
