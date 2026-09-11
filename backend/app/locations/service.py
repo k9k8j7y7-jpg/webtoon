@@ -6,8 +6,11 @@ PRD 4.3: 대본에서 주요 장소를 추출해 레퍼런스 이미지를 생�
 
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.locations.models import Location, LocationImage
 from app.adapters.gemini_image import get_image_adapter
+
+settings = get_settings()
 from app.storage import upload_image
 from app.images.service import _load_image_bytes
 from app.jobs import get_job, update_job
@@ -101,7 +104,7 @@ async def generate_location_images(
                         project_id=ep.project_id if ep else 0,
                         user_id=owner_id,
                         kind="location",
-                        model="gemini-2.5-flash-image",
+                        model=settings.IMAGE_MODEL,
                         model_tier="flash",
                         cost_usd=0.02,
                         credits_charged=0,
@@ -205,7 +208,7 @@ async def convert_photo_to_illustration(
             project_id=ep.project_id if ep else 0,
             user_id=owner_id,
             kind="location",
-            model="gemini-2.5-flash-image",
+            model=settings.IMAGE_MODEL,
             model_tier="flash",
             cost_usd=0.02,
             credits_charged=0,

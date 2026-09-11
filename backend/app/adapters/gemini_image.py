@@ -15,8 +15,7 @@ from app.adapters.base import ImageAdapter, ImageResult
 
 settings = get_settings()
 
-# PRD 기준 모델: gemini-3.1-flash-image-preview (Nano Banana 2)
-IMAGE_MODEL = "gemini-2.5-flash-image"
+IMAGE_MODEL = settings.IMAGE_MODEL
 
 
 class GeminiImageAdapter(ImageAdapter):

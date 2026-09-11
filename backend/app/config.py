@@ -54,6 +54,7 @@ class Settings(BaseSettings):
 
     # Gemini API
     GEMINI_API_KEY: str = ""
+    IMAGE_MODEL: str = "gemini-2.5-flash-image"
 
     model_config = {
         "env_file": ".env",

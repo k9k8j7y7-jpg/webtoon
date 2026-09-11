@@ -8,8 +8,11 @@ import logging
 
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.characters.models import Character, CharacterImage, CharacterOutfit, EpisodeCharacter
 from app.adapters.gemini_image import get_image_adapter
+
+settings = get_settings()
 from app.adapters.gemini import generate_text, parse_ai_json, AI_TOKENS_SHORT
 from app.images.service import _load_image_bytes
 from app.storage import upload_image
@@ -268,7 +271,7 @@ async def generate_character_sheets(
                 project_id=project_id or 0,
                 user_id=0,  # BackgroundTask — user_id 추적은 라우터에서
                 kind="character",
-                model="gemini-2.5-flash-image",
+                model=settings.IMAGE_MODEL,
                 model_tier="flash",
                 cost_usd=0.04,
                 credits_charged=0,
