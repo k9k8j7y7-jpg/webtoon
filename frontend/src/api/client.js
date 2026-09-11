@@ -20,6 +20,12 @@ api.interceptors.response.use(
       localStorage.removeItem('token');
       window.location.href = '/WEBTOON/login';
     }
+    if (err.response?.status === 402) {
+      const d = err.response.data?.detail;
+      if (d?.message) {
+        alert(`${d.message}\n(보유 ${d.balance}패킷 / 필요 ${d.needed}패킷)`);
+      }
+    }
     return Promise.reject(err);
   }
 );

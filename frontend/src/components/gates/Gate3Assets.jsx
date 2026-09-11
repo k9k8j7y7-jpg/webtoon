@@ -203,7 +203,12 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
       setCharPhotoExtracted(true);
       setCacheBuster(Date.now());
     } catch (err) {
-      setCharPhotoError(err.response?.data?.detail || err.message);
+      const detail = err.response?.data?.detail;
+      if (err.response?.status === 402 && detail?.message) {
+        setCharPhotoError(`${detail.message} (잔량 ${detail.balance}, 필요 ${detail.needed})`);
+      } else {
+        setCharPhotoError(typeof detail === 'string' ? detail : detail?.message || err.message);
+      }
     } finally {
       setUploadingCharPhoto(false);
     }

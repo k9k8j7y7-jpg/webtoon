@@ -435,7 +435,12 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
       setCacheBuster(Date.now());
       await loadCuts();
     } catch (err) {
-      setError(err.response?.data?.detail || err.message);
+      const detail = err.response?.data?.detail;
+      if (err.response?.status === 402 && detail?.message) {
+        setError(`${detail.message} (잔량 ${detail.balance}, 필요 ${detail.needed})`);
+      } else {
+        setError(typeof detail === 'string' ? detail : detail?.message || err.message);
+      }
     } finally {
       setSavingStoryboard(false);
     }
