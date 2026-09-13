@@ -56,6 +56,10 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = ""
     IMAGE_MODEL: str = "gemini-2.5-flash-image"
 
+    # Toss Payments
+    TOSS_CLIENT_KEY: str = ""
+    TOSS_SECRET_KEY: str = ""
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",
