@@ -1,4 +1,4 @@
-from sqlalchemy import Column, BigInteger, String, Enum, DateTime, ForeignKey, JSON, VARCHAR
+from sqlalchemy import Column, BigInteger, String, Enum, DateTime, ForeignKey, JSON, VARCHAR, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -71,6 +71,9 @@ class Episode(Base):
     gate_status = Column(JSON, nullable=False)
     created_at = Column(DateTime, nullable=False, server_default=func.now())
     updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
+    showcase = Column(Boolean, nullable=False, default=False)
+    showcase_category = Column(Enum("short", "series", "ad", name="showcase_category_enum"), nullable=True)
+    share_token = Column(VARCHAR(36), nullable=True, unique=True, index=True)
     deleted_at = Column(DateTime, nullable=True)
 
     project = relationship("Project", back_populates="episodes")

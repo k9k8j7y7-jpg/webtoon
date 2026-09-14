@@ -1,14 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import axios from 'axios';
 
-const dummyWebtoons = [
-  { id: 1, title: 'AI의 역습', category: '단편', genre: 'SF/스릴러', image: 'https://images.unsplash.com/photo-1618519764620-7403abdbdfe9?q=80&w=600&auto=format&fit=crop' },
-  { id: 2, title: '디지털 로맨스', category: '연작', genre: '로맨스', image: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?q=80&w=600&auto=format&fit=crop' },
-  { id: 3, title: '스타트업 101', category: '광고·홍보', genre: '기업홍보', image: 'https://images.unsplash.com/photo-1557683316-973673baf926?q=80&w=600&auto=format&fit=crop' },
-  { id: 4, title: '사이버펑크 서울', category: '단편', genre: '액션', image: 'https://images.unsplash.com/photo-1515630278258-407f66498911?q=80&w=600&auto=format&fit=crop' },
-  { id: 5, title: '고양이 행성', category: '연작', genre: '판타지', image: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=600&auto=format&fit=crop' },
-  { id: 6, title: 'EziToon 사용백서', category: '광고·홍보', genre: '가이드', image: 'https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?q=80&w=600&auto=format&fit=crop' },
-];
+const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
+const CATEGORY_MAP = { '단편': 'short', '연작': 'series', '광고·홍보': 'ad' };
 
 const faqs = [
   { q: "웹툰을 한 번도 그려본 적이 없는데 사용할 수 있나요?", a: "네, EziToon은 그림을 전혀 그리지 못해도 사진과 이야기만 있으면 AI가 알아서 컷과 말풍선을 구성해 완성해 줍니다." },
@@ -21,6 +16,7 @@ export default function LandingPage() {
   const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
   const [activeTab, setActiveTab] = useState('단편');
+  const [galleryData, setGalleryData] = useState({ short: [], series: [], ad: [] });
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -28,7 +24,13 @@ export default function LandingPage() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const filteredWebtoons = dummyWebtoons.filter(toon => toon.category === activeTab);
+  useEffect(() => {
+    axios.get(`${API_BASE}/api/v1/showcase/episodes`)
+      .then(res => setGalleryData(res.data))
+      .catch(() => {});
+  }, []);
+
+  const filteredWebtoons = galleryData[CATEGORY_MAP[activeTab]] || [];
 
   const scrollToSection = (id) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
@@ -107,19 +109,32 @@ export default function LandingPage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredWebtoons.map(toon => (
-              <div key={toon.id} className="group relative rounded-2xl overflow-hidden aspect-[9/12] cursor-pointer bg-[#121216] border border-white/10 shadow-2xl transition-all duration-500 hover:-translate-y-2 hover:shadow-[0_20px_40px_rgba(0,0,0,0.5)] hover:border-cyan-500/50">
-                <img src={toon.image} alt={toon.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#0A0F1D] via-[#0A0F1D]/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-6">
-                  <div className="translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
-                    <span className="inline-block px-3 py-1 bg-white/10 backdrop-blur-md rounded-full text-xs text-cyan-300 border border-white/10 mb-3 font-semibold">
-                      {toon.genre}
-                    </span>
-                    <h3 className="text-2xl font-bold text-white">{toon.title}</h3>
+            {filteredWebtoons.length === 0 ? (
+              <div className="col-span-full text-center py-20 text-gray-500 text-lg">
+                준비 중
+              </div>
+            ) : (
+              filteredWebtoons.map(toon => (
+                <div key={toon.share_token} onClick={() => navigate(`/view/${toon.share_token}`)}
+                  className="group relative rounded-2xl overflow-hidden aspect-[9/12] cursor-pointer bg-[#121216] border border-white/10 shadow-2xl transition-all duration-500 hover:-translate-y-2 hover:shadow-[0_20px_40px_rgba(0,0,0,0.5)] hover:border-cyan-500/50">
+                  {toon.thumbnail_url ? (
+                    <img src={toon.thumbnail_url} alt={toon.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-purple-900/50 to-cyan-900/50" />
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#0A0F1D] via-[#0A0F1D]/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-6">
+                    <div className="translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
+                      {toon.genre && (
+                        <span className="inline-block px-3 py-1 bg-white/10 backdrop-blur-md rounded-full text-xs text-cyan-300 border border-white/10 mb-3 font-semibold">
+                          {toon.genre}
+                        </span>
+                      )}
+                      <h3 className="text-2xl font-bold text-white">{toon.title}</h3>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </section>
 

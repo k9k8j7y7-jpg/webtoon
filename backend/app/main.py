@@ -20,6 +20,7 @@ from app.series.router import router as series_router
 from app.notices.router import router as notices_router
 from app.packets.router import router as packets_router
 from app.payments.router import router as payments_router
+from app.showcase.router import router as showcase_router
 
 settings = get_settings()
 
@@ -56,6 +57,7 @@ app.include_router(series_router, prefix=settings.API_V1_PREFIX)
 app.include_router(notices_router, prefix=settings.API_V1_PREFIX)
 app.include_router(packets_router, prefix=settings.API_V1_PREFIX)
 app.include_router(payments_router, prefix=settings.API_V1_PREFIX)
+app.include_router(showcase_router, prefix=settings.API_V1_PREFIX)
 
 
 import os

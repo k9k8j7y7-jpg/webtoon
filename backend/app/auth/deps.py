@@ -7,6 +7,7 @@ from app.auth.jwt import decode_access_token
 from app.users.models import User
 
 bearer_scheme = HTTPBearer()
+bearer_scheme_optional = HTTPBearer(auto_error=False)
 
 
 def get_current_user(
@@ -27,3 +28,16 @@ def get_current_user(
             detail="User not found",
         )
     return user
+
+
+def get_optional_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme_optional),
+    db: Session = Depends(get_db),
+) -> User | None:
+    """Return the authenticated User if a valid token is present, else None."""
+    if credentials is None:
+        return None
+    user_id = decode_access_token(credentials.credentials)
+    if user_id is None:
+        return None
+    return db.query(User).filter(User.id == user_id).first()
