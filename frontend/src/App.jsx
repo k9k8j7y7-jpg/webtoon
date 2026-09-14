@@ -12,6 +12,7 @@ import PrivacyPage from './pages/PrivacyPage';
 import TermsPage from './pages/TermsPage';
 import FaqPage from './pages/FaqPage';
 import PacketsPage from './pages/PacketsPage';
+import LandingPage from './pages/LandingPage';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -33,8 +34,12 @@ function AppRoutes() {
       <Route path="/privacy" element={<PrivacyPage />} />
       <Route path="/terms" element={<TermsPage />} />
       <Route path="/faq" element={<FaqPage />} />
+      
+      <Route path="/" element={user ? <ProtectedRoute><Layout /></ProtectedRoute> : <LandingPage />}>
+        <Route index element={user ? <DashboardPage /> : null} />
+      </Route>
+
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-        <Route path="/" element={<DashboardPage />} />
         <Route path="/projects/:projectId" element={<ProjectPage />} />
         <Route path="/projects/:projectId/episodes/:episodeId/workflow" element={<WorkflowPage />} />
         <Route path="/projects/:projectId/series/:seriesId" element={<SeriesPage />} />
