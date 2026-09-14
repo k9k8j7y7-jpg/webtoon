@@ -7,6 +7,12 @@ import EffectLayer from '../components/EffectLayer';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
 
+function resolveUrl(path) {
+  if (!path) return '';
+  if (path.startsWith('http')) return path;
+  return `${API_BASE}${path.startsWith('/') ? '' : '/'}${path}`;
+}
+
 function CutViewer({ cut }) {
   const [dims, setDims] = useState({ w: 0, h: 0 });
   const imgRef = useRef(null);
@@ -27,7 +33,7 @@ function CutViewer({ cut }) {
     <div className="relative w-full">
       <img
         ref={imgRef}
-        src={cut.image_url}
+        src={resolveUrl(cut.image_url)}
         alt={`컷 ${cut.cut_number}`}
         className="w-full block"
         onLoad={updateDims}

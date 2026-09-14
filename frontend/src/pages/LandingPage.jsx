@@ -5,6 +5,12 @@ import axios from 'axios';
 const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
 const CATEGORY_MAP = { '단편': 'short', '연작': 'series', '광고·홍보': 'ad' };
 
+function resolveUrl(path) {
+  if (!path) return '';
+  if (path.startsWith('http')) return path;
+  return `${API_BASE}${path.startsWith('/') ? '' : '/'}${path}`;
+}
+
 const faqs = [
   { q: "웹툰을 한 번도 그려본 적이 없는데 사용할 수 있나요?", a: "네, EziToon은 그림을 전혀 그리지 못해도 사진과 이야기만 있으면 AI가 알아서 컷과 말풍선을 구성해 완성해 줍니다." },
   { q: "사진은 어떤 사진을 올려야 하나요?", a: "가족, 반려동물, 친구들과 찍은 일상 사진이나, 우리 가게 사진 등 어떤 사진이든 웹툰의 훌륭한 소재가 될 수 있습니다." },
@@ -118,7 +124,7 @@ export default function LandingPage() {
                 <div key={toon.share_token} onClick={() => navigate(`/view/${toon.share_token}`)}
                   className="group relative rounded-2xl overflow-hidden aspect-[9/12] cursor-pointer bg-[#121216] border border-white/10 shadow-2xl transition-all duration-500 hover:-translate-y-2 hover:shadow-[0_20px_40px_rgba(0,0,0,0.5)] hover:border-cyan-500/50">
                   {toon.thumbnail_url ? (
-                    <img src={toon.thumbnail_url} alt={toon.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                    <img src={resolveUrl(toon.thumbnail_url)} alt={toon.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
                   ) : (
                     <div className="w-full h-full bg-gradient-to-br from-purple-900/50 to-cyan-900/50" />
                   )}
