@@ -14,6 +14,7 @@ def get_me(current_user: User = Depends(get_current_user)):
         "email": current_user.email,
         "provider": current_user.provider,
         "created_at": current_user.created_at.isoformat() if current_user.created_at else None,
+        "is_admin": bool(current_user.is_admin),
     }
 
 # /me/packets → packets/router.py로 이동 (3단계)

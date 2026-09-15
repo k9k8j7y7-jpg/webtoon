@@ -1,4 +1,4 @@
-from sqlalchemy import Column, BigInteger, String, Enum, DateTime, UniqueConstraint
+from sqlalchemy import Column, BigInteger, Boolean, String, Enum, DateTime, UniqueConstraint
 from sqlalchemy.sql import func
 
 from app.database import Base
@@ -13,6 +13,7 @@ class User(Base):
     email = Column(String(255), nullable=True)
     display_name = Column(String(100), nullable=True)
     created_at = Column(DateTime, nullable=False, server_default=func.now())
+    is_admin = Column(Boolean, nullable=False, default=False, server_default="0")
     updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
 
     __table_args__ = (
