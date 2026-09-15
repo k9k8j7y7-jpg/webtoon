@@ -1,4 +1,4 @@
-from sqlalchemy import Column, BigInteger, String, Enum, DateTime, ForeignKey, JSON, VARCHAR, Boolean
+from sqlalchemy import Column, BigInteger, Integer, String, Enum, DateTime, ForeignKey, JSON, VARCHAR, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -74,6 +74,18 @@ class Episode(Base):
     showcase = Column(Boolean, nullable=False, default=False)
     showcase_category = Column(Enum("short", "series", "ad", name="showcase_category_enum"), nullable=True)
     share_token = Column(VARCHAR(36), nullable=True, unique=True, index=True)
+    view_count = Column(Integer, nullable=False, default=0, server_default="0")
+    like_count = Column(Integer, nullable=False, default=0, server_default="0")
     deleted_at = Column(DateTime, nullable=True)
 
     project = relationship("Project", back_populates="episodes")
+
+
+class ShowcaseLike(Base):
+    """공개 뷰어 좋아요 (fingerprint 기반 중복 방지)."""
+    __tablename__ = "showcase_likes"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    episode_id = Column(BigInteger, ForeignKey("episodes.id"), nullable=False)
+    fingerprint = Column(VARCHAR(64), nullable=False)
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
