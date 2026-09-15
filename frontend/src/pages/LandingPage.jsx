@@ -11,6 +11,8 @@ function resolveUrl(path) {
   return `${API_BASE}${path.startsWith('/') ? '' : '/'}${path}`;
 }
 
+const PRODUCT_LABELS = { packet_30: '베이직', packet_100: '프로', packet_300: '프리미엄' };
+
 const faqs = [
   { q: "웹툰을 한 번도 그려본 적이 없는데 사용할 수 있나요?", a: "네, EziToon은 그림을 전혀 그리지 못해도 사진과 이야기만 있으면 AI가 알아서 컷과 말풍선을 구성해 완성해 줍니다." },
   { q: "사진은 어떤 사진을 올려야 하나요?", a: "가족, 반려동물, 친구들과 찍은 일상 사진이나, 우리 가게 사진 등 어떤 사진이든 웹툰의 훌륭한 소재가 될 수 있습니다." },
@@ -23,6 +25,7 @@ export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false);
   const [activeTab, setActiveTab] = useState('단편');
   const [galleryData, setGalleryData] = useState({ short: [], series: [], ad: [] });
+  const [products, setProducts] = useState([]);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -33,6 +36,9 @@ export default function LandingPage() {
   useEffect(() => {
     axios.get(`${API_BASE}/api/v1/showcase/episodes`)
       .then(res => setGalleryData(res.data))
+      .catch(() => {});
+    axios.get(`${API_BASE}/api/v1/payments/products`)
+      .then(res => setProducts(res.data))
       .catch(() => {});
   }, []);
 
@@ -184,34 +190,29 @@ export default function LandingPage() {
         <section id="pricing" className="max-w-7xl mx-auto px-6 py-20 relative z-10">
           <h3 className="text-3xl font-bold text-center mb-16">요금 안내</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
-            {/* Basic */}
-            <div className="p-8 bg-white/5 rounded-3xl border border-white/10 flex flex-col items-center">
-              <h4 className="text-xl text-gray-300 mb-2">베이직</h4>
-              <div className="text-4xl font-bold mb-6 text-white">5,900원</div>
-              <div className="w-full py-3 bg-white/5 rounded-xl text-center mb-6">
-                <span className="text-cyan-400 font-bold">30</span> 패킷
-              </div>
-              <button className="w-full py-3 rounded-full border border-white/20 hover:bg-white/10 transition-colors font-medium">선택하기</button>
-            </div>
-            {/* Pro (인기) */}
-            <div className="p-8 bg-gradient-to-b from-[#1a1438] to-[#0A0F1D] rounded-3xl border border-purple-500/50 flex flex-col items-center relative transform md:-translate-y-4 shadow-[0_0_40px_rgba(168,85,247,0.2)]">
-              <div className="absolute -top-4 bg-gradient-to-r from-purple-500 to-cyan-500 px-4 py-1 rounded-full text-sm font-bold shadow-lg">인기</div>
-              <h4 className="text-xl text-gray-300 mb-2 mt-4">프로</h4>
-              <div className="text-4xl font-bold mb-6 text-white">14,900원</div>
-              <div className="w-full py-3 bg-white/10 rounded-xl text-center mb-6">
-                <span className="text-cyan-400 font-bold text-lg">100</span> 패킷
-              </div>
-              <button className="w-full py-3 rounded-full bg-gradient-to-r from-purple-600 to-cyan-500 hover:opacity-90 transition-opacity font-bold text-white">선택하기</button>
-            </div>
-            {/* Premium */}
-            <div className="p-8 bg-white/5 rounded-3xl border border-white/10 flex flex-col items-center">
-              <h4 className="text-xl text-gray-300 mb-2">프리미엄</h4>
-              <div className="text-4xl font-bold mb-6 text-white">34,900원</div>
-              <div className="w-full py-3 bg-white/5 rounded-xl text-center mb-6">
-                <span className="text-cyan-400 font-bold">300</span> 패킷
-              </div>
-              <button className="w-full py-3 rounded-full border border-white/20 hover:bg-white/10 transition-colors font-medium">선택하기</button>
-            </div>
+            {products.map((p, i) => {
+              const isPro = p.code === 'packet_100';
+              const label = PRODUCT_LABELS[p.code] || p.name;
+              return (
+                <div key={p.code} className={`p-8 rounded-3xl flex flex-col items-center ${
+                  isPro
+                    ? 'bg-gradient-to-b from-[#1a1438] to-[#0A0F1D] border border-purple-500/50 relative transform md:-translate-y-4 shadow-[0_0_40px_rgba(168,85,247,0.2)]'
+                    : 'bg-white/5 border border-white/10'
+                }`}>
+                  {isPro && <div className="absolute -top-4 bg-gradient-to-r from-purple-500 to-cyan-500 px-4 py-1 rounded-full text-sm font-bold shadow-lg">인기</div>}
+                  <h4 className={`text-xl text-gray-300 mb-2 ${isPro ? 'mt-4' : ''}`}>{label}</h4>
+                  <div className="text-4xl font-bold mb-6 text-white">{p.amount.toLocaleString()}원</div>
+                  <div className={`w-full py-3 rounded-xl text-center mb-6 ${isPro ? 'bg-white/10' : 'bg-white/5'}`}>
+                    <span className={`text-cyan-400 font-bold ${isPro ? 'text-lg' : ''}`}>{p.packets}</span> 패킷
+                  </div>
+                  <button onClick={() => navigate('/login')} className={`w-full py-3 rounded-full font-medium transition-colors ${
+                    isPro
+                      ? 'bg-gradient-to-r from-purple-600 to-cyan-500 hover:opacity-90 font-bold text-white'
+                      : 'border border-white/20 hover:bg-white/10'
+                  }`}>선택하기</button>
+                </div>
+              );
+            })}
           </div>
           <div className="text-center text-gray-400 bg-white/5 py-4 rounded-xl border border-white/10 inline-block px-8 mx-auto w-full md:w-auto">
             <span className="text-cyan-400">✓</span> 이미지 1장 = 1패킷 &nbsp;&nbsp;|&nbsp;&nbsp; 
