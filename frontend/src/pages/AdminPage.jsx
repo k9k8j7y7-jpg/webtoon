@@ -230,6 +230,242 @@ function GalleryTab() {
   );
 }
 
+/* ── 패킷 운영 ────────────────────────────────── */
+function PacketsTab() {
+  const [users, setUsers] = useState([]);
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [grantAmount, setGrantAmount] = useState('');
+  const [grantMemo, setGrantMemo] = useState('');
+  const [grantBusy, setGrantBusy] = useState(false);
+
+  // 주문 관련
+  const [orders, setOrders] = useState([]);
+  const [orderFilter, setOrderFilter] = useState('');
+  const [pendingCount, setPendingCount] = useState(0);
+  const [ordersLoading, setOrdersLoading] = useState(true);
+  const [tab, setTab] = useState('users'); // 'users' | 'orders'
+
+  const fetchUsers = useCallback(() => {
+    const params = search ? { search } : {};
+    api.get('/admin/users', { params })
+      .then(({ data }) => setUsers(data))
+      .catch(err => console.error(err))
+      .finally(() => setLoading(false));
+  }, [search]);
+
+  const fetchOrders = useCallback(() => {
+    const params = orderFilter ? { status_filter: orderFilter } : {};
+    api.get('/admin/orders', { params })
+      .then(({ data }) => {
+        setOrders(data.orders);
+        setPendingCount(data.pending_count);
+      })
+      .catch(err => console.error(err))
+      .finally(() => setOrdersLoading(false));
+  }, [orderFilter]);
+
+  useEffect(() => { setLoading(true); fetchUsers(); }, [fetchUsers]);
+  useEffect(() => { setOrdersLoading(true); fetchOrders(); }, [fetchOrders]);
+
+  const handleGrant = async () => {
+    const amount = parseInt(grantAmount);
+    if (!amount || !selectedUser) return;
+    setGrantBusy(true);
+    try {
+      const { data } = await api.post('/admin/packets/grant', {
+        user_id: selectedUser.id,
+        amount,
+        memo: grantMemo,
+      });
+      alert(`${amount > 0 ? '지급' : '차감'} 완료. 잔량: ${data.balance}`);
+      setGrantAmount('');
+      setGrantMemo('');
+      setSelectedUser(null);
+      fetchUsers();
+    } catch (err) {
+      alert('실패: ' + (err.response?.data?.detail || err.message));
+    } finally {
+      setGrantBusy(false);
+    }
+  };
+
+  const handleExpirePending = async () => {
+    if (!confirm(`오늘 이전 pending 주문 ${pendingCount}건을 만료 처리합니다.`)) return;
+    try {
+      const { data } = await api.post('/admin/orders/expire-pending');
+      alert(`${data.expired_count}건 만료 처리됨`);
+      fetchOrders();
+    } catch (err) {
+      alert('실패: ' + (err.response?.data?.detail || err.message));
+    }
+  };
+
+  const STATUS_LABELS = { pending: '대기', paid: '완료', failed: '실패', cancelled: '취소' };
+  const STATUS_COLORS = {
+    pending: 'text-yellow-400',
+    paid: 'text-green-400',
+    failed: 'text-red-400',
+    cancelled: 'text-gray-500',
+  };
+
+  return (
+    <div>
+      <h2 className="text-xl font-bold text-white mb-6">패킷 운영</h2>
+
+      {/* 탭 전환 */}
+      <div className="flex gap-2 mb-6">
+        <button onClick={() => setTab('users')}
+          className={`px-4 py-2 rounded-lg text-sm transition-colors ${tab === 'users' ? 'bg-cyan-500/20 text-cyan-300' : 'text-gray-400 hover:bg-white/5'}`}>
+          회원 관리
+        </button>
+        <button onClick={() => setTab('orders')}
+          className={`px-4 py-2 rounded-lg text-sm transition-colors ${tab === 'orders' ? 'bg-cyan-500/20 text-cyan-300' : 'text-gray-400 hover:bg-white/5'}`}>
+          주문 목록 {pendingCount > 0 && <span className="ml-1 text-yellow-400">({pendingCount})</span>}
+        </button>
+      </div>
+
+      {tab === 'users' && (
+        <>
+          {/* 패킷 지급/차감 모달 */}
+          {selectedUser && (
+            <div className="bg-[#1e1e3a] border border-cyan-500/30 rounded-xl p-5 mb-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-white font-semibold">
+                  {selectedUser.display_name} ({selectedUser.email}) — 잔량 {selectedUser.balance}
+                </h3>
+                <button onClick={() => setSelectedUser(null)} className="text-gray-500 hover:text-white">✕</button>
+              </div>
+              <div className="flex gap-3 items-end">
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">수량 (양수=지급, 음수=차감)</label>
+                  <input type="number" value={grantAmount} onChange={e => setGrantAmount(e.target.value)}
+                    className="bg-[#12122a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm w-32 focus:outline-none focus:border-cyan-500/50"
+                    placeholder="예: 100" />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-xs text-gray-400 mb-1">사유</label>
+                  <input type="text" value={grantMemo} onChange={e => setGrantMemo(e.target.value)}
+                    className="bg-[#12122a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm w-full focus:outline-none focus:border-cyan-500/50"
+                    placeholder="사유 입력" />
+                </div>
+                <button onClick={handleGrant} disabled={grantBusy || !grantAmount}
+                  className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:bg-gray-700 text-white rounded-lg text-sm transition-colors">
+                  {grantBusy ? '처리 중...' : '적용'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 검색 */}
+          <div className="mb-4">
+            <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="닉네임 또는 이메일 검색..."
+              className="bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-sm text-gray-300 w-64 focus:outline-none focus:border-cyan-500/50" />
+          </div>
+
+          {/* 회원 테이블 */}
+          <div className="bg-[#1a1a2e] border border-white/10 rounded-xl overflow-hidden">
+            {loading ? <div className="text-gray-400 py-12 text-center">로딩 중...</div> : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-white/10 text-gray-400">
+                    <th className="text-left px-4 py-3 font-medium">ID</th>
+                    <th className="text-left px-4 py-3 font-medium">닉네임</th>
+                    <th className="text-left px-4 py-3 font-medium">이메일</th>
+                    <th className="text-left px-4 py-3 font-medium">로그인</th>
+                    <th className="text-left px-4 py-3 font-medium">가입일</th>
+                    <th className="text-right px-4 py-3 font-medium">잔량</th>
+                    <th className="text-center px-4 py-3 font-medium">패킷</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map(u => (
+                    <tr key={u.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+                      <td className="px-4 py-3 text-gray-500 font-mono text-xs">{u.id}</td>
+                      <td className="px-4 py-3 text-white">{u.display_name || '—'}</td>
+                      <td className="px-4 py-3 text-gray-400 text-xs">{u.email || '—'}</td>
+                      <td className="px-4 py-3 text-gray-400 text-xs">{u.provider}</td>
+                      <td className="px-4 py-3 text-gray-500 text-xs">{u.created_at?.split('T')[0]}</td>
+                      <td className="px-4 py-3 text-right text-white font-mono">{u.balance}</td>
+                      <td className="px-4 py-3 text-center">
+                        <button onClick={() => setSelectedUser(u)}
+                          className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors">
+                          지급/차감
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </>
+      )}
+
+      {tab === 'orders' && (
+        <>
+          <div className="flex items-center gap-4 mb-4">
+            <select value={orderFilter} onChange={e => setOrderFilter(e.target.value)}
+              className="bg-[#1a1a2e] border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-cyan-500/50">
+              <option value="">전체</option>
+              <option value="pending">대기</option>
+              <option value="paid">완료</option>
+              <option value="failed">실패</option>
+              <option value="cancelled">취소</option>
+            </select>
+            {pendingCount > 0 && (
+              <button onClick={handleExpirePending}
+                className="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-lg text-sm border border-red-500/30 transition-colors">
+                오래된 pending 만료 ({pendingCount}건)
+              </button>
+            )}
+          </div>
+
+          <div className="bg-[#1a1a2e] border border-white/10 rounded-xl overflow-hidden">
+            {ordersLoading ? <div className="text-gray-400 py-12 text-center">로딩 중...</div> : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-white/10 text-gray-400">
+                    <th className="text-left px-4 py-3 font-medium">주문ID</th>
+                    <th className="text-left px-4 py-3 font-medium">회원</th>
+                    <th className="text-left px-4 py-3 font-medium">상품</th>
+                    <th className="text-right px-4 py-3 font-medium">금액</th>
+                    <th className="text-right px-4 py-3 font-medium">패킷</th>
+                    <th className="text-center px-4 py-3 font-medium">상태</th>
+                    <th className="text-left px-4 py-3 font-medium">일시</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {orders.map(o => (
+                    <tr key={o.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+                      <td className="px-4 py-3 text-gray-500 font-mono text-[11px]">{o.order_id}</td>
+                      <td className="px-4 py-3 text-gray-300 text-xs">{o.user_name}</td>
+                      <td className="px-4 py-3 text-gray-400 text-xs">{o.product_code}</td>
+                      <td className="px-4 py-3 text-right text-white font-mono">{o.amount?.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-right text-gray-400 font-mono">{o.packet_delta}</td>
+                      <td className={`px-4 py-3 text-center text-xs font-semibold ${STATUS_COLORS[o.status]}`}>
+                        {STATUS_LABELS[o.status] || o.status}
+                      </td>
+                      <td className="px-4 py-3 text-gray-500 text-xs">
+                        {(o.paid_at || o.created_at)?.replace('T', ' ').slice(0, 16)}
+                      </td>
+                    </tr>
+                  ))}
+                  {orders.length === 0 && (
+                    <tr><td colSpan={7} className="px-4 py-12 text-center text-gray-500">주문 없음</td></tr>
+                  )}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 /* ── 준비 중 탭 ───────────────────────────────── */
 function ComingSoon({ name }) {
   return (
@@ -298,7 +534,7 @@ export default function AdminPage() {
         <Routes>
           <Route index element={<DashboardTab />} />
           <Route path="gallery" element={<GalleryTab />} />
-          <Route path="packets" element={<ComingSoon name="패킷 운영" />} />
+          <Route path="packets" element={<PacketsTab />} />
           <Route path="notices" element={<ComingSoon name="공지 관리" />} />
           <Route path="products" element={<ComingSoon name="상품 관리" />} />
         </Routes>

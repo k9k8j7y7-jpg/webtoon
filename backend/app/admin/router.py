@@ -11,6 +11,7 @@ from app.admin.deps import require_admin
 from app.users.models import User
 from app.projects.models import Episode, Project
 from app.storyboard.models import GenerationLog
+from app.packets.service import grant_packets
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -148,3 +149,161 @@ def toggle_showcase(
         "showcase_category": episode.showcase_category,
         "share_token": episode.share_token,
     }
+
+
+# ── 3단계: 패킷 운영 ────────────────────────────────────────
+
+@router.get("/users")
+def list_users(
+    search: str | None = Query(None),
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """회원 목록 (닉네임/이메일 검색 가능, 패킷 잔량 포함)."""
+    q = db.query(User).order_by(User.id.desc())
+    if search:
+        like = f"%{search}%"
+        q = q.filter(
+            (User.display_name.like(like)) | (User.email.like(like))
+        )
+    users = q.all()
+
+    # 패킷 잔량 일괄 조회
+    balances = {}
+    if users:
+        uids = [u.id for u in users]
+        rows = db.execute(
+            text("SELECT user_id, balance FROM packet_balances WHERE user_id IN :uids"),
+            {"uids": tuple(uids)},
+        ).fetchall()
+        balances = {r[0]: r[1] for r in rows}
+
+    return [
+        {
+            "id": u.id,
+            "display_name": u.display_name,
+            "email": u.email,
+            "provider": u.provider,
+            "created_at": u.created_at.isoformat() if u.created_at else None,
+            "balance": balances.get(u.id, 0),
+        }
+        for u in users
+    ]
+
+
+class PacketGrantRequest(BaseModel):
+    user_id: int
+    amount: int
+    memo: str = ""
+
+
+@router.post("/packets/grant")
+def admin_grant_packets(
+    req: PacketGrantRequest,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """관리자 패킷 지급/차감. amount > 0 지급, < 0 차감."""
+    if req.amount == 0:
+        raise HTTPException(status_code=400, detail="수량은 0이 아니어야 합니다")
+
+    target = db.query(User).filter(User.id == req.user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="회원을 찾을 수 없습니다")
+
+    if req.amount > 0:
+        new_balance = grant_packets(req.user_id, req.amount, db)
+    else:
+        # 차감: charge_packets는 402를 던질 수 있음 — 관리자 차감은 음수 허용
+        from app.packets.service import _ensure_balance
+        _ensure_balance(req.user_id, db)
+        row = db.execute(
+            text("SELECT balance FROM packet_balances WHERE user_id = :uid FOR UPDATE"),
+            {"uid": req.user_id},
+        ).fetchone()
+        new_balance = row[0] + req.amount  # amount is negative
+        if new_balance < 0:
+            new_balance = 0
+        db.execute(
+            text("UPDATE packet_balances SET balance = :bal WHERE user_id = :uid"),
+            {"bal": new_balance, "uid": req.user_id},
+        )
+        db.execute(
+            text(
+                "INSERT INTO packet_transactions (user_id, delta, reason, ref_log_id, balance_after) "
+                "VALUES (:uid, :delta, 'admin_grant', NULL, :bal)"
+            ),
+            {"uid": req.user_id, "delta": req.amount, "bal": new_balance},
+        )
+
+    db.commit()
+    return {
+        "user_id": req.user_id,
+        "delta": req.amount,
+        "balance": new_balance,
+    }
+
+
+@router.get("/orders")
+def list_orders(
+    status_filter: str | None = Query(None),
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """주문 목록 (상태 필터 가능)."""
+    sql = (
+        "SELECT o.id, o.order_id, o.user_id, u.display_name, o.product_code, "
+        "o.amount, o.packet_delta, o.status, o.paid_at, o.created_at "
+        "FROM orders o JOIN users u ON o.user_id = u.id "
+    )
+    params = {}
+
+    if status_filter and status_filter in ("pending", "paid", "failed", "cancelled"):
+        sql += "WHERE o.status = :status "
+        params["status"] = status_filter
+
+    sql += "ORDER BY o.created_at DESC LIMIT 200"
+
+    rows = db.execute(text(sql), params).fetchall()
+
+    # pending 건수
+    pending_count = db.execute(
+        text("SELECT COUNT(*) FROM orders WHERE status = 'pending'")
+    ).scalar()
+
+    return {
+        "pending_count": pending_count,
+        "orders": [
+            {
+                "id": r[0],
+                "order_id": r[1],
+                "user_id": r[2],
+                "user_name": r[3],
+                "product_code": r[4],
+                "amount": r[5],
+                "packet_delta": r[6],
+                "status": r[7],
+                "paid_at": r[8].isoformat() if r[8] else None,
+                "created_at": r[9].isoformat() if r[9] else None,
+            }
+            for r in rows
+        ],
+    }
+
+
+@router.post("/orders/expire-pending")
+def expire_pending_orders(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """24시간 이상 된 pending 주문을 일괄 만료(failed) 처리."""
+    cutoff = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    result = db.execute(
+        text(
+            "UPDATE orders SET status = 'failed' "
+            "WHERE status = 'pending' AND created_at < :cutoff"
+        ),
+        {"cutoff": cutoff},
+    )
+    db.commit()
+    return {"expired_count": result.rowcount}
