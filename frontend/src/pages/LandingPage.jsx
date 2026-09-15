@@ -122,20 +122,32 @@ export default function LandingPage() {
             ) : (
               filteredWebtoons.map(toon => (
                 <div key={toon.share_token} onClick={() => navigate(`/view/${toon.share_token}`)}
-                  className="group relative rounded-2xl overflow-hidden aspect-[9/12] cursor-pointer bg-[#121216] border border-white/10 shadow-2xl transition-all duration-500 hover:-translate-y-2 hover:shadow-[0_20px_40px_rgba(0,0,0,0.5)] hover:border-cyan-500/50">
-                  {toon.thumbnail_url ? (
-                    <img src={resolveUrl(toon.thumbnail_url)} alt={toon.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
-                  ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-purple-900/50 to-cyan-900/50" />
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#0A0F1D] via-[#0A0F1D]/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-6">
-                    <div className="translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
-                      {toon.genre && (
-                        <span className="inline-block px-3 py-1 bg-white/10 backdrop-blur-md rounded-full text-xs text-cyan-300 border border-white/10 mb-3 font-semibold">
-                          {toon.genre}
-                        </span>
-                      )}
-                      <h3 className="text-2xl font-bold text-white">{toon.title}</h3>
+                  className="group relative rounded-2xl overflow-hidden aspect-[9/12] cursor-pointer bg-white/5 backdrop-blur-md border border-white/10 shadow-xl transition-all duration-500 hover:-translate-y-2 hover:shadow-[0_20px_40px_rgba(168,85,247,0.2)] hover:border-purple-500/50 p-3 flex flex-col">
+                  
+                  {/* 썸네일 영역 */}
+                  <div className="relative flex-1 rounded-xl overflow-hidden bg-[#0A0F1D]/80 mb-3">
+                    {toon.thumbnail_url ? (
+                      <img src={resolveUrl(toon.thumbnail_url)} alt={toon.title} className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                    ) : (
+                      <div className="absolute inset-0 w-full h-full bg-gradient-to-br from-purple-900/50 to-cyan-900/50" />
+                    )}
+                  </div>
+                  
+                  {/* 하단 정보 영역 */}
+                  <div className="flex flex-col gap-2 px-1">
+                    <div className="flex justify-between items-start gap-2">
+                      <h3 className="text-lg font-bold text-white truncate leading-tight">{toon.title}</h3>
+                      <span className="shrink-0 px-2 py-1 bg-white/10 rounded-md text-[10px] text-cyan-300 border border-white/10 font-semibold whitespace-nowrap">
+                        {activeTab}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 text-sm text-gray-400 font-medium">
+                      <span className="flex items-center gap-1.5">
+                        <span className="text-red-400 text-xs">❤️</span> {toon.like_count || 0}
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="text-gray-300 text-xs">👁</span> {toon.view_count || 0}
+                      </span>
                     </div>
                   </div>
                 </div>

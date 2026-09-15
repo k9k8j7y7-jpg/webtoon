@@ -54,6 +54,7 @@ export default function ViewerPage() {
   const { shareToken } = useParams();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
+  const [likeInfo, setLikeInfo] = useState({ liked: false, like_count: 0 });
 
   useEffect(() => {
     const headers = {};
@@ -63,7 +64,28 @@ export default function ViewerPage() {
     axios.get(`${API_BASE}/api/v1/showcase/view/${shareToken}`, { headers })
       .then(res => setData(res.data))
       .catch(err => setError(err.response?.status || 'error'));
+
+    axios.get(`${API_BASE}/api/v1/showcase/like/${shareToken}`, { headers })
+      .then(res => setLikeInfo({ liked: res.data.liked, like_count: res.data.like_count }))
+      .catch(err => console.error(err));
   }, [shareToken]);
+
+  const toggleLike = async () => {
+    try {
+      const headers = {};
+      const token = localStorage.getItem('token');
+      if (token) headers.Authorization = `Bearer ${token}`;
+
+      const res = await axios.post(`${API_BASE}/api/v1/showcase/like/${shareToken}`, {}, { headers });
+      setLikeInfo({ liked: res.data.liked, like_count: res.data.like_count });
+    } catch (err) {
+      if (err.response?.status === 401) {
+        alert('로그인이 필요합니다.');
+      } else {
+        console.error(err);
+      }
+    }
+  };
 
   if (error) {
     const msg = error === 404 ? '작품을 찾을 수 없습니다'
@@ -102,11 +124,32 @@ export default function ViewerPage() {
       </header>
 
       {/* 컷 세로 스크롤 */}
-      <main className="max-w-2xl mx-auto">
+      <main className="max-w-2xl mx-auto flex flex-col gap-6 pb-12">
         {data.cuts.map((cut, i) => (
           <CutViewer key={i} cut={cut} />
         ))}
       </main>
+
+      {/* 좋아요 & 조회수 영역 */}
+      <div className="max-w-2xl mx-auto py-12 flex flex-col items-center border-t border-white/5">
+        <div className="flex items-center gap-6 mb-4">
+          <span className="flex items-center gap-2 text-gray-400">
+            <span className="text-xl">👁</span>
+            <span className="font-semibold text-lg">{data.view_count || 0}</span>
+          </span>
+          <button 
+            onClick={toggleLike}
+            className={`flex items-center gap-2 px-6 py-3 rounded-full border transition-all duration-300 transform hover:scale-105 ${
+              likeInfo.liked 
+                ? 'bg-red-500/20 border-red-500/50 text-red-400 shadow-[0_0_20px_rgba(239,68,68,0.2)]' 
+                : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:border-white/20 hover:text-white'
+            }`}
+          >
+            <span className="text-xl">{likeInfo.liked ? '❤️' : '🤍'}</span>
+            <span className="font-semibold text-lg">{likeInfo.like_count || 0}</span>
+          </button>
+        </div>
+      </div>
 
       {/* CTA 푸터 */}
       <footer className="py-16 text-center border-t border-white/10">
