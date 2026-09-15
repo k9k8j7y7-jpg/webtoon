@@ -109,7 +109,7 @@ class ShowcaseToggleRequest(BaseModel):
     showcase_category: str | None = None
 
 
-@router.patch("/episodes/{episode_id}/showcase")
+@router.post("/episodes/{episode_id}/showcase")
 def toggle_showcase(
     episode_id: int,
     req: ShowcaseToggleRequest,

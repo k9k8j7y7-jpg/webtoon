@@ -102,7 +102,7 @@ function GalleryTab() {
   const handleToggle = async (ep) => {
     const newShowcase = !ep.showcase;
     try {
-      const { data } = await api.patch(`/admin/episodes/${ep.id}/showcase`, {
+      const { data } = await api.post(`/admin/episodes/${ep.id}/showcase`, {
         showcase: newShowcase,
         showcase_category: newShowcase ? (ep.showcase_category || 'short') : ep.showcase_category,
       });
@@ -114,7 +114,7 @@ function GalleryTab() {
 
   const handleCategoryChange = async (ep, category) => {
     try {
-      const { data } = await api.patch(`/admin/episodes/${ep.id}/showcase`, {
+      const { data } = await api.post(`/admin/episodes/${ep.id}/showcase`, {
         showcase: ep.showcase,
         showcase_category: category,
       });
