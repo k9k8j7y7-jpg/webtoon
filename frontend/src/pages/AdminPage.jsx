@@ -476,6 +476,26 @@ const NOTICE_TYPES = [
 
 const EMPTY_FORM = { title: '', body: '', notice_type: 'info', is_active: true, starts_at: '', ends_at: '' };
 
+// datetime-local(로컬) → UTC ISO string
+function localToUtc(localStr) {
+  if (!localStr) return null;
+  return new Date(localStr).toISOString();
+}
+// UTC ISO string → datetime-local(로컬) 형식
+function utcToLocal(utcStr) {
+  if (!utcStr) return '';
+  const d = new Date(utcStr.endsWith('Z') ? utcStr : utcStr + 'Z');
+  const off = d.getTimezoneOffset();
+  const local = new Date(d.getTime() - off * 60000);
+  return local.toISOString().slice(0, 16);
+}
+// UTC ISO string → 로컬 날짜 표시
+function utcToLocalDate(utcStr) {
+  if (!utcStr) return '—';
+  const d = new Date(utcStr.endsWith('Z') ? utcStr : utcStr + 'Z');
+  return d.toLocaleDateString('ko-KR');
+}
+
 function NoticesTab() {
   const [notices, setNotices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -503,8 +523,8 @@ function NoticesTab() {
       body: n.body || '',
       notice_type: n.notice_type,
       is_active: n.is_active,
-      starts_at: n.starts_at ? n.starts_at.slice(0, 16) : '',
-      ends_at: n.ends_at ? n.ends_at.slice(0, 16) : '',
+      starts_at: utcToLocal(n.starts_at),
+      ends_at: utcToLocal(n.ends_at),
     });
     setEditingId(n.id);
   };
@@ -515,8 +535,8 @@ function NoticesTab() {
     try {
       const payload = {
         ...form,
-        starts_at: form.starts_at || null,
-        ends_at: form.ends_at || null,
+        starts_at: localToUtc(form.starts_at),
+        ends_at: localToUtc(form.ends_at),
       };
       if (editingId === 'new') {
         await api.post('/admin/notices', payload);
@@ -657,8 +677,8 @@ function NoticesTab() {
                     </button>
                   </td>
                   <td className="px-4 py-3 text-gray-500 text-xs">
-                    {n.starts_at?.split('T')[0] || '—'}
-                    {n.ends_at ? ` ~ ${n.ends_at.split('T')[0]}` : ' ~ 무기한'}
+                    {utcToLocalDate(n.starts_at)}
+                    {n.ends_at ? ` ~ ${utcToLocalDate(n.ends_at)}` : ' ~ 무기한'}
                   </td>
                   <td className="px-4 py-3 text-center">
                     <button onClick={() => openEdit(n)}
