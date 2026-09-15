@@ -466,6 +466,219 @@ function PacketsTab() {
   );
 }
 
+/* ── 공지 관리 ────────────────────────────────── */
+const NOTICE_TYPES = [
+  { value: 'info', label: '안내', color: 'text-blue-400' },
+  { value: 'warning', label: '경고', color: 'text-amber-400' },
+  { value: 'maintenance', label: '점검', color: 'text-purple-400' },
+  { value: 'update', label: '업데이트', color: 'text-emerald-400' },
+];
+
+const EMPTY_FORM = { title: '', body: '', notice_type: 'info', is_active: true, starts_at: '', ends_at: '' };
+
+function NoticesTab() {
+  const [notices, setNotices] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [editingId, setEditingId] = useState(null); // null=목록, 'new'=등록, 숫자=수정
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [busy, setBusy] = useState(false);
+
+  const fetchNotices = useCallback(() => {
+    api.get('/admin/notices')
+      .then(({ data }) => setNotices(data))
+      .catch(err => console.error(err))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { fetchNotices(); }, [fetchNotices]);
+
+  const openCreate = () => {
+    setForm(EMPTY_FORM);
+    setEditingId('new');
+  };
+
+  const openEdit = (n) => {
+    setForm({
+      title: n.title,
+      body: n.body || '',
+      notice_type: n.notice_type,
+      is_active: n.is_active,
+      starts_at: n.starts_at ? n.starts_at.slice(0, 16) : '',
+      ends_at: n.ends_at ? n.ends_at.slice(0, 16) : '',
+    });
+    setEditingId(n.id);
+  };
+
+  const handleSave = async () => {
+    if (!form.title.trim()) { alert('제목을 입력하세요'); return; }
+    setBusy(true);
+    try {
+      const payload = {
+        ...form,
+        starts_at: form.starts_at || null,
+        ends_at: form.ends_at || null,
+      };
+      if (editingId === 'new') {
+        await api.post('/admin/notices', payload);
+      } else {
+        await api.post(`/admin/notices/${editingId}`, payload);
+      }
+      setEditingId(null);
+      fetchNotices();
+    } catch (err) {
+      alert('저장 실패: ' + (err.response?.data?.detail || err.message));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleToggleActive = async (n) => {
+    const newActive = !n.is_active;
+    if (newActive) {
+      if (!confirm('이 공지를 활성화하면 기존 활성 공지는 자동 비활성됩니다.')) return;
+    }
+    try {
+      await api.post(`/admin/notices/${n.id}`, { is_active: newActive });
+      fetchNotices();
+    } catch (err) {
+      alert('변경 실패: ' + (err.response?.data?.detail || err.message));
+    }
+  };
+
+  if (loading) return <div className="text-gray-400 py-12 text-center">로딩 중...</div>;
+
+  // 등록/수정 폼
+  if (editingId !== null) {
+    return (
+      <div>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-bold text-white">
+            {editingId === 'new' ? '공지 등록' : '공지 수정'}
+          </h2>
+          <button onClick={() => setEditingId(null)} className="text-gray-400 hover:text-white text-sm">← 목록으로</button>
+        </div>
+        <div className="bg-[#1a1a2e] border border-white/10 rounded-xl p-6 max-w-2xl space-y-4">
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">제목 *</label>
+            <input type="text" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+              className="bg-[#12122a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm w-full focus:outline-none focus:border-cyan-500/50" />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">본문</label>
+            <textarea value={form.body} onChange={e => setForm(f => ({ ...f, body: e.target.value }))} rows={3}
+              className="bg-[#12122a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm w-full focus:outline-none focus:border-cyan-500/50 resize-y" />
+          </div>
+          <div className="flex gap-4">
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">유형</label>
+              <select value={form.notice_type} onChange={e => setForm(f => ({ ...f, notice_type: e.target.value }))}
+                className="bg-[#12122a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-cyan-500/50">
+                {NOTICE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </div>
+            <div className="flex items-end gap-2">
+              <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+                <input type="checkbox" checked={form.is_active} onChange={e => setForm(f => ({ ...f, is_active: e.target.checked }))}
+                  className="rounded" />
+                활성
+              </label>
+              {form.is_active && (
+                <span className="text-xs text-yellow-400">* 기존 활성 공지 자동 비활성</span>
+              )}
+            </div>
+          </div>
+          <div className="flex gap-4">
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">시작일시</label>
+              <input type="datetime-local" value={form.starts_at} onChange={e => setForm(f => ({ ...f, starts_at: e.target.value }))}
+                className="bg-[#12122a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-cyan-500/50" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">종료일시 (비워두면 무기한)</label>
+              <input type="datetime-local" value={form.ends_at} onChange={e => setForm(f => ({ ...f, ends_at: e.target.value }))}
+                className="bg-[#12122a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-cyan-500/50" />
+            </div>
+          </div>
+          <div className="pt-2">
+            <button onClick={handleSave} disabled={busy}
+              className="px-6 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:bg-gray-700 text-white rounded-lg text-sm transition-colors">
+              {busy ? '저장 중...' : '저장'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 목록
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-bold text-white">공지 관리</h2>
+        <button onClick={openCreate}
+          className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-sm transition-colors">
+          + 새 공지
+        </button>
+      </div>
+
+      <div className="bg-[#1a1a2e] border border-white/10 rounded-xl overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-white/10 text-gray-400">
+              <th className="text-left px-4 py-3 font-medium">ID</th>
+              <th className="text-left px-4 py-3 font-medium">제목</th>
+              <th className="text-center px-4 py-3 font-medium">유형</th>
+              <th className="text-center px-4 py-3 font-medium">활성</th>
+              <th className="text-left px-4 py-3 font-medium">기간</th>
+              <th className="text-center px-4 py-3 font-medium">관리</th>
+            </tr>
+          </thead>
+          <tbody>
+            {notices.map(n => {
+              const typeInfo = NOTICE_TYPES.find(t => t.value === n.notice_type) || NOTICE_TYPES[0];
+              return (
+                <tr key={n.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+                  <td className="px-4 py-3 text-gray-500 font-mono text-xs">{n.id}</td>
+                  <td className="px-4 py-3 text-white max-w-[300px]">
+                    <div className="truncate">{n.title}</div>
+                    {n.body && <div className="text-xs text-gray-500 truncate">{n.body}</div>}
+                  </td>
+                  <td className={`px-4 py-3 text-center text-xs font-semibold ${typeInfo.color}`}>
+                    {typeInfo.label}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <button onClick={() => handleToggleActive(n)}
+                      className={`w-10 h-5 rounded-full relative transition-colors ${
+                        n.is_active ? 'bg-cyan-500' : 'bg-gray-700'
+                      }`}>
+                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                        n.is_active ? 'left-5' : 'left-0.5'
+                      }`} />
+                    </button>
+                  </td>
+                  <td className="px-4 py-3 text-gray-500 text-xs">
+                    {n.starts_at?.split('T')[0] || '—'}
+                    {n.ends_at ? ` ~ ${n.ends_at.split('T')[0]}` : ' ~ 무기한'}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <button onClick={() => openEdit(n)}
+                      className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors">
+                      수정
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+            {notices.length === 0 && (
+              <tr><td colSpan={6} className="px-4 py-12 text-center text-gray-500">등록된 공지 없음</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 /* ── 준비 중 탭 ───────────────────────────────── */
 function ComingSoon({ name }) {
   return (
@@ -535,7 +748,7 @@ export default function AdminPage() {
           <Route index element={<DashboardTab />} />
           <Route path="gallery" element={<GalleryTab />} />
           <Route path="packets" element={<PacketsTab />} />
-          <Route path="notices" element={<ComingSoon name="공지 관리" />} />
+          <Route path="notices" element={<NoticesTab />} />
           <Route path="products" element={<ComingSoon name="상품 관리" />} />
         </Routes>
       </main>

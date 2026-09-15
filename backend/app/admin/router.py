@@ -12,6 +12,7 @@ from app.users.models import User
 from app.projects.models import Episode, Project
 from app.storyboard.models import GenerationLog
 from app.packets.service import grant_packets
+from app.notices.models import Notice
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -307,3 +308,115 @@ def expire_pending_orders(
     )
     db.commit()
     return {"expired_count": result.rowcount}
+
+
+# ── 4단계: 공지 관리 ─────────────────────────────────────────
+
+def _notice_to_dict(n: Notice) -> dict:
+    return {
+        "id": n.id,
+        "title": n.title,
+        "body": n.body,
+        "notice_type": n.notice_type,
+        "is_active": bool(n.is_active),
+        "starts_at": n.starts_at.isoformat() if n.starts_at else None,
+        "ends_at": n.ends_at.isoformat() if n.ends_at else None,
+        "created_at": n.created_at.isoformat() if n.created_at else None,
+    }
+
+
+@router.get("/notices")
+def list_notices(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """공지 전체 목록 (최신순)."""
+    notices = db.query(Notice).order_by(Notice.id.desc()).all()
+    return [_notice_to_dict(n) for n in notices]
+
+
+class NoticeCreateRequest(BaseModel):
+    title: str
+    body: str = ""
+    notice_type: str = "info"
+    is_active: bool = True
+    starts_at: str | None = None
+    ends_at: str | None = None
+
+
+@router.post("/notices")
+def create_notice(
+    req: NoticeCreateRequest,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """공지 등록. 활성화 시 기존 활성 공지 자동 비활성."""
+    valid_types = {"info", "warning", "maintenance", "update"}
+    if req.notice_type not in valid_types:
+        raise HTTPException(status_code=400, detail=f"Invalid type: {req.notice_type}")
+
+    # 활성 공지 1건 원칙: 새 공지 활성화 시 기존 활성 공지 전부 비활성
+    if req.is_active:
+        db.query(Notice).filter(Notice.is_active == True).update(
+            {Notice.is_active: False}
+        )
+
+    notice = Notice(
+        title=req.title,
+        body=req.body,
+        notice_type=req.notice_type,
+        is_active=req.is_active,
+        starts_at=datetime.fromisoformat(req.starts_at) if req.starts_at else datetime.utcnow(),
+        ends_at=datetime.fromisoformat(req.ends_at) if req.ends_at else None,
+    )
+    db.add(notice)
+    db.commit()
+    db.refresh(notice)
+    return _notice_to_dict(notice)
+
+
+class NoticeUpdateRequest(BaseModel):
+    title: str | None = None
+    body: str | None = None
+    notice_type: str | None = None
+    is_active: bool | None = None
+    starts_at: str | None = None
+    ends_at: str | None = None
+
+
+@router.post("/notices/{notice_id}")
+def update_notice(
+    notice_id: int,
+    req: NoticeUpdateRequest,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """공지 수정. 활성화 시 기존 활성 공지 자동 비활성."""
+    notice = db.query(Notice).filter(Notice.id == notice_id).first()
+    if not notice:
+        raise HTTPException(status_code=404, detail="Notice not found")
+
+    valid_types = {"info", "warning", "maintenance", "update"}
+
+    # 활성화 토글: 기존 활성 공지 비활성
+    if req.is_active is True and not notice.is_active:
+        db.query(Notice).filter(
+            Notice.is_active == True, Notice.id != notice_id
+        ).update({Notice.is_active: False})
+
+    if req.title is not None:
+        notice.title = req.title
+    if req.body is not None:
+        notice.body = req.body
+    if req.notice_type is not None and req.notice_type in valid_types:
+        notice.notice_type = req.notice_type
+    if req.is_active is not None:
+        notice.is_active = req.is_active
+    if req.starts_at is not None:
+        notice.starts_at = datetime.fromisoformat(req.starts_at)
+    if req.ends_at is not None:
+        notice.ends_at = datetime.fromisoformat(req.ends_at) if req.ends_at else None
+
+    db.commit()
+    db.refresh(notice)
+    return _notice_to_dict(notice)
