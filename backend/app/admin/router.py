@@ -420,3 +420,84 @@ def update_notice(
     db.commit()
     db.refresh(notice)
     return _notice_to_dict(notice)
+
+
+# ── 5단계: 상품·가격 관리 ────────────────────────────────────
+
+@router.get("/products")
+def list_admin_products(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """관리자용 상품 전체 목록 (비노출 포함)."""
+    rows = db.execute(
+        text("SELECT id, code, name, packets, price, is_visible, sort_order FROM packet_products ORDER BY sort_order")
+    ).fetchall()
+    return [
+        {
+            "id": r[0], "code": r[1], "name": r[2], "packets": r[3],
+            "price": r[4], "is_visible": bool(r[5]), "sort_order": r[6],
+        }
+        for r in rows
+    ]
+
+
+class ProductUpdateRequest(BaseModel):
+    name: str | None = None
+    packets: int | None = None
+    price: int | None = None
+    is_visible: bool | None = None
+    sort_order: int | None = None
+
+
+@router.post("/products/{product_id}")
+def update_product(
+    product_id: int,
+    req: ProductUpdateRequest,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """상품 수정 + 변경 로그."""
+    row = db.execute(
+        text("SELECT id, code, name, packets, price, is_visible, sort_order FROM packet_products WHERE id = :pid"),
+        {"pid": product_id},
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    old = {"name": row[2], "packets": row[3], "price": row[4], "is_visible": bool(row[5]), "sort_order": row[6]}
+    updates = {}
+    log_entries = []
+
+    for field in ("name", "packets", "price", "is_visible", "sort_order"):
+        new_val = getattr(req, field)
+        if new_val is not None and new_val != old[field]:
+            updates[field] = new_val
+            log_entries.append((field, str(old[field]), str(new_val)))
+
+    if not updates:
+        return {"message": "변경 사항 없음"}
+
+    set_clause = ", ".join(f"{k} = :{k}" for k in updates)
+    updates["pid"] = product_id
+    db.execute(text(f"UPDATE packet_products SET {set_clause} WHERE id = :pid"), updates)
+
+    for field_name, old_val, new_val in log_entries:
+        db.execute(
+            text(
+                "INSERT INTO product_price_logs (product_id, field_name, old_value, new_value, changed_by) "
+                "VALUES (:pid, :field, :old, :new, :uid)"
+            ),
+            {"pid": product_id, "field": field_name, "old": old_val, "new": new_val, "uid": admin.id},
+        )
+
+    db.commit()
+
+    updated = db.execute(
+        text("SELECT id, code, name, packets, price, is_visible, sort_order FROM packet_products WHERE id = :pid"),
+        {"pid": product_id},
+    ).fetchone()
+    return {
+        "id": updated[0], "code": updated[1], "name": updated[2], "packets": updated[3],
+        "price": updated[4], "is_visible": bool(updated[5]), "sort_order": updated[6],
+    }

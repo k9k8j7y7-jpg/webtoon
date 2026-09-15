@@ -699,11 +699,145 @@ function NoticesTab() {
   );
 }
 
-/* ── 준비 중 탭 ───────────────────────────────── */
-function ComingSoon({ name }) {
+/* ── 상품 관리 ────────────────────────────────── */
+function ProductsTab() {
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [editingId, setEditingId] = useState(null);
+  const [form, setForm] = useState({});
+  const [busy, setBusy] = useState(false);
+
+  const fetchProducts = useCallback(() => {
+    api.get('/admin/products')
+      .then(({ data }) => setProducts(data))
+      .catch(err => console.error(err))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { fetchProducts(); }, [fetchProducts]);
+
+  const openEdit = (p) => {
+    setForm({ name: p.name, packets: p.packets, price: p.price, is_visible: p.is_visible, sort_order: p.sort_order });
+    setEditingId(p.id);
+  };
+
+  const handleSave = async () => {
+    setBusy(true);
+    try {
+      await api.post(`/admin/products/${editingId}`, form);
+      setEditingId(null);
+      fetchProducts();
+    } catch (err) {
+      alert('저장 실패: ' + (err.response?.data?.detail || err.message));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleToggleVisible = async (p) => {
+    try {
+      await api.post(`/admin/products/${p.id}`, { is_visible: !p.is_visible });
+      fetchProducts();
+    } catch (err) {
+      alert('변경 실패: ' + (err.response?.data?.detail || err.message));
+    }
+  };
+
+  if (loading) return <div className="text-gray-400 py-12 text-center">로딩 중...</div>;
+
+  // 수정 폼
+  if (editingId !== null) {
+    return (
+      <div>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-bold text-white">상품 수정</h2>
+          <button onClick={() => setEditingId(null)} className="text-gray-400 hover:text-white text-sm">← 목록으로</button>
+        </div>
+        <div className="bg-[#1a1a2e] border border-white/10 rounded-xl p-6 max-w-lg space-y-4">
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">상품명</label>
+            <input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+              className="bg-[#12122a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm w-full focus:outline-none focus:border-cyan-500/50" />
+          </div>
+          <div className="flex gap-4">
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">패킷 수</label>
+              <input type="number" value={form.packets} onChange={e => setForm(f => ({ ...f, packets: parseInt(e.target.value) || 0 }))}
+                className="bg-[#12122a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm w-32 focus:outline-none focus:border-cyan-500/50" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">가격 (원)</label>
+              <input type="number" value={form.price} onChange={e => setForm(f => ({ ...f, price: parseInt(e.target.value) || 0 }))}
+                className="bg-[#12122a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm w-32 focus:outline-none focus:border-cyan-500/50" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">정렬</label>
+              <input type="number" value={form.sort_order} onChange={e => setForm(f => ({ ...f, sort_order: parseInt(e.target.value) || 0 }))}
+                className="bg-[#12122a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm w-20 focus:outline-none focus:border-cyan-500/50" />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+              <input type="checkbox" checked={form.is_visible} onChange={e => setForm(f => ({ ...f, is_visible: e.target.checked }))}
+                className="rounded" />
+              결제 페이지 노출
+            </label>
+          </div>
+          <div className="pt-2">
+            <button onClick={handleSave} disabled={busy}
+              className="px-6 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:bg-gray-700 text-white rounded-lg text-sm transition-colors">
+              {busy ? '저장 중...' : '저장'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 목록
   return (
-    <div className="text-gray-500 py-20 text-center">
-      {name} — 다음 단계에서 구현 예정
+    <div>
+      <h2 className="text-xl font-bold text-white mb-6">상품·가격 관리</h2>
+      <div className="bg-[#1a1a2e] border border-white/10 rounded-xl overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-white/10 text-gray-400">
+              <th className="text-left px-4 py-3 font-medium">코드</th>
+              <th className="text-left px-4 py-3 font-medium">상품명</th>
+              <th className="text-right px-4 py-3 font-medium">패킷</th>
+              <th className="text-right px-4 py-3 font-medium">가격</th>
+              <th className="text-center px-4 py-3 font-medium">노출</th>
+              <th className="text-center px-4 py-3 font-medium">정렬</th>
+              <th className="text-center px-4 py-3 font-medium">관리</th>
+            </tr>
+          </thead>
+          <tbody>
+            {products.map(p => (
+              <tr key={p.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+                <td className="px-4 py-3 text-gray-400 font-mono text-xs">{p.code}</td>
+                <td className="px-4 py-3 text-white">{p.name}</td>
+                <td className="px-4 py-3 text-right text-white font-mono">{p.packets}</td>
+                <td className="px-4 py-3 text-right text-white font-mono">{p.price?.toLocaleString()}원</td>
+                <td className="px-4 py-3 text-center">
+                  <button onClick={() => handleToggleVisible(p)}
+                    className={`w-10 h-5 rounded-full relative transition-colors ${
+                      p.is_visible ? 'bg-cyan-500' : 'bg-gray-700'
+                    }`}>
+                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                      p.is_visible ? 'left-5' : 'left-0.5'
+                    }`} />
+                  </button>
+                </td>
+                <td className="px-4 py-3 text-center text-gray-400 font-mono">{p.sort_order}</td>
+                <td className="px-4 py-3 text-center">
+                  <button onClick={() => openEdit(p)}
+                    className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors">수정</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -769,7 +903,7 @@ export default function AdminPage() {
           <Route path="gallery" element={<GalleryTab />} />
           <Route path="packets" element={<PacketsTab />} />
           <Route path="notices" element={<NoticesTab />} />
-          <Route path="products" element={<ComingSoon name="상품 관리" />} />
+          <Route path="products" element={<ProductsTab />} />
         </Routes>
       </main>
     </div>
