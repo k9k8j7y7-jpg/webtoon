@@ -101,7 +101,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
       if (err.response?.status === 402 && detail?.message) {
         setError(`${detail.message} (잔량 ${detail.balance}, 필요 ${detail.needed})`);
       } else {
-        setError(typeof detail === 'string' ? detail : detail?.message || err.message);
+        setError('생성이 잠시 지연되고 있어요. 다시 시도해 주세요.');
       }
     }
   };
@@ -124,7 +124,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
       if (err.response?.status === 402 && detail?.message) {
         setError(`${detail.message} (잔량 ${detail.balance}, 필요 ${detail.needed})`);
       } else {
-        setError(typeof detail === 'string' ? detail : detail?.message || err.message);
+        setError('생성이 잠시 지연되고 있어요. 다시 시도해 주세요.');
       }
     }
   };
@@ -313,7 +313,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
       if (err.response?.status === 402 && detail?.message) {
         setError(`${detail.message} (잔량 ${detail.balance}, 필요 ${detail.needed})`);
       } else {
-        setError(typeof detail === 'string' ? detail : detail?.message || err.message);
+        setError('생성이 잠시 지연되고 있어요. 다시 시도해 주세요.');
       }
     }
   };
@@ -429,7 +429,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
       if (err.response?.status === 402 && detail?.message) {
         setLocError(`${detail.message} (잔량 ${detail.balance}, 필요 ${detail.needed})`);
       } else {
-        setLocError(typeof detail === 'string' ? detail : detail?.message || err.message);
+        setLocError('생성이 잠시 지연되고 있어요. 다시 시도해 주세요.');
       }
     }
   };
@@ -468,7 +468,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
       if (err.response?.status === 402 && detail?.message) {
         setLocError(`${detail.message} (잔량 ${detail.balance}, 필요 ${detail.needed})`);
       } else {
-        setLocError(typeof detail === 'string' ? detail : detail?.message || err.message);
+        setLocError('생성이 잠시 지연되고 있어요. 다시 시도해 주세요.');
       }
     }
   };
@@ -490,7 +490,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
       if (err.response?.status === 402 && detail?.message) {
         setLocError(`${detail.message} (잔량 ${detail.balance}, 필요 ${detail.needed})`);
       } else {
-        setLocError(typeof detail === 'string' ? detail : detail?.message || err.message);
+        setLocError('생성이 잠시 지연되고 있어요. 다시 시도해 주세요.');
       }
     } finally {
       setUploadingPhotoLocId(null);
@@ -510,7 +510,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
       if (err.response?.status === 402 && detail?.message) {
         setLocError(`${detail.message} (잔량 ${detail.balance}, 필요 ${detail.needed})`);
       } else {
-        setLocError(typeof detail === 'string' ? detail : detail?.message || err.message);
+        setLocError('생성이 잠시 지연되고 있어요. 다시 시도해 주세요.');
       }
     } finally {
       setReconvertingLocId(null);
@@ -1330,7 +1330,15 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
         )}
       </div>
 
-      {error && <p className="text-red-500 dark:text-red-400 text-sm font-bold">{error}</p>}
+      {error && (
+        <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
+          <AlertTriangle size={16} className="text-red-500 mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-bold text-red-600 dark:text-red-400">{error}</p>
+          </div>
+          <button onClick={() => setError('')} className="text-red-400 hover:text-red-600 dark:hover:text-red-300 flex-shrink-0"><X size={14} /></button>
+        </div>
+      )}
 
       {canApprove && (
         <button

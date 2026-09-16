@@ -7,6 +7,7 @@ Tech-Stack 6장: 이미지·텍스트 모두 Gemini API 경유.
 import json
 import logging
 import re
+import asyncio
 
 from google import genai
 from google.genai import types
@@ -15,6 +16,9 @@ from app.config import get_settings
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
+
+MAX_RETRIES = 2
+RETRY_DELAY = 3  # seconds
 
 _client = None
 
@@ -48,12 +52,24 @@ async def generate_text(
     if system_instruction:
         config.system_instruction = system_instruction
 
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt,
-        config=config,
-    )
-    return response.text
+    last_error = None
+    for attempt in range(1, MAX_RETRIES + 2):
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt,
+                config=config,
+            )
+            if attempt > 1:
+                logger.warning("generate_text succeeded on attempt %d", attempt)
+            return response.text
+        except Exception as e:
+            last_error = e
+            if attempt <= MAX_RETRIES:
+                logger.warning("generate_text attempt %d failed: %s — retrying in %ds", attempt, e, RETRY_DELAY)
+                await asyncio.sleep(RETRY_DELAY)
+
+    raise last_error
 
 
 def parse_ai_json(text: str, *, context: str = "ai") -> dict:

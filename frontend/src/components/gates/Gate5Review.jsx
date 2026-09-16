@@ -179,10 +179,8 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
       const detail = err.response?.data?.detail;
       if (err.response?.status === 402 && detail?.message) {
         setError(`${detail.message} (잔량 ${detail.balance}, 필요 ${detail.needed})`);
-      } else if (typeof detail === 'string' && detail === 'Network Error' || err.message === 'Network Error') {
-        setError('일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
       } else {
-        setError(typeof detail === 'string' ? detail : detail?.message || err.message);
+        setError('생성이 잠시 지연되고 있어요. 다시 시도해 주세요. (패킷은 차감되지 않았습니다)');
       }
     }
   };
@@ -203,10 +201,8 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
       const detail = err.response?.data?.detail;
       if (err.response?.status === 402 && detail?.message) {
         setError(`${detail.message} (잔량 ${detail.balance}, 필요 ${detail.needed})`);
-      } else if (typeof detail === 'string' && detail === 'Network Error' || err.message === 'Network Error') {
-        setError('일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
       } else {
-        setError(typeof detail === 'string' ? detail : detail?.message || err.message);
+        setError('생성이 잠시 지연되고 있어요. 다시 시도해 주세요. (패킷은 차감되지 않았습니다)');
       }
     }
   };
@@ -439,7 +435,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
       if (err.response?.status === 402 && detail?.message) {
         setError(`${detail.message} (잔량 ${detail.balance}, 필요 ${detail.needed})`);
       } else {
-        setError(typeof detail === 'string' ? detail : detail?.message || err.message);
+        setError('생성이 잠시 지연되고 있어요. 다시 시도해 주세요. (패킷은 차감되지 않았습니다)');
       }
     } finally {
       setSavingStoryboard(false);
@@ -555,7 +551,15 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
           </div>
         </div>
 
-        {error && <p className="text-red-500 dark:text-red-400 text-sm font-bold mb-3">{error}</p>}
+        {error && (
+          <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl mb-3">
+            <AlertTriangle size={16} className="text-red-500 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-bold text-red-600 dark:text-red-400">{error}</p>
+            </div>
+            <button onClick={() => setError('')} className="text-red-400 hover:text-red-600 dark:hover:text-red-300 flex-shrink-0"><X size={14} /></button>
+          </div>
+        )}
 
         {partialResult && (
           <div className="bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-300 dark:border-amber-700 rounded-2xl p-4 mb-3">

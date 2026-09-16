@@ -5,13 +5,19 @@ adapters/ 추상화 레이어 경유.
 """
 
 import random
-import io
+import asyncio
+import logging
 
 from google import genai
 from google.genai import types
 
 from app.config import get_settings
 from app.adapters.base import ImageAdapter, ImageResult
+
+logger = logging.getLogger(__name__)
+
+MAX_RETRIES = 2
+RETRY_DELAY = 3  # seconds
 
 settings = get_settings()
 
@@ -45,28 +51,41 @@ class GeminiImageAdapter(ImageAdapter):
 
         contents.append(prompt)
 
-        response = self._client.models.generate_content(
-            model=IMAGE_MODEL,
-            contents=contents,
-            config=types.GenerateContentConfig(
-                response_modalities=["IMAGE", "TEXT"],
-                image_config=types.ImageConfig(aspect_ratio=aspect_ratio),
-                temperature=0.8,
-                httpOptions=types.HttpOptions(timeout=120_000),
-            ),
-        )
-
-        # 응답에서 이미지 추출
-        for part in response.candidates[0].content.parts:
-            if part.inline_data and part.inline_data.mime_type.startswith("image/"):
-                return ImageResult(
-                    image_bytes=part.inline_data.data,
-                    seed=seed,
+        last_error = None
+        for attempt in range(1, MAX_RETRIES + 2):  # 1 + MAX_RETRIES attempts
+            try:
+                response = self._client.models.generate_content(
                     model=IMAGE_MODEL,
-                    mime_type=part.inline_data.mime_type,
+                    contents=contents,
+                    config=types.GenerateContentConfig(
+                        response_modalities=["IMAGE", "TEXT"],
+                        image_config=types.ImageConfig(aspect_ratio=aspect_ratio),
+                        temperature=0.8,
+                        httpOptions=types.HttpOptions(timeout=120_000),
+                    ),
                 )
 
-        raise RuntimeError("Gemini did not return an image")
+                # 응답에서 이미지 추출
+                for part in response.candidates[0].content.parts:
+                    if part.inline_data and part.inline_data.mime_type.startswith("image/"):
+                        if attempt > 1:
+                            logger.warning("generate_image succeeded on attempt %d", attempt)
+                        return ImageResult(
+                            image_bytes=part.inline_data.data,
+                            seed=seed,
+                            model=IMAGE_MODEL,
+                            mime_type=part.inline_data.mime_type,
+                        )
+
+                last_error = RuntimeError("Gemini did not return an image")
+            except Exception as e:
+                last_error = e
+
+            if attempt <= MAX_RETRIES:
+                logger.warning("generate_image attempt %d failed: %s — retrying in %ds", attempt, last_error, RETRY_DELAY)
+                await asyncio.sleep(RETRY_DELAY)
+
+        raise last_error
 
     async def generate_character_sheet(
         self,
