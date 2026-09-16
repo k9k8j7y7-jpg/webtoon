@@ -7,7 +7,7 @@ UPDATE episodes e
 SET e.gate_status = JSON_SET(
     e.gate_status,
     '$.aspect_ratio', '1:1',
-    '$.aspect_ratio_locked', CAST(TRUE AS JSON)
+    '$.aspect_ratio_locked', JSON_EXTRACT('true', '$')
 )
 WHERE e.deleted_at IS NULL
   AND e.gate_status IS NOT NULL
@@ -31,7 +31,7 @@ UPDATE episodes e
 SET e.gate_status = JSON_SET(
     e.gate_status,
     '$.aspect_ratio', '9:16',
-    '$.aspect_ratio_locked', CAST(FALSE AS JSON)
+    '$.aspect_ratio_locked', JSON_EXTRACT('false', '$')
 )
 WHERE e.deleted_at IS NULL
   AND e.gate_status IS NOT NULL
