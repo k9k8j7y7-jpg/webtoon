@@ -22,6 +22,7 @@ from app.storage import upload_image, LOCAL_STORAGE_DIR
 from app.jobs import get_job, update_job, Job
 from app.billing.service import charge_generation  # legacy — 비활성화 (3단계)
 from app.packets.service import charge_packets, refund_packets
+from app.workflow.gate import get_aspect_ratio, is_aspect_ratio_locked, lock_aspect_ratio
 
 logger = logging.getLogger(__name__)
 
@@ -260,6 +261,9 @@ async def generate_cut_image(
     project_memory = db.query(ProjectMemory).filter(ProjectMemory.project_id == project_id).first()
     project_rules = project_memory.rules if project_memory else None
 
+    # 4.5. 에피소드 비율 (컷 생성은 에피소드 비율 사용, 시트는 1:1 고정)
+    ep_aspect_ratio = get_aspect_ratio(episode.gate_status)
+
     # 5. 프롬프트 조립 (Prompt Engine)
     prompt = build_cut_prompt(
         cut_spec=spec,
@@ -268,6 +272,7 @@ async def generate_cut_image(
         style_prompt=style_prompt,
         project_rules=project_rules,
         loc_is_photo=loc_is_photo,
+        aspect_ratio=ep_aspect_ratio,
     )
 
     # 6. 이미지 생성 (레퍼런스 주입 + 앵커링!)
@@ -276,7 +281,12 @@ async def generate_cut_image(
         reference_images=ref_images if ref_images else None,
         reference_labels=ref_labels if ref_labels else None,
         seed=cut.seed,
+        aspect_ratio=ep_aspect_ratio,
     )
+
+    # 6.5. 첫 이미지 생성 시 비율 잠금
+    if not is_aspect_ratio_locked(episode.gate_status):
+        episode.gate_status = lock_aspect_ratio(episode.gate_status)
 
     # 7. 저장
     version = (cut.version or 0) + 1

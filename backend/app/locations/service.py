@@ -24,6 +24,7 @@ async def generate_location_images(
     style_prompt: str,
     job_id: str,
     db: Session,
+    aspect_ratio: str = "16:9",
 ):
     """모든 장소의 레퍼런스 이미지를 생성한다."""
     # BackgroundTask는 별도 스레드에서 실행 → 자체 DB 세션 사용
@@ -78,6 +79,7 @@ async def generate_location_images(
                 img_result = await adapter.generate_location(
                     location_description=loc_desc,
                     style_prompt=style_prompt,
+                    aspect_ratio=aspect_ratio,
                 )
                 url = upload_image(
                     image_bytes=img_result.image_bytes,
@@ -114,6 +116,12 @@ async def generate_location_images(
                     db.flush()
                     charge_packets(owner_id, 1, "generation", gen_log.id, db)
 
+                # 첫 이미지 생성 시 비율 잠금
+                from app.workflow.gate import is_aspect_ratio_locked, lock_aspect_ratio
+                ep_obj = db.query(Ep).filter(Ep.id == episode_id).first()
+                if ep_obj and not is_aspect_ratio_locked(ep_obj.gate_status):
+                    ep_obj.gate_status = lock_aspect_ratio(ep_obj.gate_status)
+
                 results.append({"ref_key": ref_key, "name": name, "status": "generated"})
 
             except Exception as e:
@@ -132,6 +140,7 @@ async def convert_photo_to_illustration(
     location: Location,
     style_prompt: str,
     db: Session,
+    aspect_ratio: str = "16:9",
 ) -> str:
     """업로드 사진 → 공간 묘사 추출(비전) → 일러스트 생성(텍스트→이미지).
 
@@ -185,7 +194,7 @@ async def convert_photo_to_illustration(
         f"hand-drawn webtoon background panel."
     )
 
-    result = await adapter.generate_image(prompt=gen_prompt, aspect_ratio="16:9")
+    result = await adapter.generate_image(prompt=gen_prompt, aspect_ratio=aspect_ratio)
 
     url = upload_image(
         image_bytes=result.image_bytes,

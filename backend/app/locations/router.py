@@ -14,7 +14,7 @@ from app.locations.models import Location
 from app.locations.service import generate_location_images, convert_photo_to_illustration
 from app.storage import upload_image
 from app.jobs import create_job, run_job_in_background
-from app.workflow.gate import get_gate_number
+from app.workflow.gate import get_gate_number, get_aspect_ratio
 from app.styles.models import Style, STYLE_PRESETS
 from app.packets.service import require_packets
 
@@ -76,6 +76,7 @@ async def create_locations(
 
     style = db.query(Style).filter(Style.episode_id == episode_id).first()
     style_prompt = style.prompt_snippet if style else STYLE_PRESETS["korean_webtoon"]["prompt"]
+    ep_aspect_ratio = get_aspect_ratio(episode.gate_status)
     job = create_job(total=len(locations_data))
 
     run_job_in_background(
@@ -87,6 +88,7 @@ async def create_locations(
             style_prompt=style_prompt,
             job_id=job.job_id,
             db=db,
+            aspect_ratio=ep_aspect_ratio,
         ),
     )
 
@@ -163,6 +165,9 @@ async def regenerate_location(
     # 패킷 사전 확인: 장소 재생성 = 1패킷
     require_packets(current_user.id, 1, db)
 
+    episode = db.query(Episode).filter(Episode.id == location.episode_id).first()
+    ep_aspect_ratio = get_aspect_ratio(episode.gate_status) if episode else "9:16"
+
     style = db.query(Style).filter(Style.episode_id == location.episode_id).first()
     style_prompt = style.prompt_snippet if style else STYLE_PRESETS["korean_webtoon"]["prompt"]
     job = create_job(total=1)
@@ -181,6 +186,7 @@ async def regenerate_location(
             style_prompt=style_prompt,
             job_id=job.job_id,
             db=db,
+            aspect_ratio=ep_aspect_ratio,
         ),
     )
 
@@ -286,7 +292,9 @@ async def upload_location_photo(
     # 즉시 변환
     style = db.query(Style).filter(Style.episode_id == location.episode_id).first()
     style_prompt = style.prompt_snippet if style else STYLE_PRESETS["korean_webtoon"]["prompt"]
-    converted_url = await convert_photo_to_illustration(location, style_prompt, db)
+    ep = db.query(Episode).filter(Episode.id == location.episode_id).first()
+    ep_ar = get_aspect_ratio(ep.gate_status) if ep else "9:16"
+    converted_url = await convert_photo_to_illustration(location, style_prompt, db, aspect_ratio=ep_ar)
 
     return {
         "id": location.id,
@@ -313,7 +321,9 @@ async def reconvert_location_photo(
 
     style = db.query(Style).filter(Style.episode_id == location.episode_id).first()
     style_prompt = style.prompt_snippet if style else STYLE_PRESETS["korean_webtoon"]["prompt"]
-    converted_url = await convert_photo_to_illustration(location, style_prompt, db)
+    ep = db.query(Episode).filter(Episode.id == location.episode_id).first()
+    ep_ar = get_aspect_ratio(ep.gate_status) if ep else "9:16"
+    converted_url = await convert_photo_to_illustration(location, style_prompt, db, aspect_ratio=ep_ar)
 
     return {
         "id": location.id,

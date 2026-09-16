@@ -11,7 +11,7 @@ from app.projects.models import Project, Episode
 from app.characters.models import Character, EpisodeCharacter
 from app.locations.models import Location
 from app.storyboard.models import Cut
-from app.workflow.gate import approve_gate, get_gate_number, GATE_KEYS
+from app.workflow.gate import approve_gate, get_gate_number, get_aspect_ratio, is_aspect_ratio_locked, GATE_KEYS
 from app.jobs import get_job
 
 router = APIRouter(tags=["workflow"])
@@ -65,6 +65,43 @@ async def approve_assets(
         "characters_approved": len(characters),
         "locations_approved": len(locations),
         "gate_status": new_status,
+    }
+
+
+class AspectRatioRequest(BaseModel):
+    aspect_ratio: str  # "1:1" | "9:16"
+
+
+@router.post("/projects/{project_id}/episodes/{episode_id}/aspect-ratio")
+async def set_aspect_ratio(
+    project_id: int,
+    episode_id: int,
+    body: AspectRatioRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """에피소드 컷 비율 설정. 잠금 후 변경 불가."""
+    if body.aspect_ratio not in ("1:1", "9:16"):
+        raise HTTPException(status_code=400, detail="aspect_ratio must be '1:1' or '9:16'")
+
+    episode = _get_episode_for_user(db, project_id, episode_id, current_user.id)
+
+    gs = episode.gate_status
+    if is_aspect_ratio_locked(gs):
+        raise HTTPException(status_code=400, detail="비율이 잠금되어 변경할 수 없습니다 (이미지 생성 후 고정)")
+
+    new_gs = {**gs}
+    new_gs["aspect_ratio"] = body.aspect_ratio
+    new_gs["aspect_ratio_locked"] = False
+    episode.gate_status = new_gs
+
+    db.commit()
+    db.refresh(episode)
+
+    return {
+        "aspect_ratio": body.aspect_ratio,
+        "aspect_ratio_locked": False,
+        "gate_status": episode.gate_status,
     }
 
 

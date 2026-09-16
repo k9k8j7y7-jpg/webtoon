@@ -50,6 +50,7 @@ class GeminiImageAdapter(ImageAdapter):
             contents=contents,
             config=types.GenerateContentConfig(
                 response_modalities=["IMAGE", "TEXT"],
+                image_config=types.ImageConfig(aspect_ratio=aspect_ratio),
                 temperature=0.8,
                 httpOptions=types.HttpOptions(timeout=120_000),
             ),
@@ -124,13 +125,14 @@ class GeminiImageAdapter(ImageAdapter):
         self,
         location_description: str,
         style_prompt: str,
+        aspect_ratio: str = "16:9",
     ) -> ImageResult:
         prompt = (
             f"Background illustration, detailed environment art. "
             f"{location_description}. {style_prompt}. "
             f"No characters, environment only, wide shot, detailed background."
         )
-        return await self.generate_image(prompt=prompt, aspect_ratio="16:9")
+        return await self.generate_image(prompt=prompt, aspect_ratio=aspect_ratio)
 
 
 # 싱글턴

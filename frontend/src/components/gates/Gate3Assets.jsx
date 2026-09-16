@@ -5,7 +5,7 @@ import { Users, MapPin, Palette, Check, RefreshCw, X, ChevronDown, ChevronUp, Al
 
 const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
 
-export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
+export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatus }) {
   const [characters, setCharacters] = useState([]);
   const [locations, setLocations] = useState([]);
   const [styles, setStyles] = useState(null);
@@ -25,6 +25,24 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
   const [libraryChars, setLibraryChars] = useState([]);
   const [pickerLoading, setPickerLoading] = useState(false);
   const [pickerError, setPickerError] = useState('');
+
+  // 컷 비율
+  const aspectRatio = gateStatus?.aspect_ratio || '9:16';
+  const aspectRatioLocked = gateStatus?.aspect_ratio_locked ?? true; // 미설정 시 잠금 (기존 에피소드)
+  const [arSaving, setArSaving] = useState(false);
+
+  const setAspectRatio = async (ratio) => {
+    if (aspectRatioLocked || arSaving) return;
+    setArSaving(true);
+    try {
+      await api.post(`/projects/${projectId}/episodes/${episodeId}/aspect-ratio`, { aspect_ratio: ratio });
+      await onRefresh();
+    } catch (err) {
+      setError(err.response?.data?.detail || err.message);
+    } finally {
+      setArSaving(false);
+    }
+  };
 
   const imageUrl = (path) => {
     if (!path) return '';
@@ -668,6 +686,52 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh }) {
               스타일이 변경되었습니다. 일관성을 위해 캐릭터/장소를 재생성하세요.
             </p>
           </div>
+        )}
+      </div>
+
+      {/* 컷 비율 */}
+      <div className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl p-6 backdrop-blur-sm">
+        <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2 mb-4">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="text-blue-500"><rect x="2" y="2" width="16" height="16" rx="2" stroke="currentColor" strokeWidth="1.5"/><rect x="6" y="4" width="8" height="12" rx="1" stroke="currentColor" strokeWidth="1.2" strokeDasharray="2 1"/></svg>
+          컷 비율
+        </h2>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setAspectRatio('1:1')}
+            disabled={aspectRatioLocked || arSaving}
+            className={`flex flex-col items-center gap-2 px-5 py-3 rounded-xl text-sm font-bold border-2 transition-all min-w-[90px]
+              ${aspectRatio === '1:1'
+                ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'bg-white dark:bg-zinc-800 border-border dark:border-zinc-700 text-gray-500 dark:text-gray-400'}
+              ${aspectRatioLocked ? 'opacity-60 cursor-not-allowed' : 'hover:border-blue-400 dark:hover:border-blue-500 hover:-translate-y-0.5 cursor-pointer'}`}
+          >
+            <div className="w-10 h-10 border-2 rounded-md border-current" />
+            <span>정사각 1:1</span>
+          </button>
+          <button
+            onClick={() => setAspectRatio('9:16')}
+            disabled={aspectRatioLocked || arSaving}
+            className={`flex flex-col items-center gap-2 px-5 py-3 rounded-xl text-sm font-bold border-2 transition-all min-w-[90px]
+              ${aspectRatio === '9:16'
+                ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'bg-white dark:bg-zinc-800 border-border dark:border-zinc-700 text-gray-500 dark:text-gray-400'}
+              ${aspectRatioLocked ? 'opacity-60 cursor-not-allowed' : 'hover:border-blue-400 dark:hover:border-blue-500 hover:-translate-y-0.5 cursor-pointer'}`}
+          >
+            <div className="w-7 h-10 border-2 rounded-md border-current" />
+            <span>세로 9:16</span>
+          </button>
+        </div>
+        {!aspectRatioLocked && (
+          <p className="text-xs font-bold text-amber-600 dark:text-amber-400 mt-3 flex items-center gap-1">
+            <AlertTriangle size={12} />
+            비율은 첫 이미지 생성 후 변경할 수 없습니다
+          </p>
+        )}
+        {aspectRatioLocked && (
+          <p className="text-xs font-bold text-gray-500 dark:text-gray-400 mt-3 flex items-center gap-1">
+            <Check size={12} />
+            {aspectRatio === '1:1' ? '정사각 1:1' : '세로 9:16'} 비율 잠금됨
+          </p>
         )}
       </div>
 

@@ -33,6 +33,7 @@ def build_cut_prompt(
     style_prompt: str,
     project_rules: dict | None = None,
     loc_is_photo: bool = False,
+    aspect_ratio: str = "9:16",
 ) -> str:
     """컷 명세로부터 이미지 생성 프롬프트를 조립한다.
 
@@ -139,8 +140,9 @@ def build_cut_prompt(
 
     # ── 7. 웹툰 기본 지시 ──
     parts.append(PLACEMENT_COMMON_SENSE)
+    format_desc = "vertical scroll format" if aspect_ratio == "9:16" else "square panel format"
     parts.append(
-        "Webtoon panel illustration, vertical scroll format, clean composition. "
+        f"Webtoon panel illustration, {format_desc}, clean composition. "
         "DO NOT render any text, letters, words, or speech bubbles in the image. "
         "No Korean text, no English text, no signs, no captions. Pure illustration only"
     )
