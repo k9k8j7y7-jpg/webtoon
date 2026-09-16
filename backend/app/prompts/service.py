@@ -34,6 +34,7 @@ def build_cut_prompt(
     project_rules: dict | None = None,
     loc_is_photo: bool = False,
     aspect_ratio: str = "9:16",
+    product_desc: str = "",
 ) -> str:
     """컷 명세로부터 이미지 생성 프롬프트를 조립한다.
 
@@ -109,6 +110,10 @@ def build_cut_prompt(
     action = cut_spec.get("action")
     if action:
         parts.append(f"Scene: {action}")
+
+    # ── 3.5. 제품 (광고 에피소드) ──
+    if product_desc:
+        parts.append(f"{product_desc}Draw the product matching the provided product reference sheet")
 
     # ── 4. 스타일 (얼굴 정체성을 덮지 않는 선에서) ──
     parts.append(f"{style_prompt}. Apply this art style to coloring and rendering only, preserve character facial identity from references")

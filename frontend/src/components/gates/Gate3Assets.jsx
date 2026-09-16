@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import api, { pollJob } from '../../api/client';
 import JobProgress from '../JobProgress';
-import { Users, MapPin, Palette, Check, RefreshCw, X, ChevronDown, ChevronUp, AlertTriangle, Edit3, Plus, Trash2, Sparkles, Link, Unlink, Star, Library, Camera } from 'lucide-react';
+import { Users, MapPin, Palette, Check, RefreshCw, X, ChevronDown, ChevronUp, AlertTriangle, Edit3, Plus, Trash2, Sparkles, Link, Unlink, Star, Library, Camera, Package, Upload } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
 
@@ -44,6 +44,81 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
     }
   };
 
+  // 제품 자산 (광고)
+  const isAd = gateStatus?.is_ad || false;
+  const [products, setProducts] = useState([]);
+  const [productName, setProductName] = useState('');
+  const [productFeatures, setProductFeatures] = useState('');
+  const [showProductForm, setShowProductForm] = useState(false);
+  const [uploadingProductPhoto, setUploadingProductPhoto] = useState(null);
+  const [generatingSheet, setGeneratingSheet] = useState(null);
+
+  const loadProducts = async () => {
+    try {
+      const { data } = await api.get(`/projects/${projectId}/episodes/${episodeId}/products`);
+      setProducts(data);
+    } catch { /* ignore */ }
+  };
+
+  const createProduct = async () => {
+    if (!productName.trim()) return;
+    try {
+      await api.post(`/projects/${projectId}/episodes/${episodeId}/products`, {
+        name: productName.trim(),
+        features: productFeatures.trim() || null,
+      });
+      setProductName('');
+      setProductFeatures('');
+      setShowProductForm(false);
+      await loadProducts();
+    } catch (err) {
+      setError(err.response?.data?.detail || err.message);
+    }
+  };
+
+  const deleteProduct = async (productId) => {
+    try {
+      await api.delete(`/products/${productId}`);
+      await loadProducts();
+    } catch (err) {
+      setError(err.response?.data?.detail || err.message);
+    }
+  };
+
+  const uploadProductPhoto = async (productId, file) => {
+    setUploadingProductPhoto(productId);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      await api.post(`/products/${productId}/photo`, form);
+      setCacheBuster(Date.now());
+      await loadProducts();
+    } catch (err) {
+      setError(err.response?.data?.detail || err.message);
+    } finally {
+      setUploadingProductPhoto(null);
+    }
+  };
+
+  const generateProductSheet = async (productId) => {
+    setGeneratingSheet(productId);
+    try {
+      await api.post(`/products/${productId}/generate-sheet`);
+      setCacheBuster(Date.now());
+      await loadProducts();
+      window.dispatchEvent(new Event('packets:refresh'));
+    } catch (err) {
+      const detail = err.response?.data?.detail;
+      if (err.response?.status === 402 && detail?.message) {
+        setError(`${detail.message} (잔량 ${detail.balance}, 필요 ${detail.needed})`);
+      } else {
+        setError('생성이 잠시 지연되고 있어요. 다시 시도해 주세요.');
+      }
+    } finally {
+      setGeneratingSheet(null);
+    }
+  };
+
   const imageUrl = (path) => {
     if (!path) return '';
     if (path.startsWith('http')) return path;
@@ -73,7 +148,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
     } catch {}
   };
 
-  useEffect(() => { loadAssets(); }, []);
+  useEffect(() => { loadAssets(); if (isAd) loadProducts(); }, []);
 
   const [skippedInfo, setSkippedInfo] = useState(null);
 
@@ -1329,6 +1404,116 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
           </div>
         )}
       </div>
+
+      {/* 제품 자산 (광고 에피소드) */}
+      {isAd && (
+        <div className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl p-6 backdrop-blur-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2">
+              <Package size={20} className="text-amber-500" /> 제품 자산
+            </h2>
+            <button
+              onClick={() => setShowProductForm(true)}
+              className="flex items-center gap-1 px-3 py-2 text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/40 rounded-full transition-colors"
+            >
+              <Plus size={12} /> 제품 추가
+            </button>
+          </div>
+
+          {/* 제품 추가 폼 */}
+          {showProductForm && (
+            <div className="mb-4 p-4 border-2 border-amber-200 dark:border-amber-800 rounded-xl bg-amber-50/50 dark:bg-amber-900/10">
+              <div className="space-y-3">
+                <input
+                  type="text"
+                  value={productName}
+                  onChange={(e) => setProductName(e.target.value)}
+                  placeholder="제품명"
+                  className="w-full px-3 py-2 border-2 border-border dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-sm font-bold text-ink-black dark:text-white placeholder-gray-400 focus:border-amber-500 focus:outline-none"
+                  autoFocus
+                />
+                <textarea
+                  value={productFeatures}
+                  onChange={(e) => setProductFeatures(e.target.value)}
+                  placeholder="제품 특징 메모 (선택) — 예: 유기농 녹차 성분, 쿨링 효과, 민트색 패키지"
+                  rows={2}
+                  className="w-full px-3 py-2 border-2 border-border dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-sm font-bold text-ink-black dark:text-white placeholder-gray-400 focus:border-amber-500 focus:outline-none resize-none"
+                />
+                <div className="flex gap-2">
+                  <button onClick={() => setShowProductForm(false)} className="px-3 py-1.5 text-xs font-bold text-gray-500 dark:text-gray-400 border border-border dark:border-zinc-700 rounded-lg hover:bg-gray-50 dark:hover:bg-zinc-800">취소</button>
+                  <button onClick={createProduct} disabled={!productName.trim()} className="px-3 py-1.5 text-xs font-bold text-white bg-amber-500 rounded-lg hover:bg-amber-600 disabled:opacity-50">추가</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 제품 목록 */}
+          {products.length > 0 ? (
+            <div className="space-y-3">
+              {products.map((p) => (
+                <div key={p.id} className="border-2 border-border dark:border-zinc-700 rounded-xl p-3 bg-white/50 dark:bg-zinc-800/50">
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="min-w-0">
+                      <div className="font-bold text-sm text-ink-black dark:text-white">{p.name}</div>
+                      {p.features && <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{p.features}</div>}
+                    </div>
+                    <button onClick={() => deleteProduct(p.id)} className="text-gray-300 hover:text-red-500 dark:text-zinc-600 dark:hover:text-red-400 transition-colors flex-shrink-0"><Trash2 size={14} /></button>
+                  </div>
+
+                  <div className="flex gap-3">
+                    {/* 사진 */}
+                    <div className="flex flex-col items-center gap-1">
+                      {p.photo_url ? (
+                        <img
+                          src={imageUrl(p.photo_url)}
+                          alt="제품 사진"
+                          className="w-20 h-20 object-cover rounded-lg border border-border dark:border-zinc-700 cursor-pointer"
+                          onClick={() => setLightbox({ url: imageUrl(p.photo_url), label: `${p.name} 사진` })}
+                        />
+                      ) : (
+                        <div className="w-20 h-20 border-2 border-dashed border-gray-300 dark:border-zinc-600 rounded-lg flex items-center justify-center">
+                          <Camera size={16} className="text-gray-400" />
+                        </div>
+                      )}
+                      <label className="cursor-pointer text-[10px] font-bold text-amber-600 dark:text-amber-400 hover:underline">
+                        {uploadingProductPhoto === p.id ? '업로드 중...' : (p.photo_url ? '사진 변경' : '사진 업로드')}
+                        <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files[0] && uploadProductPhoto(p.id, e.target.files[0])} disabled={uploadingProductPhoto === p.id} />
+                      </label>
+                    </div>
+
+                    {/* 시트 */}
+                    <div className="flex flex-col items-center gap-1">
+                      {p.sheet_url ? (
+                        <img
+                          src={imageUrl(p.sheet_url)}
+                          alt="제품 시트"
+                          className="w-20 h-20 object-cover rounded-lg border-2 border-amber-300 dark:border-amber-700 cursor-pointer"
+                          onClick={() => setLightbox({ url: imageUrl(p.sheet_url), label: `${p.name} 시트` })}
+                        />
+                      ) : (
+                        <div className="w-20 h-20 border-2 border-dashed border-amber-300 dark:border-amber-700 rounded-lg flex items-center justify-center">
+                          <Sparkles size={16} className="text-amber-400" />
+                        </div>
+                      )}
+                      {p.photo_url && (
+                        <button
+                          onClick={() => generateProductSheet(p.id)}
+                          disabled={generatingSheet === p.id || !hasStyle}
+                          className="text-[10px] font-bold text-amber-600 dark:text-amber-400 hover:underline disabled:opacity-50"
+                        >
+                          {generatingSheet === p.id ? '생성 중...' : (p.sheet_url ? '재생성 (1패킷)' : '시트 생성 (1패킷)')}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm font-bold text-gray-400 dark:text-gray-500">제품을 추가해서 광고 웹툰에 제품 참조를 연결하세요</p>
+          )}
+        </div>
+      )}
 
       {error && (
         <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">

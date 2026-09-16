@@ -252,6 +252,21 @@ async def generate_cut_image(
                     MAX_REF_IMAGES, location_id,
                 )
 
+    # 2.5. 제품 레퍼런스 로드 (광고 에피소드)
+    product_desc = ""
+    from app.products.models import Product
+    products = db.query(Product).filter(
+        Product.episode_id == episode_id, Product.sheet_url.isnot(None)
+    ).all()
+    for prod in products:
+        if len(ref_images) < MAX_REF_IMAGES:
+            prod_bytes = _load_image_bytes(prod.sheet_url)
+            if prod_bytes:
+                ref_images.append(prod_bytes)
+                ref_labels.append(f"Product '{prod.name}' — illustration reference sheet")
+        features = f" ({prod.features})" if prod.features else ""
+        product_desc += f"Product '{prod.name}'{features} appears in this scene. "
+
     # 3. 스타일 프롬프트
     style = db.query(Style).filter(Style.episode_id == episode_id).first()
     style_prompt = style.prompt_snippet if style else STYLE_PRESETS["korean_webtoon"]["prompt"]
@@ -273,6 +288,7 @@ async def generate_cut_image(
         project_rules=project_rules,
         loc_is_photo=loc_is_photo,
         aspect_ratio=ep_aspect_ratio,
+        product_desc=product_desc,
     )
 
     # 6. 이미지 생성 (레퍼런스 주입 + 앵커링!)
