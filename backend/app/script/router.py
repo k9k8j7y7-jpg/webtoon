@@ -9,7 +9,7 @@ from app.auth.deps import get_current_user
 from app.users.models import User
 from app.projects.models import Project, Episode, Series
 from app.script.service import generate_script, extract_character_names, extract_location_names
-from app.workflow.gate import approve_gate, get_gate_number
+from app.workflow.gate import approve_gate, get_gate_number, is_ad_episode
 from app.workflow.service import compute_invalidation_scope, invalidate_from_gate
 
 router = APIRouter(tags=["gate2-script"])
@@ -84,7 +84,8 @@ async def create_script(
                 "prev_hook": prev_item.get("hook") if prev_item else None,
             }
 
-    result = await generate_script(planning, series_context=series_context)
+    ad_flag = is_ad_episode(episode.gate_status)
+    result = await generate_script(planning, series_context=series_context, is_ad=ad_flag)
 
     # 대본 저장
     script_data = dict(episode.script) if episode.script else {}

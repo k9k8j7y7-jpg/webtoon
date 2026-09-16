@@ -68,15 +68,17 @@ SYSTEM_INSTRUCTION = """너는 웹툰 대본 작가야.
 - action(지문)에서 인물 위치는 가구 기준으로 명시 (예: '소파에 앉아', '테이블 옆에 서서'). 위치 불명 서술 금지"""
 
 
-async def generate_script(planning: dict, series_context: dict | None = None) -> dict:
+async def generate_script(planning: dict, series_context: dict | None = None, is_ad: bool = False) -> dict:
     """기획안으로부터 대본을 생성한다.
 
     series_context가 있으면 연작 컨텍스트를 프롬프트에 주입한다.
+    is_ad가 True면 광고 웹툰 지침을 적용한다.
     """
     from app.script.prompt_fragments import (
         build_series_context_block,
         SERIES_SCRIPT_INSTRUCTION_ADDON,
         STANDALONE_SCRIPT_INSTRUCTION_ADDON,
+        AD_SCRIPT_INSTRUCTION_ADDON,
     )
 
     # 연작 컨텍스트 블록
@@ -107,6 +109,8 @@ async def generate_script(planning: dict, series_context: dict | None = None) ->
     system = SYSTEM_INSTRUCTION
     if series_context:
         system += SERIES_SCRIPT_INSTRUCTION_ADDON
+    elif is_ad:
+        system += AD_SCRIPT_INSTRUCTION_ADDON
     else:
         system += STANDALONE_SCRIPT_INSTRUCTION_ADDON
 

@@ -33,12 +33,13 @@ export default function ProjectPage() {
   const [seriesList, setSeriesList] = useState([]);
   const [creating, setCreating] = useState(false);
 
-  // 단편 모달
+  // 단편/광고 모달
   const [showModal, setShowModal] = useState(false);
   const [modalTitle, setModalTitle] = useState('');
   const [modalIdea, setModalIdea] = useState('');
   const [modalStoryOptions, setModalStoryOptions] = useState(null);
   const [modalChips, setModalChips] = useState([]);
+  const [isAdMode, setIsAdMode] = useState(false);
 
   // 연작 모달
   const [showSeriesModal, setShowSeriesModal] = useState(false);
@@ -62,11 +63,12 @@ export default function ProjectPage() {
 
   // ── 단편 에피소드 ──
 
-  const openModal = (chip = null) => {
+  const openModal = (chip = null, adMode = false) => {
     setModalTitle('');
     setModalIdea(chip?.text || '');
     setModalStoryOptions(chip ? { genre: chip.genre, mood: chip.mood, development: chip.development } : null);
     setModalChips(pickRandomChips(3));
+    setIsAdMode(adMode);
     setShowModal(true);
   };
 
@@ -78,6 +80,7 @@ export default function ProjectPage() {
         episode_no: episodes.length + 1,
         title: modalTitle.trim(),
         idea: modalIdea || '',
+        is_ad: isAdMode,
       });
       setShowModal(false);
       navigate(`/projects/${projectId}/episodes/${data.id}/workflow`, {
@@ -196,6 +199,13 @@ export default function ProjectPage() {
           >
             <BookOpen size={16} /> 연작
           </button>
+          <button
+            onClick={() => openModal(null, true)}
+            disabled={creating}
+            className="flex items-center gap-1.5 px-4 py-2 bg-amber-500 text-white rounded-full text-sm font-bold hover:bg-amber-600 hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50"
+          >
+            <Sparkles size={16} /> 광고
+          </button>
         </div>
       </div>
 
@@ -305,7 +315,12 @@ export default function ProjectPage() {
               className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl p-4 flex items-center justify-between hover:shadow-md hover:border-comic-orange hover:-translate-y-0.5 transition-all cursor-pointer backdrop-blur-sm group"
             >
               <div>
-                <h3 className="font-bold font-serif text-ink-black dark:text-white group-hover:text-comic-orange transition-colors">{ep.title || `에피소드 ${ep.episode_no}`}</h3>
+                <div className="flex items-center gap-2 mb-0.5">
+                  {ep.gate_status?.is_ad && (
+                    <span className="shrink-0 px-2 py-0.5 text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 rounded-full">광고</span>
+                  )}
+                  <h3 className="font-bold font-serif text-ink-black dark:text-white group-hover:text-comic-orange transition-colors">{ep.title || `에피소드 ${ep.episode_no}`}</h3>
+                </div>
                 {isEpisodeCompleted(ep.gate_status) ? (
                   <p className="text-sm font-bold text-green-500 mt-0.5 flex items-center gap-1">
                     <CheckCircle size={14} /> 에피소드 완료
@@ -329,7 +344,7 @@ export default function ProjectPage() {
         </div>
       )}
 
-      {/* 단편 에피소드 생성 모달 */}
+      {/* 단편/광고 에피소드 생성 모달 */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowModal(false)}>
           <div
@@ -337,7 +352,7 @@ export default function ProjectPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white">단편 에피소드 만들기</h2>
+              <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white">{isAdMode ? '광고 웹툰 만들기' : '단편 에피소드 만들기'}</h2>
               <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
                 <X size={20} />
               </button>
@@ -362,7 +377,7 @@ export default function ProjectPage() {
                 <textarea
                   value={modalIdea}
                   onChange={(e) => setModalIdea(e.target.value)}
-                  placeholder="어떤 이야기를 만들고 싶으신가요?"
+                  placeholder={isAdMode ? "제품/브랜드와 어떤 스토리를 만들고 싶으신가요?" : "어떤 이야기를 만들고 싶으신가요?"}
                   rows={3}
                   className="w-full px-4 py-2.5 border-2 border-border dark:border-zinc-700 rounded-xl bg-white dark:bg-zinc-800 text-ink-black dark:text-white placeholder-gray-400 focus:border-comic-orange focus:outline-none transition-colors font-bold resize-none"
                 />

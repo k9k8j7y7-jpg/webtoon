@@ -1,11 +1,12 @@
 """게이트 상태 관리 — Backend-State-Model v1.0 기준"""
 
 
-def create_initial_gate_status() -> dict:
+def create_initial_gate_status(is_ad: bool = False) -> dict:
     """에피소드 생성 시 초기 gate_status JSON을 반환한다."""
     return {
         "current_gate": 1,
         "auto_advance": False,
+        "is_ad": is_ad,
         "aspect_ratio": "9:16",
         "aspect_ratio_locked": False,
         "gates": {
@@ -72,6 +73,11 @@ def approve_gate(gate_status: dict, gate_number: int) -> dict:
 
 def get_gate_number(gate_status: dict) -> int:
     return gate_status.get("current_gate", 1)
+
+
+def is_ad_episode(gate_status: dict) -> bool:
+    """광고 에피소드 여부."""
+    return gate_status.get("is_ad", False)
 
 
 def get_aspect_ratio(gate_status: dict) -> str:

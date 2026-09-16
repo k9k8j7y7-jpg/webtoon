@@ -37,6 +37,7 @@ class EpisodeCreate(BaseModel):
     title: str | None = None
     idea: str
     mood: str | None = None
+    is_ad: bool = False
 
 
 class EpisodeResponse(BaseModel):

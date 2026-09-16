@@ -133,7 +133,9 @@ def toggle_showcase(
     episode.showcase = req.showcase
 
     if req.showcase:
-        episode.showcase_category = req.showcase_category or "short"
+        # 광고 에피소드면 카테고리 기본값 "ad"
+        default_cat = "ad" if (episode.gate_status or {}).get("is_ad") else "short"
+        episode.showcase_category = req.showcase_category or default_cat
         # share_token 없으면 자동 생성
         if not episode.share_token:
             episode.share_token = str(uuid.uuid4())
