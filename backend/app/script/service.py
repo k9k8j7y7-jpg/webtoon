@@ -76,6 +76,7 @@ async def generate_script(planning: dict, series_context: dict | None = None) ->
     from app.script.prompt_fragments import (
         build_series_context_block,
         SERIES_SCRIPT_INSTRUCTION_ADDON,
+        STANDALONE_SCRIPT_INSTRUCTION_ADDON,
     )
 
     # 연작 컨텍스트 블록
@@ -106,6 +107,8 @@ async def generate_script(planning: dict, series_context: dict | None = None) ->
     system = SYSTEM_INSTRUCTION
     if series_context:
         system += SERIES_SCRIPT_INSTRUCTION_ADDON
+    else:
+        system += STANDALONE_SCRIPT_INSTRUCTION_ADDON
 
     raw = await generate_text(
         prompt=prompt,
