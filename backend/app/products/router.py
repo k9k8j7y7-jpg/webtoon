@@ -174,9 +174,14 @@ async def generate_product_sheet(
         contents=[
             types.Part.from_bytes(data=photo_bytes, mime_type="image/jpeg"),
             (
-                "Describe this product's visual appearance in English, under 100 words. "
-                "Focus on: shape, color, material, distinctive features, brand text if visible, "
-                "size proportions. Describe as if telling an illustrator what to draw."
+                "Describe this product's visual appearance in English, under 150 words. "
+                "Focus on EXACT SHAPE first: silhouette outline (angular/rounded shoulders, "
+                "straight/tapered/curved body, neck width vs body width ratio), cap/pump/nozzle "
+                "type and proportions, height-to-width aspect ratio. "
+                "Then: color, material/finish (matte/glossy/transparent), label layout, "
+                "brand text if visible, distinctive design elements. "
+                "Describe as precise technical reference for an illustrator who must match "
+                "the exact bottle/package silhouette."
             ),
         ],
         config=types.GenerateContentConfig(
@@ -186,17 +191,25 @@ async def generate_product_sheet(
     )
     product_desc = vision_response.text.strip()
 
-    # 2단계: 텍스트→일러스트 생성 (사진 미참조 — 플랜C 패턴)
+    # 2단계: 텍스트+참조사진→일러스트 생성
     adapter = get_image_adapter()
     features_text = f" Features: {product.features}." if product.features else ""
     gen_prompt = (
-        f"Product illustration sheet, single item centered on white background. "
+        f"Product illustration, single item centered on white background. "
+        f"CRITICAL: Match the reference photo's exact silhouette — bottle/package outline, "
+        f"shoulder shape, body proportions, cap/pump structure, height-to-width ratio. "
+        f"Only change the rendering style to illustration. "
         f"{product_desc}.{features_text} "
         f"{style_prompt}. "
-        f"Clean line art, detailed product illustration, no characters, no text, "
-        f"white background, product design reference sheet."
+        f"Clean detailed product illustration, no characters, no extra text, "
+        f"white background."
     )
-    result = await adapter.generate_image(prompt=gen_prompt, aspect_ratio="1:1")
+    result = await adapter.generate_image(
+        prompt=gen_prompt,
+        reference_images=[photo_bytes],
+        reference_labels=["Product photo — match this exact silhouette and proportions"],
+        aspect_ratio="1:1",
+    )
 
     url = upload_image(
         image_bytes=result.image_bytes,

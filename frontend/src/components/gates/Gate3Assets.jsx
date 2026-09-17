@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import api, { pollJob } from '../../api/client';
 import JobProgress from '../JobProgress';
+import ErrorBoundary from '../ErrorBoundary';
 import { Users, MapPin, Palette, Check, RefreshCw, X, ChevronDown, ChevronUp, AlertTriangle, Edit3, Plus, Trash2, Sparkles, Link, Unlink, Star, Library, Camera, Package, Upload } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
@@ -53,6 +54,13 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
   const [uploadingProductPhoto, setUploadingProductPhoto] = useState(null);
   const [generatingSheet, setGeneratingSheet] = useState(null);
 
+  const extractError = (err) => {
+    const d = err.response?.data?.detail;
+    if (typeof d === 'string') return d;
+    if (d?.message) return d.message;
+    return err.message || '오류가 발생했습니다';
+  };
+
   const loadProducts = async () => {
     try {
       const { data } = await api.get(`/projects/${projectId}/episodes/${episodeId}/products`);
@@ -72,7 +80,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
       setShowProductForm(false);
       await loadProducts();
     } catch (err) {
-      setError(err.response?.data?.detail || err.message);
+      setError(extractError(err));
     }
   };
 
@@ -81,7 +89,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
       await api.delete(`/products/${productId}`);
       await loadProducts();
     } catch (err) {
-      setError(err.response?.data?.detail || err.message);
+      setError(extractError(err));
     }
   };
 
@@ -90,11 +98,13 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
     try {
       const form = new FormData();
       form.append('file', file);
-      await api.post(`/products/${productId}/photo`, form);
+      await api.post(`/products/${productId}/photo`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
       setCacheBuster(Date.now());
       await loadProducts();
     } catch (err) {
-      setError(err.response?.data?.detail || err.message);
+      setError(extractError(err));
     } finally {
       setUploadingProductPhoto(null);
     }
@@ -1407,6 +1417,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
 
       {/* 제품 자산 (광고 에피소드) */}
       {isAd && (
+        <ErrorBoundary label="제품 자산">
         <div className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl p-6 backdrop-blur-sm">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2">
@@ -1513,6 +1524,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
             <p className="text-sm font-bold text-gray-400 dark:text-gray-500">제품을 추가해서 광고 웹툰에 제품 참조를 연결하세요</p>
           )}
         </div>
+        </ErrorBoundary>
       )}
 
       {error && (

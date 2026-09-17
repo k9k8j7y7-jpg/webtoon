@@ -53,7 +53,7 @@ class GenerationLog(Base):
     episode_id = Column(BigInteger, nullable=False)
     project_id = Column(BigInteger, nullable=False)
     user_id = Column(BigInteger, nullable=False)
-    kind = Column(Enum("cut", "character", "location", name="gen_kind_enum"), nullable=False)
+    kind = Column(Enum("cut", "character", "location", "product", name="gen_kind_enum"), nullable=False)
     model = Column(String(80), nullable=False)
     model_tier = Column(Enum("flash", "pro", name="model_tier_enum"), default="flash")
     cost_usd = Column(Numeric(10, 5), nullable=False, default=0)
