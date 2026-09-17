@@ -85,13 +85,19 @@ async def create_storyboard(
     db.query(Cut).filter(Cut.episode_id == episode_id).delete()
     db.flush()
 
+    # 광고 에피소드: 제품명 수집 (콘티 생성 시 컷별 제품 등장 판단용)
+    from app.products.models import Product as ProductModel
+    product_names = [
+        p.name for p in db.query(ProductModel).filter(ProductModel.episode_id == episode_id).all()
+    ]
+
     # 목표 컷 수가 있고, 현재와 다르면 AI 재분할
     if target:
         readjusted = await readjust_storyboard(script_data, target)
         adjusted_script = {"scenes": readjusted.get("scenes", [])}
-        cuts = create_cuts_from_script(episode_id, adjusted_script, db)
+        cuts = create_cuts_from_script(episode_id, adjusted_script, db, product_names=product_names)
     else:
-        cuts = create_cuts_from_script(episode_id, script_data, db)
+        cuts = create_cuts_from_script(episode_id, script_data, db, product_names=product_names)
 
     # 재생성 후 게이트4 상태가 invalidated이면 draft로 변경
     # create_cuts_from_script가 db.commit()을 호출하므로 episode를 refresh해야 함
@@ -142,6 +148,7 @@ async def list_cuts(
             "sfx_items": (c.spec or {}).get("sfx_items", []),
             "effect_items": (c.spec or {}).get("effect_items", []),
             "product_items": (c.spec or {}).get("product_items", []),
+            "has_product": (c.spec or {}).get("has_product", False),
             "emphasis": (c.spec or {}).get("emphasis"),
         }
         for c in cuts
@@ -168,6 +175,8 @@ async def update_cut(
         spec["dialogue"] = body["dialogue"]
     if "characters" in body:
         spec["characters"] = body["characters"]
+    if "has_product" in body:
+        spec["has_product"] = bool(body["has_product"])
 
     cut.spec = spec
     db.commit()

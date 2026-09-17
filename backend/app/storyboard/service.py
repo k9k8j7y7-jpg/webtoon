@@ -102,7 +102,32 @@ async def readjust_storyboard(script_data: dict, target_count: int) -> dict:
     return json.loads(text)
 
 
-def create_cuts_from_script(episode_id: int, script_data: dict, db: Session) -> list[dict]:
+def _detect_product_in_cut(cut_data: dict, product_names: list[str]) -> bool:
+    """컷의 지문·대사에서 제품 언급 여부를 판단한다."""
+    if not product_names:
+        return False
+    action = (cut_data.get("action") or "").lower()
+    dialogue_text = " ".join(
+        (d.get("text") or "").lower()
+        for d in cut_data.get("dialogue", [])
+    )
+    combined = f"{action} {dialogue_text}"
+    for name in product_names:
+        # 제품명의 핵심 키워드로 매칭 (짧은 단어 2자 이상)
+        keywords = [w for w in name.lower().split() if len(w) >= 2]
+        if any(kw in combined for kw in keywords):
+            return True
+    # 제품 관련 일반 키워드
+    product_keywords = ["제품", "상품", "패키지", "브랜드", "사용", "바르", "뿌리", "마시", "먹"]
+    if any(kw in combined for kw in product_keywords):
+        return True
+    return False
+
+
+def create_cuts_from_script(
+    episode_id: int, script_data: dict, db: Session,
+    product_names: list[str] | None = None,
+) -> list[dict]:
     """대본에서 컷 명세를 추출해 DB에 저장한다."""
     cuts_result = []
     global_cut_number = 0
@@ -114,6 +139,9 @@ def create_cuts_from_script(episode_id: int, script_data: dict, db: Session) -> 
             global_cut_number += 1
             cut_number = cut_data.get("cut_number", global_cut_number)
             cut_id = f"ep{episode_id:02d}_c{global_cut_number:03d}"
+
+            # 제품 등장 여부 자동 판단
+            has_product = _detect_product_in_cut(cut_data, product_names or [])
 
             # Cut Spec JSON 조립
             spec = {
@@ -127,6 +155,7 @@ def create_cuts_from_script(episode_id: int, script_data: dict, db: Session) -> 
                 "dialogue": cut_data.get("dialogue", []),
                 "emphasis": cut_data.get("emphasis", "normal"),
                 "transition": cut_data.get("transition"),
+                "has_product": has_product,
                 "prompt_override": None,
                 "status": "pending",
                 "generation": None,

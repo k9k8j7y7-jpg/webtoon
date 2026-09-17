@@ -83,6 +83,7 @@ export default function Gate4Storyboard({ projectId, episodeId, onRefresh, readO
       shot: cut.shot || 'full',
       action: cut.action || '',
       dialogue: (cut.dialogue || []).map(d => ({ ...d })),
+      has_product: cut.has_product || false,
     });
   };
 
@@ -93,6 +94,7 @@ export default function Gate4Storyboard({ projectId, episodeId, onRefresh, readO
         shot: editForm.shot,
         action: editForm.action,
         dialogue: editForm.dialogue,
+        has_product: editForm.has_product,
       });
       setEditingCut(null);
       await loadCuts();
@@ -222,6 +224,15 @@ export default function Gate4Storyboard({ projectId, episodeId, onRefresh, readO
                     )}
                   </div>
                 </div>
+
+                {/* 제품 등장 배지 */}
+                {cut.has_product && (
+                  <div className="flex items-center gap-1 mb-1">
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                      📦 제품 등장
+                    </span>
+                  </div>
+                )}
 
                 {/* 장소 */}
                 {cut.location_id && (
@@ -377,6 +388,23 @@ export default function Gate4Storyboard({ projectId, episodeId, onRefresh, readO
                   ))}
                 </div>
               </div>
+
+              {/* 제품 등장 토글 (광고 에피소드만) */}
+              {gateStatus?.is_ad && (
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-gray-600 dark:text-gray-400">제품 등장 (이미지에 제품 참조 첨부)</label>
+                  <button
+                    onClick={() => setEditForm(prev => ({ ...prev, has_product: !prev.has_product }))}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                      editForm.has_product
+                        ? 'bg-amber-500 text-white'
+                        : 'bg-gray-200 dark:bg-zinc-700 text-gray-500 dark:text-gray-400'
+                    }`}
+                  >
+                    {editForm.has_product ? 'ON' : 'OFF'}
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* 모달 푸터 */}

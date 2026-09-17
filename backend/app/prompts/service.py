@@ -8,7 +8,9 @@ A-2/A-3: 캐릭터 앵커링 최우선, 프롬프트 순서 재조정.
 APPEARANCE_ANCHOR = "MUST keep these features exactly in every panel"
 PLACEMENT_COMMON_SENSE = (
     "Place characters naturally within the scene: feet on the floor or seated on sofas/chairs. "
-    "NEVER on tables, counters, or floating in air. Respect furniture scale"
+    "NEVER on tables, counters, or floating in air. Respect furniture scale. "
+    "Characters and objects must be correctly scaled relative to background — "
+    "a person should be realistically proportioned to doors, tables, and furniture around them"
 )
 
 
@@ -113,7 +115,14 @@ def build_cut_prompt(
 
     # ── 3.5. 제품 (광고 에피소드) ──
     if product_desc:
-        parts.append(f"{product_desc}Draw the product matching the provided product reference sheet")
+        parts.append(
+            f"{product_desc}"
+            f"Draw the product matching the provided product reference sheet. "
+            f"CRITICAL: The product must be realistically sized relative to characters — "
+            f"a hand-held bottle stays hand-sized, a package stays table-sized. "
+            f"NEVER make the product giant or background-sized. "
+            f"Show it naturally held, placed on a surface, or used by a character"
+        )
 
     # ── 4. 스타일 (얼굴 정체성을 덮지 않는 선에서) ──
     parts.append(f"{style_prompt}. Apply this art style to coloring and rendering only, preserve character facial identity from references")
