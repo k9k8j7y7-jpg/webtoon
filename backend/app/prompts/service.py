@@ -7,10 +7,36 @@ A-2/A-3: 캐릭터 앵커링 최우선, 프롬프트 순서 재조정.
 # ── 프롬프트 조각 상수 ──
 APPEARANCE_ANCHOR = "MUST keep these features exactly in every panel"
 PLACEMENT_COMMON_SENSE = (
-    "Place characters naturally within the scene: feet on the floor or seated on sofas/chairs. "
-    "NEVER on tables, counters, or floating in air. Respect furniture scale. "
-    "Characters and objects must be correctly scaled relative to background — "
-    "a person should be realistically proportioned to doors, tables, and furniture around them"
+    "Camera at human eye level unless the storyboard says otherwise. "
+    "Use real-world scale anchors: doorways and shop signs are about the character's height; "
+    "car roofs reach the character's waist to chest; tables reach the hip; chairs the knee. "
+    "NEVER shrink the environment to fit the character — instead CROP it: "
+    "show only the lower 1-2 floors of buildings, cut off the tops. "
+    "The character must never be taller than a door, a car, or a single building floor"
+)
+
+SHOT_SCALE_GUIDE = {
+    "long": (
+        "Wide shot: the full scene is visible, characters are small within the environment. "
+        "The surroundings dominate the frame. Buildings, streets, and sky are at real scale"
+    ),
+    "full": (
+        "Full shot: the character's full body occupies roughly 60-75% of the frame height, "
+        "feet visible near the bottom. The surroundings are at street/room level and cropped "
+        "by the frame edges, not miniaturized. Background objects near the character must match her real size"
+    ),
+    "bust": (
+        "Medium shot from the chest up. Background furniture and architecture are at realistic "
+        "human scale and partially cut off by the frame"
+    ),
+    "close_up": (
+        "Close-up of the face/hands; background is a soft, tightly cropped fragment of the environment"
+    ),
+}
+
+LOCATION_REFRAME = (
+    "The location reference shows the place; re-frame it from the character's eye level "
+    "at the described scale — do not paste it as a distant wide vista behind her"
 )
 
 
@@ -97,6 +123,7 @@ def build_cut_prompt(
     # ── 3. 장소·상황 ──
     if location_desc:
         parts.append(f"Setting: {location_desc}")
+        parts.append(LOCATION_REFRAME)
 
     if loc_is_photo:
         parts.append(
@@ -128,14 +155,8 @@ def build_cut_prompt(
     parts.append(f"{style_prompt}. Apply this art style to coloring and rendering only, preserve character facial identity from references")
 
     # ── 5. 샷 타입·강조 ──
-    shot_map = {
-        "long": "wide shot, full scene view",
-        "full": "full body shot",
-        "bust": "bust shot, upper body",
-        "close_up": "close-up shot, face detail",
-    }
     shot = cut_spec.get("shot", "full")
-    parts.append(shot_map.get(shot, "medium shot"))
+    parts.append(SHOT_SCALE_GUIDE.get(shot, SHOT_SCALE_GUIDE["full"]))
 
     emphasis = cut_spec.get("emphasis", "normal")
     if emphasis == "full_bleed":

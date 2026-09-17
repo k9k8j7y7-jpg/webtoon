@@ -77,6 +77,11 @@ function CutImageWithBubbles({ cut, imageUrl, onZoom, products }) {
           말풍선
         </div>
       )}
+      {cut.has_product && (
+        <div className="absolute bottom-1 left-1 bg-amber-500/80 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold pointer-events-none">
+          📦 제품
+        </div>
+      )}
     </div>
   );
 }
@@ -120,7 +125,7 @@ function LightboxImageWithBubbles({ cut, imgSrc, products }) {
   );
 }
 
-export default function Gate5Review({ projectId, episodeId, onRefresh }) {
+export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatus }) {
   const [cuts, setCuts] = useState([]);
   const [job, setJob] = useState(null);
   const [selectedCut, setSelectedCut] = useState(null);
@@ -368,6 +373,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
         shot: cut.shot || 'full',
         action: cut.action || '',
         characterIds: currentCharIds,
+        has_product: cut.has_product || false,
       },
     });
   };
@@ -432,6 +438,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
         shot: form.shot,
         action: form.action,
         characters,
+        has_product: form.has_product,
       });
 
       if (andRegenerate) {
@@ -1002,6 +1009,26 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
                 placeholder="이 컷에서 일어나는 장면을 묘사해주세요"
               />
             </div>
+
+            {/* 제품 등장 토글 (광고 에피소드만) */}
+            {gateStatus?.is_ad && (
+              <div className="flex items-center justify-between mb-4 p-3 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-xl">
+                <div>
+                  <span className="text-xs font-bold text-amber-700 dark:text-amber-400">제품 등장</span>
+                  <p className="text-[10px] text-amber-600/70 dark:text-amber-500/70 mt-0.5">ON: 이미지에 제품 시트 참조 첨부</p>
+                </div>
+                <button
+                  onClick={() => updateStoryboardForm('has_product', !storyboardEdit.form.has_product)}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                    storyboardEdit.form.has_product
+                      ? 'bg-amber-500 text-white'
+                      : 'bg-gray-200 dark:bg-zinc-700 text-gray-500 dark:text-gray-400'
+                  }`}
+                >
+                  {storyboardEdit.form.has_product ? 'ON' : 'OFF'}
+                </button>
+              </div>
+            )}
 
             {/* 콘티 전체 보기 링크 */}
             <a
