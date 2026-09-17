@@ -7,11 +7,12 @@ import { Image, RefreshCw, RotateCcw, Download, Check, AlertTriangle, MessageSqu
 import CutEditor from '../CutEditor';
 import SfxLayer from '../SfxLayer';
 import EffectLayer from '../EffectLayer';
+import ProductLayer from '../ProductLayer';
 import ExportProgressModal from '../ExportProgressModal';
 import { exportAsPNGZip, exportAsVertical, exportAsInstagram, exportAsA4Single, exportAsA4Grid } from '../../utils/exportRenderer';
 
 // ── 그리드 컷 카드: 이미지 + SVG 말풍선 오버레이 ──
-function CutImageWithBubbles({ cut, imageUrl, onZoom }) {
+function CutImageWithBubbles({ cut, imageUrl, onZoom, products }) {
   const containerRef = useRef(null);
   const [dims, setDims] = useState({ w: 0, h: 0 });
 
@@ -33,6 +34,10 @@ function CutImageWithBubbles({ cut, imageUrl, onZoom }) {
         className={`w-full h-full object-cover ${cut.status === 'invalidated' ? 'opacity-50' : ''}`}
         onLoad={handleImageLoad}
       />
+      {/* 제품 오버레이 */}
+      {dims.w > 0 && products?.length > 0 && (
+        <ProductLayer productItems={cut.product_items} products={products} width={dims.w} height={dims.h} />
+      )}
       {/* 배경효과 오버레이 */}
       {dims.w > 0 && (
         <EffectLayer effectItems={cut.effect_items} width={dims.w} height={dims.h} />
@@ -77,7 +82,7 @@ function CutImageWithBubbles({ cut, imageUrl, onZoom }) {
 }
 
 // ── 라이트박스: 이미지 + SVG 말풍선 오버레이 ──
-function LightboxImageWithBubbles({ cut, imgSrc }) {
+function LightboxImageWithBubbles({ cut, imgSrc, products }) {
   const containerRef = useRef(null);
   const [dims, setDims] = useState({ w: 0, h: 0 });
 
@@ -94,6 +99,9 @@ function LightboxImageWithBubbles({ cut, imgSrc }) {
         className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg shadow-2xl"
         onLoad={handleImageLoad}
       />
+      {dims.w > 0 && products?.length > 0 && (
+        <ProductLayer productItems={cut.product_items} products={products} width={dims.w} height={dims.h} />
+      )}
       {dims.w > 0 && (
         <EffectLayer effectItems={cut.effect_items} width={dims.w} height={dims.h} />
       )}
@@ -127,6 +135,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
   const [partialResult, setPartialResult] = useState(null); // { done, total, failed: [cut_id...] }
   const [previewIndex, setPreviewIndex] = useState(null); // 라이트박스 미리보기 인덱스
   const [editCutIndex, setEditCutIndex] = useState(null); // CutEditor 편집 인덱스
+  const [products, setProducts] = useState([]); // 광고 제품 목록
 
   const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
 
@@ -141,7 +150,14 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
     setCuts(data);
   };
 
-  useEffect(() => { loadCuts(); }, []);
+  const loadProducts = async () => {
+    try {
+      const { data } = await api.get(`/projects/${projectId}/episodes/${episodeId}/products`);
+      setProducts(data);
+    } catch { /* 광고 아니면 404 — 무시 */ }
+  };
+
+  useEffect(() => { loadCuts(); loadProducts(); }, []);
 
   // 게이트4 승인 후 자동 이미지 생성
   const autoTriggered = useRef(false);
@@ -226,7 +242,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
 
     const getUrl = (cut) => imageUrl(getCutImageUrl(cut));
     const onProgress = (done) => setExportModal(prev => prev ? { ...prev, done } : prev);
-    const opts = { onProgress, signal: abortCtrl.signal };
+    const opts = { onProgress, signal: abortCtrl.signal, products };
 
     try {
       let blob;
@@ -586,6 +602,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
                   cut={cut}
                   imageUrl={imageUrl(getCutImageUrl(cut))}
                   onZoom={(e) => { e.stopPropagation(); setPreviewIndex(cuts.indexOf(cut)); }}
+                  products={products}
                 />
               ) : (
                 <div className="aspect-square bg-gray-50 dark:bg-zinc-800 flex items-center justify-center">
@@ -705,7 +722,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
 
             {/* 이미지 + 말풍선 SVG 오버레이 */}
             <div className="relative max-h-[90vh] max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
-              <LightboxImageWithBubbles cut={cut} imgSrc={imgSrc} />
+              <LightboxImageWithBubbles cut={cut} imgSrc={imgSrc} products={products} />
             </div>
 
             {/* 하단 정보 */}
@@ -1030,7 +1047,8 @@ export default function Gate5Review({ projectId, episodeId, onRefresh }) {
         const hasNext = editCutIndex < cuts.length - 1 && cuts[editCutIndex + 1]?.image_url;
         return (
           <CutEditor
-            cut={{ ...cut, dialogue: cut.dialogue || [], sfx_items: cut.sfx_items || [], effect_items: cut.effect_items || [] }}
+            cut={{ ...cut, dialogue: cut.dialogue || [], sfx_items: cut.sfx_items || [], effect_items: cut.effect_items || [], product_items: cut.product_items || [] }}
+            products={products}
             imageUrl={imageUrl(getCutImageUrl(cut))}
             characters={cut.characters || []}
             charNameMap={charNameMap}

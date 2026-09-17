@@ -141,6 +141,7 @@ async def list_cuts(
             "dialogue": (c.spec or {}).get("dialogue", []),
             "sfx_items": (c.spec or {}).get("sfx_items", []),
             "effect_items": (c.spec or {}).get("effect_items", []),
+            "product_items": (c.spec or {}).get("product_items", []),
             "emphasis": (c.spec or {}).get("emphasis"),
         }
         for c in cuts
@@ -252,10 +253,41 @@ def _validate_effect_items(items: list[dict]) -> None:
             )
 
 
+def _validate_product_items(items: list[dict]) -> None:
+    """product_items 배열 검증. 위반 시 HTTPException(400)."""
+    for i, item in enumerate(items):
+        pid = item.get("product_id")
+        if pid is None or not isinstance(pid, int):
+            raise HTTPException(
+                status_code=400,
+                detail=f"product_items[{i}]: product_id must be an integer",
+            )
+        for field in ("x", "y", "opacity"):
+            val = item.get(field)
+            if val is not None and not (0 <= float(val) <= 1):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"product_items[{i}].{field}: {val} out of range 0~1",
+                )
+        w_val = item.get("width")
+        if w_val is not None and not (0 < float(w_val) <= 2):
+            raise HTTPException(
+                status_code=400,
+                detail=f"product_items[{i}].width: {w_val} out of range (0,2]",
+            )
+        rotation = item.get("rotation")
+        if rotation is not None and not (0 <= float(rotation) <= 360):
+            raise HTTPException(
+                status_code=400,
+                detail=f"product_items[{i}].rotation: {rotation} out of range 0~360",
+            )
+
+
 class DialogueUpdateRequest(BaseModel):
     dialogue: list[dict]
     sfx_items: list[dict] | None = None  # 효과음 요소 (선택, 없으면 기존 유지)
     effect_items: list[dict] | None = None  # 배경효과 요소 (선택, 없으면 기존 유지)
+    product_items: list[dict] | None = None  # 제품 배치 요소 (선택, 없으면 기존 유지)
 
 
 @router.put("/cuts/{cut_id}/dialogue")
@@ -277,6 +309,9 @@ async def update_cut_dialogue(
     if body.effect_items is not None:
         _validate_effect_items(body.effect_items)
         spec["effect_items"] = body.effect_items
+    if body.product_items is not None:
+        _validate_product_items(body.product_items)
+        spec["product_items"] = body.product_items
     cut.spec = spec
 
     # 원본 이미지 위에 재조판 (말풍선만, 효과음은 프론트엔드 SVG로 렌더링)
@@ -295,6 +330,7 @@ async def update_cut_dialogue(
         "dialogue": body.dialogue,
         "sfx_items": spec.get("sfx_items", []),
         "effect_items": spec.get("effect_items", []),
+        "product_items": spec.get("product_items", []),
     }
 
 

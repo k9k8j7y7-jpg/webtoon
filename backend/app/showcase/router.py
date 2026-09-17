@@ -8,6 +8,7 @@ from app.auth.deps import get_optional_user
 from app.users.models import User
 from app.projects.models import Episode, Project, ShowcaseLike
 from app.storyboard.models import Cut
+from app.products.models import Product
 
 router = APIRouter(prefix="/showcase", tags=["showcase"])
 
@@ -117,11 +118,18 @@ def get_viewer_data(
         .all()
     )
 
+    # 제품 목록 (광고 에피소드용 — 뷰어에서 product_items 렌더에 필요)
+    ep_products = db.query(Product).filter(Product.episode_id == episode.id).all()
+
     return {
         "title": episode.title or project.title,
         "episode_no": episode.episode_no,
         "view_count": episode.view_count,
         "like_count": episode.like_count,
+        "products": [
+            {"id": p.id, "name": p.name, "photo_url": p.photo_url}
+            for p in ep_products if p.photo_url
+        ],
         "cuts": [
             {
                 "cut_number": c.cut_number,
@@ -129,6 +137,7 @@ def get_viewer_data(
                 "dialogue": (c.spec or {}).get("dialogue", []),
                 "sfx_items": (c.spec or {}).get("sfx_items", []),
                 "effect_items": (c.spec or {}).get("effect_items", []),
+                "product_items": (c.spec or {}).get("product_items", []),
                 "characters": (c.spec or {}).get("characters", []),
             }
             for c in cuts

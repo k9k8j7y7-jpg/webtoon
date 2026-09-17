@@ -4,6 +4,7 @@ import axios from 'axios';
 import BubbleOverlay from '../components/BubbleOverlay';
 import SfxLayer from '../components/SfxLayer';
 import EffectLayer from '../components/EffectLayer';
+import ProductLayer from '../components/ProductLayer';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
 
@@ -13,7 +14,7 @@ function resolveUrl(path) {
   return `${API_BASE}${path.startsWith('/') ? '' : '/'}${path}`;
 }
 
-function CutViewer({ cut }) {
+function CutViewer({ cut, products }) {
   const [dims, setDims] = useState({ w: 0, h: 0 });
   const imgRef = useRef(null);
 
@@ -41,6 +42,7 @@ function CutViewer({ cut }) {
       />
       {dims.w > 0 && (
         <>
+          <ProductLayer productItems={cut.product_items || []} products={products || []} width={dims.w} height={dims.h} />
           <EffectLayer effectItems={cut.effect_items || []} width={dims.w} height={dims.h} />
           <BubbleOverlay dialogue={cut.dialogue || []} characters={cut.characters || []} width={dims.w} height={dims.h} />
           <SfxLayer sfxItems={cut.sfx_items || []} width={dims.w} height={dims.h} />
@@ -126,7 +128,7 @@ export default function ViewerPage() {
       {/* 컷 세로 스크롤 */}
       <main className="max-w-2xl mx-auto flex flex-col gap-6 pb-12">
         {data.cuts.map((cut, i) => (
-          <CutViewer key={i} cut={cut} />
+          <CutViewer key={i} cut={cut} products={data.products} />
         ))}
       </main>
 

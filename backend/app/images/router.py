@@ -171,6 +171,11 @@ async def update_dialogue(
         from app.storyboard.router import _validate_effect_items
         _validate_effect_items(effect_items)
         spec["effect_items"] = effect_items
+    product_items = body.get("product_items")
+    if product_items is not None:
+        from app.storyboard.router import _validate_product_items
+        _validate_product_items(product_items)
+        spec["product_items"] = product_items
     cut.spec = spec
 
     # 원본 이미지 위에 재조판 (12종 말풍선 자동 매핑)

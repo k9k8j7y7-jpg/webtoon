@@ -15,12 +15,15 @@ import api from '../api/client';
 import BubbleOverlay, { BUBBLE_CONFIGS, SingleBubble, BubbleMiniIcon, wrapText, computeSingleBubbleGeo, CHAR_WIDTH } from './BubbleOverlay';
 import SfxLayer from './SfxLayer';
 import EffectLayer from './EffectLayer';
+import ProductLayer from './ProductLayer';
 import EFFECT_CATALOG from '../utils/effectCatalog';
 import { resolveBubbleStyle } from '../utils/bubbleMapping';
 import bubbleSpec from '../utils/bubbleSpec.json';
 import { getFontById, getFontsByUsage } from '../utils/fontCatalog';
-import { X, Save, Pencil, Eye, Info, Zap, Sparkles, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, Save, Pencil, Eye, Info, Zap, Sparkles, Trash2, ChevronLeft, ChevronRight, Image as ImageIcon } from 'lucide-react';
 import { computeInitialLayouts } from '../utils/bubbleLayout';
+
+const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
 
 // ── 꼬리 방향 선택지 ──
 const TAIL_DIRS = [
@@ -82,15 +85,18 @@ function sfxHitBox(text, imgW, fontScale) {
 //  메인 컴포넌트
 // ──────────────────────────────────────────────────────────────
 
-export default function CutEditor({ cut, imageUrl, characters = [], charNameMap = {}, onClose, onSave, onPrev, onNext, cutIndex, totalCuts }) {
+export default function CutEditor({ cut, imageUrl, characters = [], charNameMap = {}, products = [], onClose, onSave, onPrev, onNext, cutIndex, totalCuts }) {
   const [mode, setMode] = useState('view');
   const [bubbles, setBubbles] = useState(() => (cut.dialogue || []).map(d => ({ ...d })));
   const [sfxItems, setSfxItems] = useState(() => (cut.sfx_items || []).map(s => ({ ...s })));
   const [effectItems, setEffectItems] = useState(() => (cut.effect_items || []).map(e => ({ ...e })));
+  const [productItems, setProductItems] = useState(() => (cut.product_items || []).map(p => ({ ...p })));
   const [selectedIdx, setSelectedIdx] = useState(null);     // 선택된 말풍선 인덱스
   const [selectedSfxIdx, setSelectedSfxIdx] = useState(null); // 선택된 효과음 인덱스
   const [selectedEffectIdx, setSelectedEffectIdx] = useState(null); // 선택된 배경효과 인덱스
+  const [selectedProductIdx, setSelectedProductIdx] = useState(null); // 선택된 제품 인덱스
   const [showEffectPicker, setShowEffectPicker] = useState(false);
+  const [showProductPicker, setShowProductPicker] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [openPalette, setOpenPalette] = useState(false);
@@ -115,6 +121,9 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
   const effectDragRef   = useRef(null); // 배경효과 드래그
   const effectRotateRef = useRef(null); // 배경효과 회전
   const effectAspects   = useRef({}); // 효과 이미지 종횡비 캐시
+  const productDragRef   = useRef(null); // 제품 드래그
+  const productRotateRef = useRef(null); // 제품 회전
+  const productAspects   = useRef({}); // 제품 이미지 종횡비 캐시
 
   // 컨테이너 실측 → 이미지 표시 크기 계산
   const recalcSize = useCallback(() => {
@@ -167,16 +176,30 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
     });
   }, []);
 
+  // ── 제품 이미지 종횡비 프리로드 ──
+  useEffect(() => {
+    products.forEach(p => {
+      if (!p.photo_url || productAspects.current[p.id]) return;
+      const img = new Image();
+      img.onload = () => { productAspects.current[p.id] = img.naturalHeight / img.naturalWidth; };
+      const url = p.photo_url.startsWith('http') ? p.photo_url : `${API_BASE}${p.photo_url.startsWith('/') ? '' : '/'}${p.photo_url}`;
+      img.src = url;
+    });
+  }, [products]);
+
   // ── 모드 전환 ────────────────────────────────────────────
 
   const enterEditMode = () => {
     setBubbles(computeInitialLayouts(cut.dialogue || []));
     setSfxItems((cut.sfx_items || []).map(s => ({ ...s })));
     setEffectItems((cut.effect_items || []).map(e => ({ ...e })));
+    setProductItems((cut.product_items || []).map(p => ({ ...p })));
     setSelectedIdx(null);
     setSelectedSfxIdx(null);
     setSelectedEffectIdx(null);
+    setSelectedProductIdx(null);
     setShowEffectPicker(false);
+    setShowProductPicker(false);
     setMode('edit');
   };
 
@@ -184,11 +207,14 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
     setBubbles((cut.dialogue || []).map(d => ({ ...d })));
     setSfxItems((cut.sfx_items || []).map(s => ({ ...s })));
     setEffectItems((cut.effect_items || []).map(e => ({ ...e })));
+    setProductItems((cut.product_items || []).map(p => ({ ...p })));
     setSelectedIdx(null);
     setSelectedSfxIdx(null);
     setSelectedEffectIdx(null);
+    setSelectedProductIdx(null);
     setOpenPalette(false);
     setShowEffectPicker(false);
+    setShowProductPicker(false);
     setMode('view');
   };
 
@@ -202,6 +228,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
         dialogue: bubbles,
         sfx_items: sfxItems,
         effect_items: effectItems,
+        product_items: productItems,
       });
       if (onSave) await onSave();
       setMode('view');
@@ -290,6 +317,37 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
   const handleDeleteEffect = (idx) => {
     setEffectItems(prev => prev.filter((_, i) => i !== idx));
     setSelectedEffectIdx(null);
+  };
+
+  // ── 제품 배치 업데이트 ──────────────────────────────────
+
+  const updateProductItem = useCallback((idx, updates) => {
+    setProductItems(prev => prev.map((p, i) => i === idx ? { ...p, ...updates } : p));
+  }, []);
+
+  const handleAddProduct = (productId) => {
+    const product = products.find(p => p.id === productId);
+    if (!product?.photo_url) return;
+    const newItem = {
+      product_id: productId,
+      x: 0.5,
+      y: 0.5,
+      width: 0.3,
+      rotation: 0,
+      opacity: 1,
+    };
+    const newIdx = productItems.length;
+    setProductItems(prev => [...prev, newItem]);
+    setSelectedProductIdx(newIdx);
+    setSelectedIdx(null);
+    setSelectedSfxIdx(null);
+    setSelectedEffectIdx(null);
+    setShowProductPicker(false);
+  };
+
+  const handleDeleteProduct = (idx) => {
+    setProductItems(prev => prev.filter((_, i) => i !== idx));
+    setSelectedProductIdx(null);
   };
 
   const handleDeleteBubble = (idx) => {
@@ -503,16 +561,88 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
     ));
   }, []);
 
+  // ── 제품 드래그 ────────────────────────────────────────────
+
+  const handleProductPointerDown = (e, idx) => {
+    e.stopPropagation();
+    if (e.touches) e.preventDefault();
+    setSelectedProductIdx(idx);
+    setSelectedIdx(null);
+    setSelectedSfxIdx(null);
+    setSelectedEffectIdx(null);
+    setOpenPalette(false);
+    setShowEffectPicker(false);
+    setShowProductPicker(false);
+    dragMoved.current = false;
+
+    const item = productItems[idx];
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    productDragRef.current = {
+      idx,
+      startX: clientX, startY: clientY,
+      origX: item.x ?? 0.5, origY: item.y ?? 0.5,
+    };
+  };
+
+  const applyProductDrag = useCallback((clientX, clientY) => {
+    const pd = productDragRef.current;
+    if (!pd) return;
+    const { w, h } = imgSizeRef.current;
+    if (!w || !h) return;
+    if (Math.hypot(clientX - pd.startX, clientY - pd.startY) < DRAG_THRESHOLD) return;
+    dragMoved.current = true;
+    const dx = (clientX - pd.startX) / w;
+    const dy = (clientY - pd.startY) / h;
+    setProductItems(prev => prev.map((item, i) => i !== pd.idx ? item : {
+      ...item,
+      x: Math.max(0, Math.min(1, pd.origX + dx)),
+      y: Math.max(0, Math.min(1, pd.origY + dy)),
+    }));
+  }, []);
+
+  // ── 제품 회전 ────────────────────────────────────────────
+
+  const handleProductRotateStart = (e, idx) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const item = productItems[idx];
+    const imgRect = imgRef.current?.getBoundingClientRect();
+    if (!imgRect) return;
+    const { w, h } = imgSizeRef.current;
+    const centerX = imgRect.left + (item.x ?? 0.5) * w;
+    const centerY = imgRect.top + (item.y ?? 0.5) * h;
+    const startAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * 180 / Math.PI;
+    productRotateRef.current = {
+      idx, centerX, centerY,
+      startAngle,
+      origRotation: item.rotation || 0,
+    };
+  };
+
+  const applyProductRotate = useCallback((clientX, clientY) => {
+    const pr = productRotateRef.current;
+    if (!pr) return;
+    const angle = Math.atan2(clientY - pr.centerY, clientX - pr.centerX) * 180 / Math.PI;
+    let newRotation = pr.origRotation + (angle - pr.startAngle);
+    newRotation = ((newRotation % 360) + 360) % 360;
+    setProductItems(prev => prev.map((item, i) =>
+      i === pr.idx ? { ...item, rotation: Math.round(newRotation) } : item
+    ));
+  }, []);
+
   // ── window 이벤트 (mousemove/mouseup/touch) ───────────────
 
   const handleMouseMove = useCallback((e) => {
     if (dragRef.current)         applyDrag(e.clientX, e.clientY);
     else if (sfxDragRef.current) applySfxDrag(e.clientX, e.clientY);
     else if (effectDragRef.current) applyEffectDrag(e.clientX, e.clientY);
+    else if (productDragRef.current) applyProductDrag(e.clientX, e.clientY);
     else if (resizeRef.current)  applyResize(e.clientX);
     else if (rotateRef.current)  applyRotate(e.clientX, e.clientY);
     else if (effectRotateRef.current) applyEffectRotate(e.clientX, e.clientY);
-  }, [applyDrag, applySfxDrag, applyEffectDrag, applyResize, applyRotate, applyEffectRotate]);
+    else if (productRotateRef.current) applyProductRotate(e.clientX, e.clientY);
+  }, [applyDrag, applySfxDrag, applyEffectDrag, applyProductDrag, applyResize, applyRotate, applyEffectRotate, applyProductRotate]);
 
   const handleMouseUp = useCallback((e) => {
     // 말풍선 드래그 클릭 판정
@@ -539,10 +669,19 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
     }
     effectDragRef.current = null;
 
+    // 제품 드래그 클릭 판정
+    const pd = productDragRef.current;
+    if (pd) {
+      const dist = Math.hypot((e?.clientX ?? pd.startX) - pd.startX, (e?.clientY ?? pd.startY) - pd.startY);
+      if (dist < DRAG_THRESHOLD) setSelectedProductIdx(pd.idx);
+    }
+    productDragRef.current = null;
+
     resizeRef.current = null;
     rotateRef.current = null;
     effectRotateRef.current = null;
-  }, [setSelectedIdx, setSelectedSfxIdx, setSelectedEffectIdx]);
+    productRotateRef.current = null;
+  }, [setSelectedIdx, setSelectedSfxIdx, setSelectedEffectIdx, setSelectedProductIdx]);
 
   const handleTouchMove = useCallback((e) => {
     if (!e.touches?.length) return;
@@ -551,8 +690,10 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
     if (dragRef.current)            applyDrag(t.clientX, t.clientY);
     else if (sfxDragRef.current)    applySfxDrag(t.clientX, t.clientY);
     else if (effectDragRef.current) applyEffectDrag(t.clientX, t.clientY);
+    else if (productDragRef.current) applyProductDrag(t.clientX, t.clientY);
     else if (effectRotateRef.current) applyEffectRotate(t.clientX, t.clientY);
-  }, [applyDrag, applySfxDrag, applyEffectDrag, applyEffectRotate]);
+    else if (productRotateRef.current) applyProductRotate(t.clientX, t.clientY);
+  }, [applyDrag, applySfxDrag, applyEffectDrag, applyProductDrag, applyEffectRotate, applyProductRotate]);
 
   const handleTouchEnd = useCallback((e) => {
     const t = e.changedTouches?.[0];
@@ -575,10 +716,17 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
     }
     effectDragRef.current = null;
 
+    const pd2 = productDragRef.current;
+    if (pd2 && t) {
+      if (Math.hypot(t.clientX - pd2.startX, t.clientY - pd2.startY) < DRAG_THRESHOLD) setSelectedProductIdx(pd2.idx);
+    }
+    productDragRef.current = null;
+
     resizeRef.current = null;
     rotateRef.current = null;
     effectRotateRef.current = null;
-  }, [setSelectedIdx, setSelectedSfxIdx, setSelectedEffectIdx]);
+    productRotateRef.current = null;
+  }, [setSelectedIdx, setSelectedSfxIdx, setSelectedEffectIdx, setSelectedProductIdx]);
 
   useEffect(() => {
     window.addEventListener('mousemove', handleMouseMove);
@@ -610,6 +758,8 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
   const selectedBubble  = selectedIdx !== null ? bubbles[selectedIdx] : null;
   const selectedSfxItem = selectedSfxIdx !== null ? sfxItems[selectedSfxIdx] : null;
   const selectedEffectItem = selectedEffectIdx !== null ? effectItems[selectedEffectIdx] : null;
+  const selectedProductItem = selectedProductIdx !== null ? productItems[selectedProductIdx] : null;
+  const productMap = Object.fromEntries(products.map(p => [p.id, p]));
   const { w: imgW, h: imgH } = imgSizeState;
 
   // ──────────────────────────────────────────────────────────────
@@ -619,7 +769,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
   return (
     <div
       className="fixed inset-0 z-50 bg-black flex flex-col"
-      onClick={() => { setSelectedIdx(null); setSelectedSfxIdx(null); setSelectedEffectIdx(null); setOpenPalette(false); setShowEffectPicker(false); }}
+      onClick={() => { setSelectedIdx(null); setSelectedSfxIdx(null); setSelectedEffectIdx(null); setSelectedProductIdx(null); setOpenPalette(false); setShowEffectPicker(false); setShowProductPicker(false); }}
     >
       {/* ── 상단 바 ── */}
       <div
@@ -657,6 +807,17 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
           )}
           {mode === 'edit' && (
             <>
+              {/* 제품 배치 버튼 (광고 에피소드 — 제품 있을 때만) */}
+              {products.length > 0 && (
+                <button
+                  onClick={() => setShowProductPicker(p => !p)}
+                  className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold transition-colors shadow-sm ${
+                    showProductPicker ? 'bg-amber-500 text-white' : 'bg-amber-600 hover:bg-amber-700 text-white'
+                  }`}
+                >
+                  <ImageIcon size={12} /> 제품 배치
+                </button>
+              )}
               {/* 배경효과 추가 버튼 */}
               <button
                 onClick={() => setShowEffectPicker(p => !p)}
@@ -717,15 +878,17 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
           {/* 보기 모드: 읽기 전용 오버레이 */}
           {mode === 'view' && imgW > 0 && (
             <>
+              <ProductLayer productItems={productItems} products={products} width={imgW} height={imgH} />
               <EffectLayer effectItems={effectItems} width={imgW} height={imgH} />
               <BubbleOverlay dialogue={bubbles} characters={characters} width={imgW} height={imgH} />
               <SfxLayer sfxItems={sfxItems} width={imgW} height={imgH} />
             </>
           )}
 
-          {/* 편집 모드: 효과 레이어 + 인터랙티브 SVG */}
+          {/* 편집 모드: 제품 + 효과 레이어 + 인터랙티브 SVG */}
           {mode === 'edit' && imgW > 0 && (
             <>
+            <ProductLayer productItems={productItems} products={products} width={imgW} height={imgH} />
             <EffectLayer effectItems={effectItems} width={imgW} height={imgH} />
             <svg
               className="absolute inset-0"
@@ -749,6 +912,63 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                   setShowEffectPicker(false);
                 }}
               />
+
+              {/* ── 제품 히트박스 (이미지는 ProductLayer가 렌더, 여기는 조작 전용) ── */}
+              {productItems.map((item, i) => {
+                const product = productMap[item.product_id];
+                if (!product?.photo_url) return null;
+                const px = (item.x ?? 0.5) * imgW;
+                const py = (item.y ?? 0.5) * imgH;
+                const pW = (item.width ?? 0.3) * imgW;
+                const aspect = productAspects.current[item.product_id] || 1;
+                const pH = pW * aspect;
+                const rotation = item.rotation || 0;
+                const isSelected = selectedProductIdx === i;
+
+                return (
+                  <g key={`prod-${i}`} transform={`translate(${px}, ${py}) rotate(${rotation})`}>
+                    {isSelected && (
+                      <rect x={-pW/2-4} y={-pH/2-4} width={pW+8} height={pH+8}
+                        fill="none" stroke="#f59e0b" strokeWidth={2}
+                        strokeDasharray="6,3" rx={4} style={{ pointerEvents: 'none' }} />
+                    )}
+                    <rect
+                      x={-pW/2} y={-pH/2} width={pW} height={pH}
+                      fill="transparent" style={{ cursor: 'grab', pointerEvents: 'all' }}
+                      onMouseDown={e => handleProductPointerDown(e, i)}
+                      onTouchStart={e => { e.preventDefault(); handleProductPointerDown(e, i); }}
+                      onClick={e => {
+                        e.stopPropagation();
+                        dragMoved.current = false;
+                        setSelectedProductIdx(i);
+                        setSelectedIdx(null);
+                        setSelectedSfxIdx(null);
+                        setSelectedEffectIdx(null);
+                        setShowEffectPicker(false);
+                        setShowProductPicker(false);
+                      }}
+                    />
+                    <text x={-pW/2+2} y={-pH/2-6}
+                      fill={isSelected ? '#f59e0b' : 'rgba(245,158,11,0.45)'}
+                      fontSize={8} fontWeight="bold"
+                      stroke="rgba(0,0,0,0.5)" strokeWidth={0.8} paintOrder="stroke"
+                      style={{ pointerEvents: 'none' }}>
+                      P{i+1}
+                    </text>
+                    {isSelected && (
+                      <g>
+                        <line x1="0" y1={-pH/2-4} x2="0" y2={-pH/2-28}
+                          stroke="#f59e0b" strokeWidth={1.5} style={{ pointerEvents: 'none' }} />
+                        <circle cx="0" cy={-pH/2-32} r={10} fill="#f59e0b" opacity={0.9}
+                          style={{ cursor: 'crosshair', pointerEvents: 'all' }}
+                          onMouseDown={e => handleProductRotateStart(e, i)} />
+                        <text x="0" y={-pH/2-28} textAnchor="middle" dominantBaseline="middle"
+                          fill="white" fontSize={13} style={{ pointerEvents: 'none' }}>↻</text>
+                      </g>
+                    )}
+                  </g>
+                );
+              })}
 
               {/* ── 배경효과 히트박스 (이미지는 EffectLayer가 렌더, 여기는 조작 전용) ── */}
               {effectItems.map((item, i) => {
@@ -1287,7 +1507,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
           )}
 
           {/* 배경효과 선택 패널 */}
-          {!selectedBubble && !selectedSfxItem && selectedEffectItem && (
+          {!selectedBubble && !selectedSfxItem && !selectedProductItem && selectedEffectItem && (
             <div className="px-4 py-3 space-y-2.5">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-cyan-400 flex items-center gap-1">
@@ -1358,7 +1578,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
           )}
 
           {/* 배경효과 피커 */}
-          {showEffectPicker && !selectedBubble && !selectedSfxItem && !selectedEffectItem && (
+          {showEffectPicker && !selectedBubble && !selectedSfxItem && !selectedEffectItem && !selectedProductItem && (
             <div className="px-4 py-3 space-y-2">
               <p className="text-xs font-bold text-cyan-400 flex items-center gap-1">
                 <Sparkles size={12} /> 배경효과 선택
@@ -1388,8 +1608,80 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
             </div>
           )}
 
+          {/* 제품 선택 패널 */}
+          {!selectedBubble && !selectedSfxItem && !selectedEffectItem && selectedProductItem && (
+            <div className="px-4 py-3 space-y-2.5">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-amber-400 flex items-center gap-1">
+                  <ImageIcon size={12} /> {productMap[selectedProductItem.product_id]?.name || '제품'} (P{selectedProductIdx + 1})
+                </span>
+                <button
+                  onClick={() => handleDeleteProduct(selectedProductIdx)}
+                  className="ml-auto flex items-center gap-1 text-xs font-bold text-red-400 hover:text-red-300 transition-colors"
+                >
+                  <Trash2 size={12} /> 삭제
+                </button>
+              </div>
+
+              <div className="flex items-start gap-4 flex-wrap">
+                <div className="shrink-0">
+                  <p className="text-[10px] text-zinc-500 font-bold mb-1">
+                    크기 {Math.round((selectedProductItem.width ?? 0.3) * 100)}%
+                  </p>
+                  <input type="range" min={5} max={100} step={1}
+                    value={Math.round((selectedProductItem.width ?? 0.3) * 100)}
+                    onChange={e => updateProductItem(selectedProductIdx, { width: Number(e.target.value) / 100 })}
+                    className="w-28 accent-amber-500 cursor-pointer" />
+                </div>
+
+                <div className="shrink-0">
+                  <p className="text-[10px] text-zinc-500 font-bold mb-1">
+                    회전 {selectedProductItem.rotation || 0}°
+                  </p>
+                  <input type="range" min={0} max={360} step={1}
+                    value={selectedProductItem.rotation || 0}
+                    onChange={e => updateProductItem(selectedProductIdx, { rotation: Number(e.target.value) })}
+                    className="w-28 accent-amber-500 cursor-pointer" />
+                </div>
+
+                <div className="shrink-0">
+                  <p className="text-[10px] text-zinc-500 font-bold mb-1">
+                    불투명도 {Math.round((selectedProductItem.opacity ?? 1) * 100)}%
+                  </p>
+                  <input type="range" min={10} max={100} step={5}
+                    value={Math.round((selectedProductItem.opacity ?? 1) * 100)}
+                    onChange={e => updateProductItem(selectedProductIdx, { opacity: Number(e.target.value) / 100 })}
+                    className="w-28 accent-amber-500 cursor-pointer" />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 제품 피커 */}
+          {showProductPicker && !selectedBubble && !selectedSfxItem && !selectedEffectItem && !selectedProductItem && (
+            <div className="px-4 py-3 space-y-2">
+              <p className="text-xs font-bold text-amber-400 flex items-center gap-1">
+                <ImageIcon size={12} /> 제품 배치 선택
+              </p>
+              <div className="flex gap-2 flex-wrap">
+                {products.filter(p => p.photo_url).map(p => (
+                  <button key={p.id} onClick={() => handleAddProduct(p.id)}
+                    className="flex flex-col items-center gap-1 p-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-amber-500 rounded-lg transition-colors"
+                  >
+                    <img src={`${API_BASE}${p.photo_url.startsWith('/') ? '' : '/'}${p.photo_url}`} alt={p.name}
+                      className="w-12 h-12 object-cover rounded opacity-80" draggable={false} />
+                    <span className="text-[10px] text-zinc-400 font-bold max-w-[60px] truncate">{p.name}</span>
+                  </button>
+                ))}
+              </div>
+              {products.filter(p => p.photo_url).length === 0 && (
+                <p className="text-[10px] text-zinc-500 font-bold">게이트3에서 제품 사진을 먼저 업로드해주세요</p>
+              )}
+            </div>
+          )}
+
           {/* 아무것도 선택 안 됨 */}
-          {!selectedBubble && !selectedSfxItem && !selectedEffectItem && !showEffectPicker && (
+          {!selectedBubble && !selectedSfxItem && !selectedEffectItem && !selectedProductItem && !showEffectPicker && !showProductPicker && (
             <div className="flex items-center justify-center gap-1.5 py-3 text-xs text-zinc-500 font-bold">
               <Info size={13} />
               말풍선, 효과음, 배경효과를 클릭하면 편집할 수 있습니다

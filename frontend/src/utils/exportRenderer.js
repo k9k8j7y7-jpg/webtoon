@@ -47,7 +47,7 @@ const REF_WIDTH = 400;
 
 // ── 컷 1장 → Canvas (SVG 직렬화 방식) ──
 
-export async function renderCutToCanvas(cut, characters, imageUrl, fontCSS) {
+export async function renderCutToCanvas(cut, characters, imageUrl, fontCSS, products) {
   const img = await loadImage(imageUrl);
   const W = img.naturalWidth;
   const H = img.naturalHeight;
@@ -60,13 +60,16 @@ export async function renderCutToCanvas(cut, characters, imageUrl, fontCSS) {
   // 1. 베이스 이미지
   ctx.drawImage(img, 0, 0, W, H);
 
-  // 2. SVG 오버레이 (효과 + 말풍선 + 효과음) — CutEditor 보기모드와 동일한 배치
-  // 레이어 순서: 이미지 → 효과 → 말풍선 → 효과음
+  // 2. SVG 오버레이 (제품 + 효과 + 말풍선 + 효과음) — CutEditor 보기모드와 동일한 배치
+  // 레이어 순서: 이미지 → 제품 → 효과 → 말풍선 → 효과음
   const dialogue = computeInitialLayouts(cut.dialogue || []);
   const hasBubbles = dialogue.length > 0;
   const hasSfx = cut.sfx_items?.length > 0;
   const effectItems = cut.effect_items || [];
   const hasEffects = effectItems.length > 0;
+  const productItems = cut.product_items || [];
+  const productMap = products ? Object.fromEntries(products.map(p => [p.id, p])) : {};
+  const hasProducts = productItems.length > 0 && products?.length > 0;
 
   // 배경효과 PNG → Base64 변환 (CORS taint 방지)
   const effectBase64Cache = {};
@@ -90,14 +93,58 @@ export async function renderCutToCanvas(cut, characters, imageUrl, fontCSS) {
     }
   }
 
-  if (hasBubbles || hasSfx || hasEffects) {
+  // 제품 사진 → Base64 변환
+  const productBase64Cache = {};
+  if (hasProducts) {
+    const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
+    const uniqueIds = [...new Set(productItems.map(p => p.product_id))];
+    for (const pid of uniqueIds) {
+      const product = productMap[pid];
+      if (!product?.photo_url) continue;
+      const url = product.photo_url.startsWith('http')
+        ? product.photo_url
+        : `${API_BASE}${product.photo_url.startsWith('/') ? '' : '/'}${product.photo_url}`;
+      try {
+        const pImg = await loadImage(url, true);
+        const tmpCanvas = document.createElement('canvas');
+        tmpCanvas.width = pImg.naturalWidth;
+        tmpCanvas.height = pImg.naturalHeight;
+        const tmpCtx = tmpCanvas.getContext('2d');
+        tmpCtx.drawImage(pImg, 0, 0);
+        productBase64Cache[pid] = {
+          dataUrl: tmpCanvas.toDataURL('image/jpeg', 0.9),
+          aspect: pImg.naturalHeight / pImg.naturalWidth,
+        };
+        tmpCanvas.width = 0;
+        tmpCanvas.height = 0;
+      } catch { /* 로드 실패 무시 */ }
+    }
+  }
+
+  if (hasBubbles || hasSfx || hasEffects || hasProducts) {
     // viewBox 참조 크기: 화면 비율 유지, 고정 너비
     const refW = REF_WIDTH;
     const refH = Math.round(refW * H / W);
 
     let innerContent = '';
 
-    // 배경효과 (이미지 바로 위, 말풍선·효과음 아래)
+    // 제품 (이미지 바로 위, 효과·말풍선·효과음 아래)
+    if (hasProducts) {
+      for (const item of productItems) {
+        const cached = productBase64Cache[item.product_id];
+        if (!cached) continue;
+        const pW = (item.width ?? 0.3) * refW;
+        const pH = pW * cached.aspect;
+        const cx = (item.x ?? 0.5) * refW;
+        const cy = (item.y ?? 0.5) * refH;
+        const rotation = item.rotation || 0;
+        const opacity = item.opacity ?? 1;
+        const transforms = [`translate(${cx},${cy})`, `rotate(${rotation})`];
+        innerContent += `<g transform="${transforms.join(' ')}"><image href="${cached.dataUrl}" x="${-pW/2}" y="${-pH/2}" width="${pW}" height="${pH}" opacity="${opacity}"/></g>`;
+      }
+    }
+
+    // 배경효과 (제품 위, 말풍선·효과음 아래)
     if (hasEffects) {
       for (const item of effectItems) {
         const cached = effectBase64Cache[item.effect_id];
@@ -184,6 +231,7 @@ async function processAllCuts(
   getImageUrl,
   onProgress,
   signal,
+  products,
 ) {
   // 사용된 커스텀 폰트 수집 → 폰트 CSS 로드 + 브라우저 폰트 대기
   const usedFontIds = collectUsedFonts(cuts);
@@ -204,6 +252,7 @@ async function processAllCuts(
       characters,
       getImageUrl(cut),
       fontCSS,
+      products,
     );
     const blob = await canvasToBlob(canvas);
     results.push(blob);
@@ -221,7 +270,7 @@ export async function exportAsPNGZip(
   cuts,
   characters,
   getImageUrl,
-  { onProgress, signal } = {},
+  { onProgress, signal, products } = {},
 ) {
   const blobs = await processAllCuts(
     cuts,
@@ -229,6 +278,7 @@ export async function exportAsPNGZip(
     getImageUrl,
     onProgress,
     signal,
+    products,
   );
 
   const zip = new JSZip();
@@ -247,7 +297,7 @@ export async function exportAsVertical(
   cuts,
   characters,
   getImageUrl,
-  { onProgress, signal } = {},
+  { onProgress, signal, products } = {},
 ) {
   const blobs = await processAllCuts(
     cuts,
@@ -255,6 +305,7 @@ export async function exportAsVertical(
     getImageUrl,
     onProgress,
     signal,
+    products,
   );
 
   const imgs = await Promise.all(
@@ -297,7 +348,7 @@ export async function exportAsInstagram(
   cuts,
   characters,
   getImageUrl,
-  { onProgress, signal } = {},
+  { onProgress, signal, products } = {},
 ) {
   const blobs = await processAllCuts(
     cuts,
@@ -305,6 +356,7 @@ export async function exportAsInstagram(
     getImageUrl,
     onProgress,
     signal,
+    products,
   );
 
   const zip = new JSZip();
@@ -355,7 +407,7 @@ export async function exportAsA4Single(
   cut,
   characters,
   getImageUrl,
-  { onProgress, signal } = {},
+  { onProgress, signal, products } = {},
 ) {
   // processAllCuts 재사용 (단일 컷 배열)
   const blobs = await processAllCuts(
@@ -364,6 +416,7 @@ export async function exportAsA4Single(
     getImageUrl,
     onProgress,
     signal,
+    products,
   );
 
   const blob = blobs[0];
@@ -402,7 +455,7 @@ export async function exportAsA4Grid(
   cuts,
   characters,
   getImageUrl,
-  { onProgress, signal } = {},
+  { onProgress, signal, products } = {},
 ) {
   const blobs = await processAllCuts(
     cuts,
@@ -410,6 +463,7 @@ export async function exportAsA4Grid(
     getImageUrl,
     onProgress,
     signal,
+    products,
   );
 
   const validBlobs = [];
