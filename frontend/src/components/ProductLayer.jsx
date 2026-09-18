@@ -28,7 +28,7 @@ export default function ProductLayer({ productItems, products, width, height }) 
       {productItems.map((item, i) => {
         const product = productMap[item.product_id];
         if (!product?.photo_url) return null;
-        const w = (item.width ?? 0.3) * width;
+        const w = (item.width ?? 0.25) * width;
         const rotation = item.rotation || 0;
         const opacity = item.opacity ?? 1;
 

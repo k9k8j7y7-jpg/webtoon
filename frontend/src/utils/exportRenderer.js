@@ -112,7 +112,7 @@ export async function renderCutToCanvas(cut, characters, imageUrl, fontCSS, prod
         const tmpCtx = tmpCanvas.getContext('2d');
         tmpCtx.drawImage(pImg, 0, 0);
         productBase64Cache[pid] = {
-          dataUrl: tmpCanvas.toDataURL('image/jpeg', 0.9),
+          dataUrl: tmpCanvas.toDataURL('image/png'),
           aspect: pImg.naturalHeight / pImg.naturalWidth,
         };
         tmpCanvas.width = 0;

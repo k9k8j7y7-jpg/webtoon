@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import api, { pollJob } from '../../api/client';
 import JobProgress from '../JobProgress';
 import ErrorBoundary from '../ErrorBoundary';
-import { Users, MapPin, Palette, Check, RefreshCw, X, ChevronDown, ChevronUp, AlertTriangle, Edit3, Plus, Trash2, Sparkles, Link, Unlink, Star, Library, Camera, Package, Upload } from 'lucide-react';
+import { Users, MapPin, Palette, Check, RefreshCw, X, ChevronDown, ChevronUp, AlertTriangle, Edit3, Plus, Trash2, Sparkles, Link, Unlink, Star, Library, Camera, Package, Upload, Info } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
 
@@ -700,7 +700,9 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
   const hasCharacters = characters.length > 0;
   const hasLocations = locations.length > 0;
   const hasStyle = !!styles?.preset_key;
-  const canApprove = hasCharacters && hasLocations && hasStyle;
+  const currentGate = gateStatus?.current_gate || 1;
+  const isReadOnly = currentGate > 3;
+  const canApprove = hasCharacters && hasLocations && hasStyle && !isReadOnly;
 
   const StyleButton = ({ preset, selected }) => (
     <button
@@ -721,6 +723,12 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
 
   return (
     <div className="space-y-4">
+      {isReadOnly && (
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl">
+          <Info size={16} className="text-blue-500 flex-shrink-0" />
+          <span className="text-sm font-bold text-blue-600 dark:text-blue-400">읽기 전용 — 자산 수정은 가능합니다</span>
+        </div>
+      )}
       {/* 스타일 (최상단) */}
       <div className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl p-6 backdrop-blur-sm">
         <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2 mb-4">
@@ -1431,6 +1439,10 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
             </button>
           </div>
 
+          <p className="text-xs text-amber-600/70 dark:text-amber-400/60 mb-3 -mt-2">
+            제품 사진은 배경이 투명한 PNG만 가능해요. 컷 위에 자연스럽게 올라가려면 배경이 없어야 합니다.
+          </p>
+
           {/* 제품 추가 폼 */}
           {showProductForm && (
             <div className="mb-4 p-4 border-2 border-amber-200 dark:border-amber-800 rounded-xl bg-amber-50/50 dark:bg-amber-900/10">
@@ -1478,17 +1490,18 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
                         <img
                           src={imageUrl(p.photo_url)}
                           alt="제품 사진"
-                          className="w-20 h-20 object-cover rounded-lg border border-border dark:border-zinc-700 cursor-pointer"
+                          className="w-20 h-20 object-contain rounded-lg border border-border dark:border-zinc-700 cursor-pointer bg-[url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%228%22 height=%228%22><rect width=%224%22 height=%224%22 fill=%22%23ccc%22/><rect x=%224%22 y=%224%22 width=%224%22 height=%224%22 fill=%22%23ccc%22/></svg>')]"
                           onClick={() => setLightbox({ url: imageUrl(p.photo_url), label: `${p.name} 사진` })}
                         />
                       ) : (
-                        <div className="w-20 h-20 border-2 border-dashed border-gray-300 dark:border-zinc-600 rounded-lg flex items-center justify-center">
+                        <div className="w-20 h-20 border-2 border-dashed border-gray-300 dark:border-zinc-600 rounded-lg flex flex-col items-center justify-center gap-0.5">
                           <Camera size={16} className="text-gray-400" />
+                          <span className="text-[8px] text-gray-400 leading-tight text-center px-1">투명 PNG</span>
                         </div>
                       )}
                       <label className="cursor-pointer text-[10px] font-bold text-amber-600 dark:text-amber-400 hover:underline">
                         {uploadingProductPhoto === p.id ? '업로드 중...' : (p.photo_url ? '사진 변경' : '사진 업로드')}
-                        <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files[0] && uploadProductPhoto(p.id, e.target.files[0])} disabled={uploadingProductPhoto === p.id} />
+                        <input type="file" accept="image/png" className="hidden" onChange={(e) => e.target.files[0] && uploadProductPhoto(p.id, e.target.files[0])} disabled={uploadingProductPhoto === p.id} />
                       </label>
                     </div>
 
@@ -1506,13 +1519,16 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
                           <Sparkles size={16} className="text-amber-400" />
                         </div>
                       )}
+                      {p.photo_newer_than_sheet && (
+                        <span className="text-[9px] text-amber-600 dark:text-amber-400">⚠ 사진이 바뀌었어요</span>
+                      )}
                       {p.photo_url && (
                         <button
                           onClick={() => generateProductSheet(p.id)}
                           disabled={generatingSheet === p.id || !hasStyle}
-                          className="text-[10px] font-bold text-amber-600 dark:text-amber-400 hover:underline disabled:opacity-50"
+                          className={`text-[10px] font-bold hover:underline disabled:opacity-50 ${p.photo_newer_than_sheet ? 'text-red-500 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}`}
                         >
-                          {generatingSheet === p.id ? '생성 중...' : (p.sheet_url ? '재생성 (1패킷)' : '시트 생성 (1패킷)')}
+                          {generatingSheet === p.id ? '생성 중...' : (p.photo_newer_than_sheet ? '시트 재생성 (1패킷)' : (p.sheet_url ? '재생성 (1패킷)' : '시트 생성 (1패킷)'))}
                         </button>
                       )}
                     </div>

@@ -332,7 +332,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
       product_id: productId,
       x: 0.5,
       y: 0.5,
-      width: 0.3,
+      width: 0.25,
       rotation: 0,
       opacity: 1,
     };
@@ -919,7 +919,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                 if (!product?.photo_url) return null;
                 const px = (item.x ?? 0.5) * imgW;
                 const py = (item.y ?? 0.5) * imgH;
-                const pW = (item.width ?? 0.3) * imgW;
+                const pW = (item.width ?? 0.25) * imgW;
                 const aspect = productAspects.current[item.product_id] || 1;
                 const pH = pW * aspect;
                 const rotation = item.rotation || 0;

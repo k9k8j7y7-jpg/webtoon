@@ -111,3 +111,87 @@ def validate_and_process(
     buf = io.BytesIO()
     img.save(buf, format="JPEG", quality=JPEG_QUALITY, optimize=True)
     return buf.getvalue(), "image/jpeg"
+
+
+# ── 제품 사진 전용 검증 (투명 PNG 필수) ──
+
+_MIN_TRANSPARENT_RATIO = 0.05  # 투명 픽셀 5% 이상
+
+_PRODUCT_REJECT_MSG = (
+    "배경이 투명한 PNG 파일만 올릴 수 있어요. "
+    "흰 배경 사진은 배경 제거 후 PNG로 저장해서 올려주세요."
+)
+
+
+def validate_product_photo(
+    raw_bytes: bytes,
+    *,
+    original_content_type: str = "",
+    original_filename: str = "",
+) -> tuple[bytes, str]:
+    """제품 사진 전용 검증: 투명 배경 PNG만 허용.
+
+    Returns:
+        (processed_png_bytes, "image/png")
+
+    Raises:
+        ValueError: PNG가 아니거나 투명 픽셀 부족
+    """
+    if len(raw_bytes) > MAX_UPLOAD_BYTES:
+        raise ValueError(f"파일이 {MAX_UPLOAD_BYTES // (1024*1024)}MB를 초과합니다")
+
+    logger.warning(
+        "Product photo upload: content_type=%s, filename=%s, size=%d bytes",
+        original_content_type, original_filename, len(raw_bytes),
+    )
+
+    try:
+        img = Image.open(io.BytesIO(raw_bytes))
+        img.load()
+    except Exception:
+        raise ValueError(_PRODUCT_REJECT_MSG)
+
+    if (img.format or "").upper() != "PNG":
+        raise ValueError(_PRODUCT_REJECT_MSG)
+
+    # 알파 채널 검사
+    if img.mode not in ("RGBA", "LA", "PA"):
+        raise ValueError(_PRODUCT_REJECT_MSG)
+
+    img = img.convert("RGBA")
+    alpha = img.getchannel("A")
+    total_pixels = alpha.size[0] * alpha.size[1]
+    transparent_pixels = sum(1 for p in alpha.getdata() if p < 128)
+    ratio = transparent_pixels / total_pixels if total_pixels > 0 else 0
+
+    if ratio < _MIN_TRANSPARENT_RATIO:
+        raise ValueError(_PRODUCT_REJECT_MSG)
+
+    logger.warning("Product photo transparent ratio: %.1f%%", ratio * 100)
+
+    # EXIF 회전 보정
+    img = ImageOps.exif_transpose(img)
+
+    # 긴 변 리사이즈 (RGBA 유지)
+    w, h = img.size
+    long_edge = max(w, h)
+    if long_edge > MAX_LONG_EDGE:
+        r = MAX_LONG_EDGE / long_edge
+        new_w, new_h = int(w * r), int(h * r)
+        img = img.resize((new_w, new_h), Image.LANCZOS)
+        logger.warning("Product photo resized %dx%d → %dx%d", w, h, new_w, new_h)
+
+    # PNG로 저장 (RGBA 유지)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG", optimize=True)
+    return buf.getvalue(), "image/png"
+
+
+def composite_on_white(png_bytes: bytes) -> bytes:
+    """투명 PNG를 흰 배경에 합성한 JPEG 반환 (시트 생성 참조용)."""
+    img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
+    bg = Image.new("RGB", img.size, (255, 255, 255))
+    bg.paste(img, mask=img.split()[3])
+    buf = io.BytesIO()
+    bg.save(buf, format="JPEG", quality=JPEG_QUALITY, optimize=True)
+    return buf.getvalue()

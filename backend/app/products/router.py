@@ -1,5 +1,8 @@
 """게이트 3 — 제품 자산 엔드포인트 (광고 에피소드용)."""
 
+import os
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -9,7 +12,7 @@ from app.auth.deps import get_current_user
 from app.users.models import User
 from app.projects.models import Project, Episode
 from app.products.models import Product
-from app.storage import upload_image
+from app.storage import upload_image, LOCAL_STORAGE_DIR
 from app.adapters.gemini_image import get_image_adapter
 from app.styles.models import Style, STYLE_PRESETS
 from app.packets.service import require_packets, charge_packets
@@ -46,6 +49,7 @@ async def list_products(
             "photo_url": p.photo_url,
             "sheet_url": p.sheet_url,
             "status": p.status,
+            "photo_newer_than_sheet": _is_photo_newer(p),
         }
         for p in products
     ]
@@ -110,16 +114,16 @@ async def upload_product_photo(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """제품 참고 사진 업로드."""
+    """제품 참고 사진 업로드 (투명 PNG 전용)."""
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    from app.image_util import validate_and_process
+    from app.image_util import validate_product_photo
 
     raw = await file.read()
     try:
-        processed, mime = validate_and_process(
+        processed, mime = validate_product_photo(
             raw,
             original_content_type=file.content_type or "",
             original_filename=file.filename or "",
@@ -130,11 +134,10 @@ async def upload_product_photo(
     url = upload_image(
         image_bytes=processed,
         path_prefix=f"episodes/{product.episode_id}/products/{product.id}",
-        filename="photo.jpg",
+        filename="photo.png",
         mime_type=mime,
     )
     product.photo_url = url
-    product.sheet_url = None  # 새 사진 업로드 시 기존 시트 초기화
     db.commit()
 
     return {"id": product.id, "photo_url": url}
@@ -161,9 +164,13 @@ async def generate_product_sheet(
 
     # 1단계: 사진에서 제품 외형 텍스트 추출 (비전)
     from app.images.service import _load_image_bytes
+    from app.image_util import composite_on_white
     photo_bytes = _load_image_bytes(product.photo_url)
     if not photo_bytes:
         raise HTTPException(status_code=400, detail="제품 사진을 읽을 수 없습니다")
+
+    # 투명 PNG → 흰 배경 합성본을 비전·참조용으로 사용 (원본 미변경)
+    ref_bytes = composite_on_white(photo_bytes)
 
     from google.genai import types
     from app.adapters.gemini import get_client, AI_TOKENS_SHORT
@@ -172,7 +179,7 @@ async def generate_product_sheet(
     vision_response = client.models.generate_content(
         model="gemini-2.5-flash",
         contents=[
-            types.Part.from_bytes(data=photo_bytes, mime_type="image/jpeg"),
+            types.Part.from_bytes(data=ref_bytes, mime_type="image/jpeg"),
             (
                 "Describe this product's visual appearance in English, under 150 words. "
                 "Focus on EXACT SHAPE first: silhouette outline (angular/rounded shoulders, "
@@ -206,7 +213,7 @@ async def generate_product_sheet(
     )
     result = await adapter.generate_image(
         prompt=gen_prompt,
-        reference_images=[photo_bytes],
+        reference_images=[ref_bytes],
         reference_labels=["Product photo — match this exact silhouette and proportions"],
         aspect_ratio="1:1",
     )
@@ -240,6 +247,22 @@ async def generate_product_sheet(
     db.commit()
 
     return {"id": product.id, "sheet_url": url, "status": "approved"}
+
+
+def _is_photo_newer(product: Product) -> bool:
+    """사진이 시트보다 새로운지 mtime 비교. 시트 없으면 False."""
+    if not product.photo_url or not product.sheet_url:
+        return False
+    try:
+        def _local_path(url: str) -> Path:
+            return Path(LOCAL_STORAGE_DIR) / url.replace("/storage/", "")
+        photo_path = _local_path(product.photo_url)
+        sheet_path = _local_path(product.sheet_url)
+        if photo_path.exists() and sheet_path.exists():
+            return photo_path.stat().st_mtime > sheet_path.stat().st_mtime
+    except Exception:
+        pass
+    return False
 
 
 def _get_episode_for_user(db, project_id, episode_id, user_id):
