@@ -86,6 +86,25 @@ def _load_image_bytes(url: str) -> bytes | None:
     return None
 
 
+def _downscale_image(image_bytes: bytes, max_long_side: int = 768) -> bytes:
+    """이미지를 메모리 내에서 긴 변 기준 축소. 원본보다 작으면 그대로 반환."""
+    from io import BytesIO
+    from PIL import Image
+
+    img = Image.open(BytesIO(image_bytes))
+    w, h = img.size
+    long_side = max(w, h)
+    if long_side <= max_long_side:
+        return image_bytes
+    ratio = max_long_side / long_side
+    new_w, new_h = int(w * ratio), int(h * ratio)
+    img = img.resize((new_w, new_h), Image.LANCZOS)
+    buf = BytesIO()
+    fmt = "JPEG" if img.mode == "RGB" else "PNG"
+    img.save(buf, format=fmt, quality=85)
+    return buf.getvalue()
+
+
 def _get_character_references(
     episode_id: int,
     character_ids: list[str],
@@ -231,13 +250,17 @@ async def generate_cut_image(
     char_ids = [c.get("character_id") for c in spec.get("characters", []) if c.get("character_id")]
     ref_images, ref_labels, char_descs = _get_character_references(episode_id, char_ids, db, cut_spec=spec)
 
-    # 2. 장소 레퍼런스 로드
+    # 2. 장소 레퍼런스 로드 (샷 타입에 따라 이미지 첨부 여부 분기)
     location_id = spec.get("location_id")
     loc_ref, loc_desc, loc_is_photo = None, "", False
+    shot_type = spec.get("shot", "full")
+    _TEXT_ONLY_SHOTS = frozenset({"bust", "close_up"})
     if location_id:
         loc_ref, loc_desc, loc_is_photo = _get_location_reference(episode_id, location_id, db)
-        if loc_ref:
+        if loc_ref and shot_type not in _TEXT_ONLY_SHOTS:
+            # long/full(및 미지정) — 썸네일 리사이즈 후 첨부
             if len(ref_images) < MAX_REF_IMAGES:
+                loc_ref = _downscale_image(loc_ref, max_long_side=768)
                 ref_images.append(loc_ref)
                 if loc_is_photo:
                     ref_labels.append(
@@ -245,12 +268,16 @@ async def generate_cut_image(
                         "REDRAW everything in illustration style"
                     )
                 else:
-                    ref_labels.append("Location background reference")
+                    ref_labels.append("Location background reference — style guide only, do NOT reproduce as a separate image")
+                logger.info("Cut %s location_ref: attached(768px) shot=%s", cut.cut_id, shot_type)
             else:
                 logger.warning(
                     "Ref image limit (%d): skipping location '%s'",
                     MAX_REF_IMAGES, location_id,
                 )
+        else:
+            # bust/close_up — 텍스트 설명만, 이미지 미첨부
+            logger.info("Cut %s location_ref: text_only shot=%s", cut.cut_id, shot_type)
 
     # 2.5. 제품 레퍼런스 로드 (광고 에피소드 — has_product 컷만)
     product_desc = ""

@@ -5,7 +5,7 @@ A-2/A-3: 캐릭터 앵커링 최우선, 프롬프트 순서 재조정.
 """
 
 # ── 프롬프트 조각 상수 ──
-APPEARANCE_ANCHOR = "MUST keep these features exactly in every panel"
+APPEARANCE_ANCHOR = "MUST keep these features exactly in every illustration"
 PLACEMENT_COMMON_SENSE = (
     "Camera at human eye level unless the storyboard says otherwise. "
     "Use real-world scale anchors: doorways and shop signs are about the character's height; "
@@ -35,8 +35,11 @@ SHOT_SCALE_GUIDE = {
 }
 
 LOCATION_REFRAME = (
-    "The location reference shows the place; re-frame it from the character's eye level "
-    "at the described scale — do not paste it as a distant wide vista behind her"
+    "The attached location image is a reference for the setting's look only. "
+    "Do NOT reproduce it as a separate image or panel. "
+    "Draw the scene INSIDE this location from the described camera angle. "
+    "Re-frame it from the character's eye level at the described scale — "
+    "do not paste it as a distant wide vista behind her"
 )
 
 
@@ -74,6 +77,13 @@ def build_cut_prompt(
         return cut_spec["prompt_override"]
 
     parts = []
+
+    # ── 0. 단일 일러스트 강제 (패널 분할 방지) ──
+    parts.append(
+        "Output exactly ONE single-panel illustration that fills the entire canvas edge to edge. "
+        "NO panel borders, NO split frames, NO stacked or side-by-side panels, NO collage, "
+        "NO establishing shot above the scene. One continuous moment only"
+    )
 
     # ── 1. 캐릭터 앵커링 지시 (A-2: 최우선) ──
     characters = cut_spec.get("characters", [])
@@ -158,11 +168,20 @@ def build_cut_prompt(
     shot = cut_spec.get("shot", "full")
     parts.append(SHOT_SCALE_GUIDE.get(shot, SHOT_SCALE_GUIDE["full"]))
 
+    # ── 5.5. 다인물 세로 프레임 구도 ──
+    num_chars = len(characters)
+    if num_chars >= 2 and shot in ("bust", "close_up") and aspect_ratio == "9:16":
+        parts.append(
+            "With two or more characters in a tall frame, stage them at different depths "
+            "(one closer to camera, one slightly behind) or slightly overlapping, "
+            "so the composition fits the vertical canvas naturally"
+        )
+
     emphasis = cut_spec.get("emphasis", "normal")
     if emphasis == "full_bleed":
-        parts.append("dramatic full-page illustration, cinematic")
+        parts.append("dramatic full-bleed illustration, cinematic")
     elif emphasis == "large":
-        parts.append("emphasized panel, dramatic moment")
+        parts.append("emphasized dramatic moment")
 
     # ── 6. 프로젝트 규칙 ──
     if project_rules:
@@ -175,9 +194,9 @@ def build_cut_prompt(
 
     # ── 7. 웹툰 기본 지시 ──
     parts.append(PLACEMENT_COMMON_SENSE)
-    format_desc = "vertical scroll format" if aspect_ratio == "9:16" else "square panel format"
+    format_desc = "vertical scroll format" if aspect_ratio == "9:16" else "square format"
     parts.append(
-        f"Webtoon panel illustration, {format_desc}, clean composition. "
+        f"A single illustration, {format_desc}, clean composition. "
         "DO NOT render any text, letters, words, or speech bubbles in the image. "
         "No Korean text, no English text, no signs, no captions. Pure illustration only"
     )
