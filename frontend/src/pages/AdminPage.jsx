@@ -79,6 +79,8 @@ function GalleryTab() {
   const [filterProjectId, setFilterProjectId] = useState('');
   const [loading, setLoading] = useState(true);
   const [copiedId, setCopiedId] = useState(null);
+  const [editingTitleId, setEditingTitleId] = useState(null);
+  const [editingTitleValue, setEditingTitleValue] = useState('');
 
   const fetchEpisodes = useCallback(() => {
     const params = filterProjectId ? { project_id: filterProjectId } : {};
@@ -132,6 +134,28 @@ function GalleryTab() {
     });
   };
 
+  const startEditTitle = (ep) => {
+    setEditingTitleId(ep.id);
+    setEditingTitleValue(ep.title);
+  };
+
+  const saveTitle = async (epId) => {
+    const title = editingTitleValue.trim();
+    if (!title || title.length > 100) {
+      alert(!title ? '제목을 입력하세요' : '제목은 100자 이내로 입력하세요');
+      return;
+    }
+    try {
+      const { data } = await api.post(`/admin/episodes/${epId}/title`, { title });
+      setEpisodes(prev => prev.map(e => e.id === epId ? { ...e, title: data.title } : e));
+      setEditingTitleId(null);
+    } catch (err) {
+      alert('변경 실패: ' + (err.response?.data?.detail || err.message));
+    }
+  };
+
+  const cancelEditTitle = () => setEditingTitleId(null);
+
   if (loading) return <div className="text-gray-400 py-12 text-center">로딩 중...</div>;
 
   return (
@@ -169,9 +193,23 @@ function GalleryTab() {
             {episodes.map(ep => (
               <tr key={ep.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
                 <td className="px-4 py-3 text-gray-500 font-mono text-xs">{ep.id}</td>
-                <td className="px-4 py-3 text-white max-w-[200px] truncate">
-                  {ep.title}
-                  {ep.is_ad && <span className="ml-1.5 px-1.5 py-0.5 text-[10px] rounded bg-amber-500/20 text-amber-400 font-medium">AD</span>}
+                <td className="px-4 py-3 max-w-[200px]">
+                  {editingTitleId === ep.id ? (
+                    <input
+                      autoFocus
+                      value={editingTitleValue}
+                      onChange={e => setEditingTitleValue(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') saveTitle(ep.id); if (e.key === 'Escape') cancelEditTitle(); }}
+                      onBlur={() => saveTitle(ep.id)}
+                      maxLength={100}
+                      className="w-full bg-[#0d0d1a] border border-cyan-500/50 rounded px-2 py-0.5 text-white text-sm focus:outline-none"
+                    />
+                  ) : (
+                    <span onClick={() => startEditTitle(ep)} className="text-white truncate block cursor-pointer hover:text-cyan-300 transition-colors" title="클릭하여 편집">
+                      {ep.title}
+                      {ep.is_ad && <span className="ml-1.5 px-1.5 py-0.5 text-[10px] rounded bg-amber-500/20 text-amber-400 font-medium">AD</span>}
+                    </span>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-gray-400 max-w-[150px] truncate">{ep.project_title}</td>
                 <td className="px-4 py-3"><GateStatusBadges gateStatus={ep.gate_status} /></td>

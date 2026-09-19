@@ -107,9 +107,38 @@ def list_projects_for_filter(
     return [{"id": p.id, "title": p.title} for p in projects]
 
 
+class TitleUpdateRequest(BaseModel):
+    title: str
+
+
 class ShowcaseToggleRequest(BaseModel):
     showcase: bool
     showcase_category: str | None = None
+
+
+@router.post("/episodes/{episode_id}/title")
+def update_episode_title(
+    episode_id: int,
+    req: TitleUpdateRequest,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """관리자용 에피소드 제목 변경."""
+    title = req.title.strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="제목을 입력하세요")
+    if len(title) > 100:
+        raise HTTPException(status_code=400, detail="제목은 100자 이내로 입력하세요")
+
+    episode = db.query(Episode).filter(
+        Episode.id == episode_id, Episode.deleted_at == None
+    ).first()
+    if not episode:
+        raise HTTPException(status_code=404, detail="Episode not found")
+
+    episode.title = title
+    db.commit()
+    return {"id": episode.id, "title": episode.title}
 
 
 @router.post("/episodes/{episode_id}/showcase")
