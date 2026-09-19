@@ -104,7 +104,7 @@ function GalleryTab() {
     try {
       const { data } = await api.post(`/admin/episodes/${ep.id}/showcase`, {
         showcase: newShowcase,
-        showcase_category: newShowcase ? (ep.showcase_category || 'short') : ep.showcase_category,
+        showcase_category: newShowcase ? (ep.showcase_category || null) : ep.showcase_category,
       });
       setEpisodes(prev => prev.map(e => e.id === ep.id ? { ...e, ...data } : e));
     } catch (err) {
@@ -169,7 +169,10 @@ function GalleryTab() {
             {episodes.map(ep => (
               <tr key={ep.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
                 <td className="px-4 py-3 text-gray-500 font-mono text-xs">{ep.id}</td>
-                <td className="px-4 py-3 text-white max-w-[200px] truncate">{ep.title}</td>
+                <td className="px-4 py-3 text-white max-w-[200px] truncate">
+                  {ep.title}
+                  {ep.is_ad && <span className="ml-1.5 px-1.5 py-0.5 text-[10px] rounded bg-amber-500/20 text-amber-400 font-medium">AD</span>}
+                </td>
                 <td className="px-4 py-3 text-gray-400 max-w-[150px] truncate">{ep.project_title}</td>
                 <td className="px-4 py-3"><GateStatusBadges gateStatus={ep.gate_status} /></td>
                 <td className="px-4 py-3 text-center">

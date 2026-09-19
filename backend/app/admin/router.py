@@ -81,6 +81,7 @@ def list_all_episodes(
             "project_id": proj.id,
             "project_title": proj.title,
             "gate_status": ep.gate_status,
+            "is_ad": bool((ep.gate_status or {}).get("is_ad")),
             "showcase": bool(ep.showcase),
             "showcase_category": ep.showcase_category,
             "share_token": ep.share_token,
