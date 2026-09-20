@@ -150,6 +150,7 @@ async def list_cuts(
             "product_items": (c.spec or {}).get("product_items", []),
             "has_product": (c.spec or {}).get("has_product", False),
             "emphasis": (c.spec or {}).get("emphasis"),
+            "prompt_override": bool((c.spec or {}).get("prompt_override")),
         }
         for c in cuts
     ]
@@ -467,6 +468,116 @@ async def rewrite_action(
     return {
         "action": result.get("action", ""),
         "suggested_characters": result.get("suggested_characters", []),
+    }
+
+
+@router.get("/projects/{project_id}/episodes/{episode_id}/cuts/{cut_id}/prompt-preview")
+async def get_prompt_preview(
+    project_id: int,
+    episode_id: int,
+    cut_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """컷의 최종 이미지 프롬프트를 미리보기로 반환 (이미지 생성 없음)."""
+    _get_episode_for_user(db, project_id, episode_id, current_user.id)
+    cut = db.query(Cut).filter(Cut.cut_id == cut_id, Cut.episode_id == episode_id).first()
+    if not cut:
+        raise HTTPException(status_code=404, detail="Cut not found")
+
+    spec = cut.spec or {}
+
+    # 캐릭터 설명 로드
+    char_ids = [c.get("character_id") for c in spec.get("characters", []) if c.get("character_id")]
+    char_descs = {}
+    ref_labels = []
+    for char_id in char_ids:
+        character = (
+            db.query(Character)
+            .join(EpisodeCharacter, EpisodeCharacter.character_id == Character.id)
+            .filter(EpisodeCharacter.episode_id == episode_id, Character.ref_key == char_id)
+            .first()
+        )
+        if character:
+            char_descs[char_id] = {
+                "name": character.name,
+                "appearance_en": character.appearance_en or "",
+            }
+            from app.characters.models import CharacterImage
+            front = db.query(CharacterImage).filter(
+                CharacterImage.character_id == character.id, CharacterImage.type == "front"
+            ).first()
+            if front:
+                ref_labels.append(f"[이미지] {char_id} ({character.name}) — 정면 시트")
+            expr = db.query(CharacterImage).filter(
+                CharacterImage.character_id == character.id, CharacterImage.type == "expressions"
+            ).first()
+            if expr:
+                ref_labels.append(f"[이미지] {char_id} ({character.name}) — 표정 격자")
+
+    # 장소 설명
+    from app.locations.models import Location, LocationImage
+    location_id = spec.get("location_id")
+    loc_desc = ""
+    loc_is_photo = False
+    if location_id:
+        location = db.query(Location).filter(
+            Location.episode_id == episode_id, Location.ref_key == location_id
+        ).first()
+        if location:
+            loc_desc = f"{location.name}. {location.description or ''}"
+            if location.converted_photo_url:
+                ref_labels.append(f"[이미지] 장소 '{location_id}' — 변환본")
+            else:
+                loc_img = db.query(LocationImage).filter(LocationImage.location_id == location.id).first()
+                if loc_img:
+                    ref_labels.append(f"[이미지] 장소 '{location_id}' — AI 생성")
+
+    # 제품
+    product_desc = ""
+    if spec.get("has_product", False):
+        from app.products.models import Product as ProductModel
+        products = db.query(ProductModel).filter(
+            ProductModel.episode_id == episode_id, ProductModel.sheet_url.isnot(None)
+        ).all()
+        for prod in products:
+            features = f" ({prod.features})" if prod.features else ""
+            product_desc += f"Product '{prod.name}'{features} appears in this scene. "
+            ref_labels.append(f"[이미지] 제품 '{prod.name}' — 시트")
+
+    # 스타일
+    from app.styles.models import Style, STYLE_PRESETS
+    style = db.query(Style).filter(Style.episode_id == episode_id).first()
+    style_prompt = style.prompt_snippet if style else STYLE_PRESETS["korean_webtoon"]["prompt"]
+
+    # 프로젝트 규칙
+    from app.projects.models import ProjectMemory
+    episode = db.query(Episode).filter(Episode.id == episode_id).first()
+    project_memory = db.query(ProjectMemory).filter(ProjectMemory.project_id == project_id).first()
+    project_rules = project_memory.rules if project_memory else None
+
+    # 비율
+    from app.workflow.gate import get_aspect_ratio
+    ep_aspect_ratio = get_aspect_ratio(episode.gate_status) if episode else "9:16"
+
+    # 프롬프트 조립
+    from app.prompts.service import build_cut_prompt
+    prompt = build_cut_prompt(
+        cut_spec=spec,
+        character_descs=char_descs,
+        location_desc=loc_desc,
+        style_prompt=style_prompt,
+        project_rules=project_rules,
+        loc_is_photo=loc_is_photo,
+        aspect_ratio=ep_aspect_ratio,
+        product_desc=product_desc,
+    )
+
+    return {
+        "prompt": prompt,
+        "has_override": bool(spec.get("prompt_override")),
+        "reference_images": ref_labels,
+        "aspect_ratio": ep_aspect_ratio,
     }
 
 

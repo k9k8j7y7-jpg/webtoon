@@ -170,7 +170,7 @@ def build_cut_prompt(
 
     # ── 5.5. 다인물 세로 프레임 구도 ──
     num_chars = len(characters)
-    if num_chars >= 2 and shot in ("bust", "close_up") and aspect_ratio == "9:16":
+    if num_chars >= 2 and shot in ("bust", "close_up") and aspect_ratio in ("9:16", "3:4"):
         parts.append(
             "With two or more characters in a tall frame, stage them at different depths "
             "(one closer to camera, one slightly behind) or slightly overlapping, "
@@ -194,7 +194,15 @@ def build_cut_prompt(
 
     # ── 7. 웹툰 기본 지시 ──
     parts.append(PLACEMENT_COMMON_SENSE)
-    format_desc = "vertical scroll format" if aspect_ratio == "9:16" else "square format"
+    if aspect_ratio in ("9:16", "3:4"):
+        format_desc = "vertical portrait format"
+    elif aspect_ratio in ("16:9", "4:3"):
+        format_desc = "horizontal landscape format"
+        parts.append(
+            "Characters occupy 60-80% of the frame HEIGHT, environment extends to the sides"
+        )
+    else:
+        format_desc = "square format"
     parts.append(
         f"A single illustration, {format_desc}, clean composition. "
         "DO NOT render any text, letters, words, or speech bubbles in the image. "

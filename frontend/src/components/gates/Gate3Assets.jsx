@@ -788,31 +788,28 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="text-blue-500"><rect x="2" y="2" width="16" height="16" rx="2" stroke="currentColor" strokeWidth="1.5"/><rect x="6" y="4" width="8" height="12" rx="1" stroke="currentColor" strokeWidth="1.2" strokeDasharray="2 1"/></svg>
           컷 비율
         </h2>
-        <div className="flex gap-3">
-          <button
-            onClick={() => setAspectRatio('1:1')}
-            disabled={aspectRatioLocked || arSaving}
-            className={`flex flex-col items-center gap-2 px-5 py-3 rounded-xl text-sm font-bold border-2 transition-all min-w-[90px]
-              ${aspectRatio === '1:1'
-                ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 text-blue-600 dark:text-blue-400'
-                : 'bg-white dark:bg-zinc-800 border-border dark:border-zinc-700 text-gray-500 dark:text-gray-400'}
-              ${aspectRatioLocked ? 'opacity-60 cursor-not-allowed' : 'hover:border-blue-400 dark:hover:border-blue-500 hover:-translate-y-0.5 cursor-pointer'}`}
-          >
-            <div className="w-10 h-10 border-2 rounded-md border-current" />
-            <span>정사각 1:1</span>
-          </button>
-          <button
-            onClick={() => setAspectRatio('9:16')}
-            disabled={aspectRatioLocked || arSaving}
-            className={`flex flex-col items-center gap-2 px-5 py-3 rounded-xl text-sm font-bold border-2 transition-all min-w-[90px]
-              ${aspectRatio === '9:16'
-                ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 text-blue-600 dark:text-blue-400'
-                : 'bg-white dark:bg-zinc-800 border-border dark:border-zinc-700 text-gray-500 dark:text-gray-400'}
-              ${aspectRatioLocked ? 'opacity-60 cursor-not-allowed' : 'hover:border-blue-400 dark:hover:border-blue-500 hover:-translate-y-0.5 cursor-pointer'}`}
-          >
-            <div className="w-7 h-10 border-2 rounded-md border-current" />
-            <span>세로 9:16</span>
-          </button>
+        <div className="flex gap-3 flex-wrap">
+          {[
+            { value: '1:1', label: '정사각 1:1', w: 'w-10', h: 'h-10' },
+            { value: '9:16', label: '세로 9:16', w: 'w-7', h: 'h-10' },
+            { value: '3:4', label: '세로 3:4', w: 'w-8', h: 'h-10' },
+            { value: '16:9', label: '가로 16:9', w: 'w-10', h: 'h-6' },
+            { value: '4:3', label: '가로 4:3', w: 'w-10', h: 'h-8' },
+          ].map(({ value, label, w, h }) => (
+            <button
+              key={value}
+              onClick={() => setAspectRatio(value)}
+              disabled={aspectRatioLocked || arSaving}
+              className={`flex flex-col items-center gap-2 px-4 py-3 rounded-xl text-sm font-bold border-2 transition-all min-w-[80px]
+                ${aspectRatio === value
+                  ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 text-blue-600 dark:text-blue-400'
+                  : 'bg-white dark:bg-zinc-800 border-border dark:border-zinc-700 text-gray-500 dark:text-gray-400'}
+                ${aspectRatioLocked ? 'opacity-60 cursor-not-allowed' : 'hover:border-blue-400 dark:hover:border-blue-500 hover:-translate-y-0.5 cursor-pointer'}`}
+            >
+              <div className={`${w} ${h} border-2 rounded-md border-current`} />
+              <span className="text-xs">{label}</span>
+            </button>
+          ))}
         </div>
         {!aspectRatioLocked && (
           <p className="text-xs font-bold text-amber-600 dark:text-amber-400 mt-3 flex items-center gap-1">
@@ -823,7 +820,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
         {aspectRatioLocked && (
           <p className="text-xs font-bold text-gray-500 dark:text-gray-400 mt-3 flex items-center gap-1">
             <Check size={12} />
-            {aspectRatio === '1:1' ? '정사각 1:1' : '세로 9:16'} 비율 잠금됨
+            {aspectRatio} 비율 잠금됨
           </p>
         )}
       </div>

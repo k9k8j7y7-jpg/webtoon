@@ -164,12 +164,13 @@ def export_instagram_carousel(episode_id: int, db: Session) -> dict:
             if not img:
                 continue
 
+            # letterbox: 비율 유지 + 흰 배경 (center-crop 대신)
             w, h = img.size
-            side = min(w, h)
-            left = (w - side) // 2
-            top  = (h - side) // 2
-            cropped = img.crop((left, top, left + side, top + side))
-            resized = cropped.resize(CAROUSEL_SIZE, Image.LANCZOS)
+            scale = min(1080 / w, 1080 / h)
+            new_w, new_h = int(w * scale), int(h * scale)
+            resized_img = img.resize((new_w, new_h), Image.LANCZOS)
+            resized = Image.new("RGB", CAROUSEL_SIZE, (255, 255, 255))
+            resized.paste(resized_img, ((1080 - new_w) // 2, (1080 - new_h) // 2))
 
             img_buffer = BytesIO()
             resized.save(img_buffer, format="JPEG", quality=95)

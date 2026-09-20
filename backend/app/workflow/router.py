@@ -69,7 +69,10 @@ async def approve_assets(
 
 
 class AspectRatioRequest(BaseModel):
-    aspect_ratio: str  # "1:1" | "9:16"
+    aspect_ratio: str  # "1:1" | "9:16" | "16:9" | "3:4" | "4:3"
+
+
+ALLOWED_ASPECT_RATIOS = ("1:1", "9:16", "16:9", "3:4", "4:3")
 
 
 @router.post("/projects/{project_id}/episodes/{episode_id}/aspect-ratio")
@@ -81,8 +84,8 @@ async def set_aspect_ratio(
     current_user: User = Depends(get_current_user),
 ):
     """에피소드 컷 비율 설정. 잠금 후 변경 불가."""
-    if body.aspect_ratio not in ("1:1", "9:16"):
-        raise HTTPException(status_code=400, detail="aspect_ratio must be '1:1' or '9:16'")
+    if body.aspect_ratio not in ALLOWED_ASPECT_RATIOS:
+        raise HTTPException(status_code=400, detail=f"aspect_ratio must be one of {ALLOWED_ASPECT_RATIOS}")
 
     episode = _get_episode_for_user(db, project_id, episode_id, current_user.id)
 
