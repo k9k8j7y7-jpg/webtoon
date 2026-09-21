@@ -40,6 +40,8 @@ export default function ProjectPage() {
   const [modalStoryOptions, setModalStoryOptions] = useState(null);
   const [modalChips, setModalChips] = useState([]);
   const [isAdMode, setIsAdMode] = useState(false);
+  const [modalProductName, setModalProductName] = useState('');
+  const [modalProductFeatures, setModalProductFeatures] = useState('');
 
   // 연작 모달
   const [showSeriesModal, setShowSeriesModal] = useState(false);
@@ -69,6 +71,8 @@ export default function ProjectPage() {
     setModalStoryOptions(chip ? { genre: chip.genre, mood: chip.mood, development: chip.development } : null);
     setModalChips(pickRandomChips(3));
     setIsAdMode(adMode);
+    setModalProductName('');
+    setModalProductFeatures('');
     setShowModal(true);
   };
 
@@ -81,11 +85,11 @@ export default function ProjectPage() {
         title: modalTitle.trim(),
         idea: modalIdea || '',
         is_ad: isAdMode,
+        product_name: isAdMode ? modalProductName.trim() : '',
+        product_features: isAdMode ? modalProductFeatures.trim() : '',
       });
       setShowModal(false);
-      navigate(`/projects/${projectId}/episodes/${data.id}/workflow`, {
-        state: { idea: modalIdea || '', storyOptions: modalStoryOptions },
-      });
+      navigate(`/projects/${projectId}/episodes/${data.id}/workflow`);
     } catch (e) {
       alert('에피소드 생성에 실패했습니다.');
       setCreating(false);
@@ -373,11 +377,11 @@ export default function ProjectPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">아이디어 <span className="text-gray-400 font-normal">(선택)</span></label>
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">이야기</label>
                 <textarea
                   value={modalIdea}
                   onChange={(e) => setModalIdea(e.target.value)}
-                  placeholder={isAdMode ? "제품/브랜드와 어떤 스토리를 만들고 싶으신가요?" : "어떤 이야기를 만들고 싶으신가요?"}
+                  placeholder={isAdMode ? "제품/브랜드와 어떤 스토리를 만들고 싶으신가요? 대략 적어도 돼요. AI가 기획서로 정리해 드려요" : "어떤 이야기를 만들고 싶으신가요? 대략 적어도 돼요. AI가 기획서로 정리해 드려요"}
                   rows={3}
                   className="w-full px-4 py-2.5 border-2 border-border dark:border-zinc-700 rounded-xl bg-white dark:bg-zinc-800 text-ink-black dark:text-white placeholder-gray-400 focus:border-comic-orange focus:outline-none transition-colors font-bold resize-none"
                 />
@@ -403,6 +407,32 @@ export default function ProjectPage() {
                   </div>
                 </div>
               </div>
+
+              {/* 광고: 제품 정보 */}
+              {isAdMode && (
+                <div className="space-y-3 p-3 bg-amber-50/50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-xl">
+                  <div>
+                    <label className="block text-xs font-bold text-amber-700 dark:text-amber-400 mb-1">제품명</label>
+                    <input
+                      type="text"
+                      value={modalProductName}
+                      onChange={(e) => setModalProductName(e.target.value)}
+                      placeholder="예: 쿨링 헤어팩"
+                      className="w-full px-3 py-2 border-2 border-amber-200 dark:border-amber-700 rounded-lg bg-white dark:bg-zinc-800 text-sm font-bold text-ink-black dark:text-white placeholder-gray-400 focus:border-amber-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-amber-700 dark:text-amber-400 mb-1">제품 특징 <span className="font-normal text-amber-500">(선택)</span></label>
+                    <textarea
+                      value={modalProductFeatures}
+                      onChange={(e) => setModalProductFeatures(e.target.value)}
+                      placeholder="예: 유기농 녹차 성분, 쿨링 효과, 민트색 패키지"
+                      rows={2}
+                      className="w-full px-3 py-2 border-2 border-amber-200 dark:border-amber-700 rounded-lg bg-white dark:bg-zinc-800 text-sm font-bold text-ink-black dark:text-white placeholder-gray-400 focus:border-amber-500 focus:outline-none resize-none"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex gap-3 mt-6">

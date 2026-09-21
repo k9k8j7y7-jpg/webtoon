@@ -8,9 +8,9 @@ from app.database import get_db
 from app.auth.deps import get_current_user
 from app.users.models import User
 from app.projects.models import Project, Episode
-from app.story.service import generate_planning, suggest_characters
+from app.story.service import generate_planning, suggest_characters, generate_idea_brief, revise_idea_brief
 from app.story.prompt_fragments import build_story_options_prompt
-from app.workflow.gate import approve_gate, get_gate_number
+from app.workflow.gate import approve_gate, get_gate_number, get_idea_brief, set_idea_brief, is_ad_episode
 
 router = APIRouter(tags=["gate1-planning"])
 
@@ -41,6 +41,101 @@ class SuggestCharactersRequest(BaseModel):
 
 class ApproveRequest(BaseModel):
     auto_advance: bool = False
+
+
+class IdeaBriefRequest(BaseModel):
+    raw: str | None = None
+    hint: str | None = None
+
+
+class IdeaBriefUpdate(BaseModel):
+    summary: str | None = None
+    characters: list[dict] | None = None
+    story: dict | None = None
+    tone: str | None = None
+    raw: str | None = None
+
+
+# ── idea-brief 엔드포인트 ──────────────────────────
+
+@router.get("/projects/{project_id}/episodes/{episode_id}/idea-brief")
+async def get_idea_brief_endpoint(
+    project_id: int,
+    episode_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    episode = _get_episode_for_user(db, project_id, episode_id, current_user.id)
+    return get_idea_brief(episode.gate_status)
+
+
+@router.post("/projects/{project_id}/episodes/{episode_id}/idea-brief")
+async def create_idea_brief(
+    project_id: int,
+    episode_id: int,
+    body: IdeaBriefRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """아이디어 원문 → LLM → idea_brief 생성. hint가 있으면 재정리."""
+    episode = _get_episode_for_user(db, project_id, episode_id, current_user.id)
+    gs = episode.gate_status or {}
+
+    existing = get_idea_brief(gs)
+
+    if body.hint and existing:
+        # 재정리: 기존 brief + hint
+        result = await revise_idea_brief(existing, body.hint)
+        # raw 교체 여부: hint만이면 raw 유지
+        result["raw"] = existing.get("raw", "")
+    else:
+        # 신규 생성
+        raw = body.raw or (existing.get("raw", "") if existing else "")
+        if not raw:
+            raise HTTPException(status_code=400, detail="아이디어 텍스트(raw)가 필요합니다.")
+
+        is_ad = is_ad_episode(gs)
+        product = (existing or {}).get("product", {})
+        result = await generate_idea_brief(
+            raw=raw,
+            is_ad=is_ad,
+            product_name=product.get("name", ""),
+            product_features=product.get("features", ""),
+        )
+        result["raw"] = raw
+
+    # product 정보 유지 (idea_brief.product는 모달에서 생성 시 설정)
+    if existing and "product" in existing:
+        result["product"] = existing["product"]
+
+    episode.gate_status = set_idea_brief(gs, result)
+    db.commit()
+    db.refresh(episode)
+
+    return result
+
+
+@router.put("/projects/{project_id}/episodes/{episode_id}/idea-brief")
+async def update_idea_brief(
+    project_id: int,
+    episode_id: int,
+    body: IdeaBriefUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """사용자가 직접 수정한 idea_brief 필드를 저장한다."""
+    episode = _get_episode_for_user(db, project_id, episode_id, current_user.id)
+    gs = episode.gate_status or {}
+    existing = get_idea_brief(gs) or {}
+
+    update = body.model_dump(exclude_unset=True)
+    merged = {**existing, **update}
+
+    episode.gate_status = set_idea_brief(gs, merged)
+    db.commit()
+    db.refresh(episode)
+
+    return merged
 
 
 @router.get("/projects/{project_id}/episodes/{episode_id}/planning")

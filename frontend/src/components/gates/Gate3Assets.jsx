@@ -65,6 +65,13 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
     try {
       const { data } = await api.get(`/projects/${projectId}/episodes/${episodeId}/products`);
       setProducts(data);
+      // idea_brief.product 미리채움: 제품이 0개이고 idea_brief에 제품 정보가 있으면
+      if (data.length === 0 && gateStatus?.idea_brief?.product?.name) {
+        const p = gateStatus.idea_brief.product;
+        setProductName(p.name || '');
+        setProductFeatures(p.features || '');
+        setShowProductForm(true);
+      }
     } catch { /* ignore */ }
   };
 

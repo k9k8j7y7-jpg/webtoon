@@ -113,7 +113,12 @@ def create_episode(
         project_id=project_id,
         episode_no=body.episode_no,
         title=body.title,
-        gate_status=create_initial_gate_status(is_ad=body.is_ad),
+        gate_status=create_initial_gate_status(
+            is_ad=body.is_ad,
+            idea=body.idea,
+            product_name=body.product_name,
+            product_features=body.product_features,
+        ),
     )
     db.add(episode)
     db.commit()

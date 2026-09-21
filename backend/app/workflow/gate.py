@@ -1,9 +1,14 @@
 """게이트 상태 관리 — Backend-State-Model v1.0 기준"""
 
 
-def create_initial_gate_status(is_ad: bool = False) -> dict:
+def create_initial_gate_status(
+    is_ad: bool = False,
+    idea: str = "",
+    product_name: str = "",
+    product_features: str = "",
+) -> dict:
     """에피소드 생성 시 초기 gate_status JSON을 반환한다."""
-    return {
+    gs = {
         "current_gate": 1,
         "auto_advance": False,
         "is_ad": is_ad,
@@ -17,6 +22,16 @@ def create_initial_gate_status(is_ad: bool = False) -> dict:
             "5_review": {"status": "locked", "approved_at": None},
         },
     }
+    # idea_brief: 아이디어 정리 데이터 (Gate1 진입 시 LLM이 채움)
+    if idea:
+        brief: dict = {"raw": idea}
+        if is_ad and product_name:
+            brief["product"] = {
+                "name": product_name,
+                "features": product_features or "",
+            }
+        gs["idea_brief"] = brief
+    return gs
 
 
 GATE_KEYS = [
@@ -78,6 +93,18 @@ def get_gate_number(gate_status: dict) -> int:
 def is_ad_episode(gate_status: dict) -> bool:
     """광고 에피소드 여부."""
     return gate_status.get("is_ad", False)
+
+
+def get_idea_brief(gate_status: dict) -> dict | None:
+    """idea_brief 객체를 반환한다. 없으면 None (기존 에피소드 호환)."""
+    return gate_status.get("idea_brief")
+
+
+def set_idea_brief(gate_status: dict, idea_brief: dict) -> dict:
+    """idea_brief를 업데이트한 새 gate_status를 반환한다."""
+    gs = {**gate_status}
+    gs["idea_brief"] = idea_brief
+    return gs
 
 
 def get_aspect_ratio(gate_status: dict) -> str:

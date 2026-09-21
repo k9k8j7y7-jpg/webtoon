@@ -1,7 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import api from '../../api/client';
-import { Lightbulb, Check, RefreshCw, Pencil, Save, Plus, Trash2, Sparkles, UserPlus } from 'lucide-react';
-import { pickRandomChips } from '../../constants/ideaChips';
+import { Lightbulb, Check, RefreshCw, Pencil, Save, Plus, Trash2, Sparkles, UserPlus, ChevronDown, ChevronUp, Send } from 'lucide-react';
 
 // --- 3축 옵션 정의 ---
 const GENRE_OPTIONS = [
@@ -31,8 +30,15 @@ const DEVELOPMENT_OPTIONS = [
   { key: 'cliffhanger', label: '클리프행어', desc: '다음 화가 궁금해지는 끝맺음' },
 ];
 
-export default function Gate1Planning({ projectId, episodeId, onRefresh, initialIdea = '', initialStoryOptions = null, readOnly = false, derivedFromSeries = false }) {
-  const [idea, setIdea] = useState(initialIdea);
+export default function Gate1Planning({ projectId, episodeId, onRefresh, gateStatus, readOnly = false, derivedFromSeries = false }) {
+  // idea_brief 상태
+  const [ideaBrief, setIdeaBrief] = useState(null);
+  const [briefLoading, setBriefLoading] = useState(false);
+  const [rawExpanded, setRawExpanded] = useState(false);
+  const [rawEdit, setRawEdit] = useState('');
+  const [reviseHint, setReviseHint] = useState('');
+  const [revising, setRevising] = useState(false);
+
   const [characters, setCharacters] = useState([]);
   const [planning, setPlanning] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -44,55 +50,162 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, initial
   const [editData, setEditData] = useState(null);
   const [error, setError] = useState('');
 
-  // 3축 선택 상태 (initialStoryOptions 또는 저장된 값으로 초기화)
-  const [genre, setGenre] = useState(initialStoryOptions?.genre || null);
-  const [mood, setMood] = useState(initialStoryOptions?.mood || null);
-  const [development, setDevelopment] = useState(initialStoryOptions?.development || null);
+  // 3축 선택 상태
+  const [genre, setGenre] = useState(null);
+  const [mood, setMood] = useState(null);
+  const [development, setDevelopment] = useState(null);
+  // user_touched: 사용자가 장르/분위기/전개를 직접 바꿨는지
+  const [userTouched, setUserTouched] = useState(false);
 
-  // 랜덤 칩 3개 (컴포넌트 마운트마다 로테이션)
-  const visibleChips = useMemo(() => pickRandomChips(3), []);
+  const saveTimer = useRef(null);
+
+  // idea_brief를 gate_status에서 초기화
+  useEffect(() => {
+    const brief = gateStatus?.idea_brief || null;
+    setIdeaBrief(brief);
+    if (brief) {
+      setRawEdit(brief.raw || '');
+    }
+  }, [gateStatus?.idea_brief]);
 
   useEffect(() => {
-    api.get(`/projects/${projectId}/episodes/${episodeId}/planning`)
-      .then(({ data }) => {
+    const loadData = async () => {
+      try {
+        const { data } = await api.get(`/projects/${projectId}/episodes/${episodeId}/planning`);
         if (data) {
           setPlanning(data);
-          // 저장된 story_options 복원
           if (data.story_options) {
             setGenre(data.story_options.genre || null);
             setMood(data.story_options.mood || null);
             setDevelopment(data.story_options.development || null);
+            setUserTouched(true); // 이전에 저장된 값이면 touched
           }
         }
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      } catch {}
+      setLoading(false);
+    };
+    loadData();
   }, [projectId, episodeId]);
 
-  const handleChipClick = (chip) => {
-    setIdea(chip.text);
-    // 칩-버튼 연동
-    setGenre(chip.genre);
-    setMood(chip.mood);
-    setDevelopment(chip.development);
-    // 입력칸 포커스 + 전체선택
-    setTimeout(() => {
-      const ta = document.getElementById('idea-textarea');
-      if (ta) { ta.focus(); ta.select(); }
-    }, 0);
+  // idea_brief 없고 raw가 있으면 자동 생성 트리거
+  useEffect(() => {
+    const brief = gateStatus?.idea_brief;
+    if (brief && brief.raw && !brief.summary && !briefLoading && !loading && !readOnly) {
+      triggerIdeaBrief();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, gateStatus?.idea_brief]);
+
+  const triggerIdeaBrief = async (raw = null) => {
+    setBriefLoading(true);
+    setError('');
+    try {
+      const { data } = await api.post(`/projects/${projectId}/episodes/${episodeId}/idea-brief`, {
+        raw: raw || undefined,
+      });
+      setIdeaBrief(data);
+      setRawEdit(data.raw || '');
+      // suggested로 장르/분위기/전개 미리 선택 (userTouched 안 되었을 때만)
+      if (data.suggested && !userTouched) {
+        setGenre(data.suggested.genre || null);
+        setMood(data.suggested.mood || null);
+        setDevelopment(data.suggested.development || null);
+      }
+      // characters 미리 채움 (비어있을 때만)
+      if (data.characters?.length > 0 && characters.length === 0) {
+        setCharacters(data.characters.map(c => ({ name: c.name, description: c.description || '', gender: '남', age: '' })));
+      }
+    } catch (err) {
+      setError(err.response?.data?.detail || '아이디어 정리에 실패했습니다.');
+    } finally {
+      setBriefLoading(false);
+    }
+  };
+
+  const handleRevise = async () => {
+    if (!reviseHint.trim()) return;
+    setRevising(true);
+    setError('');
+    try {
+      const { data } = await api.post(`/projects/${projectId}/episodes/${episodeId}/idea-brief`, {
+        hint: reviseHint.trim(),
+      });
+      setIdeaBrief(data);
+      setReviseHint('');
+      // suggested 반영 (userTouched가 아닐 때만)
+      if (data.suggested && !userTouched) {
+        setGenre(data.suggested.genre || null);
+        setMood(data.suggested.mood || null);
+        setDevelopment(data.suggested.development || null);
+      }
+      if (data.characters?.length > 0 && characters.length === 0) {
+        setCharacters(data.characters.map(c => ({ name: c.name, description: c.description || '', gender: '남', age: '' })));
+      }
+    } catch (err) {
+      setError(err.response?.data?.detail || '재정리에 실패했습니다.');
+    } finally {
+      setRevising(false);
+    }
+  };
+
+  // blur 시 idea_brief 필드 저장
+  const saveBriefField = (field, value) => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(async () => {
+      try {
+        await api.put(`/projects/${projectId}/episodes/${episodeId}/idea-brief`, {
+          [field]: value,
+        });
+      } catch {}
+    }, 500);
+  };
+
+  const updateBriefField = (field, value) => {
+    setIdeaBrief(prev => ({ ...prev, [field]: value }));
+  };
+
+  const updateBriefStory = (key, value) => {
+    setIdeaBrief(prev => ({
+      ...prev,
+      story: { ...(prev?.story || {}), [key]: value },
+    }));
+  };
+
+  const addBriefCharacter = () => {
+    setIdeaBrief(prev => ({
+      ...prev,
+      characters: [...(prev?.characters || []), { name: '', description: '' }],
+    }));
+  };
+
+  const updateBriefCharacter = (index, field, value) => {
+    setIdeaBrief(prev => {
+      const chars = [...(prev?.characters || [])];
+      chars[index] = { ...chars[index], [field]: value };
+      return { ...prev, characters: chars };
+    });
+  };
+
+  const removeBriefCharacter = (index) => {
+    setIdeaBrief(prev => ({
+      ...prev,
+      characters: (prev?.characters || []).filter((_, i) => i !== index),
+    }));
   };
 
   const toggleOption = (current, setter, key) => {
     setter(current === key ? null : key);
+    setUserTouched(true);
   };
 
   const handleSuggestCharacters = async () => {
-    if (!idea.trim()) return;
+    const ideaText = ideaBrief?.raw || '';
+    if (!ideaText.trim()) return;
     setSuggesting(true);
     setError('');
     try {
       const { data } = await api.post(`/projects/${projectId}/episodes/${episodeId}/planning/suggest-characters`, {
-        idea: idea.trim(),
+        idea: ideaText.trim(),
       });
       setCharacters(data.characters || []);
     } catch (err) {
@@ -117,7 +230,23 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, initial
   };
 
   const handleGenerate = async () => {
-    if (!idea.trim()) return;
+    // idea: idea_brief가 있으면 기승전결을 조합, 없으면 raw
+    let ideaText = '';
+    if (ideaBrief?.story) {
+      const s = ideaBrief.story;
+      const parts = [];
+      if (ideaBrief.summary) parts.push(`한 줄 소개: ${ideaBrief.summary}`);
+      if (s.ki) parts.push(`[도입] ${s.ki}`);
+      if (s.seung) parts.push(`[전개] ${s.seung}`);
+      if (s.jeon) parts.push(`[전환] ${s.jeon}`);
+      if (s.gyeol) parts.push(`[결말] ${s.gyeol}`);
+      if (ideaBrief.tone) parts.push(`톤: ${ideaBrief.tone}`);
+      ideaText = parts.join('\n');
+    } else {
+      ideaText = ideaBrief?.raw || '';
+    }
+    if (!ideaText.trim()) return;
+
     setGenerating(true);
     setError('');
     try {
@@ -126,7 +255,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, initial
         ? { genre, mood, development }
         : undefined;
       const { data } = await api.post(`/projects/${projectId}/episodes/${episodeId}/planning`, {
-        idea: idea.trim(),
+        idea: ideaText.trim(),
         characters: validChars.length > 0 ? validChars : undefined,
         story_options: storyOptions,
       });
@@ -155,6 +284,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, initial
   // 연작 파생 기획: Gate 1은 항상 읽기 전용
   const isSeriesDerived = derivedFromSeries && planning?.derived_from_series;
 
+  // ── 읽기 전용 뷰 ──
   if (readOnly || isSeriesDerived) {
     return (
       <div className="space-y-4">
@@ -166,6 +296,77 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, initial
             </span>
           </div>
         )}
+
+        {/* 아이디어 정리 읽기 전용 */}
+        {ideaBrief?.summary && (
+          <div className="bg-gray-50 dark:bg-zinc-800/50 border-2 border-border dark:border-zinc-700 rounded-2xl p-5">
+            <h2 className="text-sm font-bold text-gray-500 dark:text-gray-400 flex items-center gap-2 mb-3">
+              <Sparkles size={16} className="text-comic-orange" /> 아이디어 정리
+            </h2>
+
+            {ideaBrief.raw && (
+              <div className="mb-3">
+                <span className="text-xs font-bold text-gray-400 dark:text-zinc-500">원문</span>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5 whitespace-pre-wrap">{ideaBrief.raw}</p>
+              </div>
+            )}
+            <div className="mb-2">
+              <span className="text-xs font-bold text-gray-400 dark:text-zinc-500">한 줄 소개</span>
+              <p className="text-sm font-bold text-gray-700 dark:text-gray-300 mt-0.5">{ideaBrief.summary}</p>
+            </div>
+            {ideaBrief.characters?.length > 0 && (
+              <div className="mb-2">
+                <span className="text-xs font-bold text-gray-400 dark:text-zinc-500">등장 캐릭터</span>
+                <div className="mt-0.5 space-y-0.5">
+                  {ideaBrief.characters.map((c, i) => (
+                    <div key={i} className="text-sm text-gray-600 dark:text-gray-400">
+                      <strong>{c.name}</strong> — {c.description}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {ideaBrief.story && (
+              <div className="mb-2 grid grid-cols-2 gap-2">
+                {[['ki', '도입'], ['seung', '전개'], ['jeon', '전환'], ['gyeol', '결말']].map(([k, label]) => (
+                  <div key={k}>
+                    <span className="text-xs font-bold text-gray-400 dark:text-zinc-500">{label}</span>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">{ideaBrief.story[k]}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            {ideaBrief.tone && (
+              <div>
+                <span className="text-xs font-bold text-gray-400 dark:text-zinc-500">톤</span>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">{ideaBrief.tone}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 장르/분위기/전개 칩 (읽기 전용) */}
+        {planning?.story_options && (
+          <div className="flex flex-wrap gap-1.5 px-1">
+            {planning.story_options.genre && (
+              <span className="px-3 py-1 text-xs font-bold rounded-full border-2 border-comic-orange bg-comic-orange/10 text-comic-orange">
+                {GENRE_OPTIONS.find(o => o.key === planning.story_options.genre)?.label || planning.story_options.genre}
+              </span>
+            )}
+            {planning.story_options.mood && (
+              <span className="px-3 py-1 text-xs font-bold rounded-full border-2 border-comic-blue bg-comic-blue/10 text-comic-blue">
+                {MOOD_OPTIONS.find(o => o.key === planning.story_options.mood)?.label || planning.story_options.mood}
+              </span>
+            )}
+            {planning.story_options.development && (
+              <span className="px-3 py-1 text-xs font-bold rounded-full border-2 border-green-500 bg-green-500/10 text-green-600">
+                {DEVELOPMENT_OPTIONS.find(o => o.key === planning.story_options.development)?.label || planning.story_options.development}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* 기획 결과 읽기 전용 */}
         <div className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl p-6 backdrop-blur-sm">
           <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2 mb-4">
             <Lightbulb size={20} className="text-amber-500" />
@@ -209,8 +410,169 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, initial
     );
   }
 
+  // ── 편집 모드 ──
   return (
     <div className="space-y-4">
+
+      {/* 아이디어 정리 카드 */}
+      <div className="bg-white dark:bg-surface-dark border-2 border-comic-orange/30 dark:border-comic-orange/20 rounded-2xl p-5 backdrop-blur-sm">
+        <h2 className="text-base font-bold font-serif text-ink-black dark:text-white flex items-center gap-2 mb-3">
+          <Sparkles size={18} className="text-comic-orange" />
+          아이디어 정리
+        </h2>
+
+        {/* 원문 접이식 */}
+        {ideaBrief?.raw && (
+          <div className="mb-3">
+            <button
+              onClick={() => setRawExpanded(!rawExpanded)}
+              className="flex items-center gap-1 text-xs font-bold text-gray-500 dark:text-gray-400 hover:text-comic-orange transition-colors"
+            >
+              {rawExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              원문 보기
+            </button>
+            {rawExpanded && (
+              <div className="mt-2">
+                <textarea
+                  value={rawEdit}
+                  onChange={(e) => setRawEdit(e.target.value)}
+                  className="w-full px-3 py-2 border-2 border-border dark:border-zinc-700 bg-transparent rounded-xl text-sm font-bold text-gray-700 dark:text-gray-300 focus:outline-none focus:border-comic-orange resize-none"
+                  rows={3}
+                />
+                <button
+                  onClick={() => triggerIdeaBrief(rawEdit.trim())}
+                  disabled={briefLoading || !rawEdit.trim()}
+                  className="mt-1 flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-comic-orange hover:bg-comic-orange/10 border border-comic-orange/30 rounded-full transition-all disabled:opacity-50"
+                >
+                  <RefreshCw size={12} className={briefLoading ? 'animate-spin' : ''} /> 다시 정리
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 로딩 */}
+        {briefLoading && (
+          <div className="flex items-center gap-2 py-6 justify-center text-comic-orange">
+            <RefreshCw size={16} className="animate-spin" />
+            <span className="text-sm font-bold">이야기를 정리하고 있어요</span>
+          </div>
+        )}
+
+        {/* idea_brief 내용 5칸 */}
+        {ideaBrief?.summary && !briefLoading && (
+          <div className="space-y-3">
+            {/* 한 줄 소개 */}
+            <div>
+              <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">한 줄 소개</label>
+              <input
+                type="text"
+                value={ideaBrief.summary}
+                onChange={(e) => updateBriefField('summary', e.target.value)}
+                onBlur={() => saveBriefField('summary', ideaBrief.summary)}
+                className="w-full px-3 py-2 border-2 border-border dark:border-zinc-700 bg-transparent rounded-xl text-sm font-bold text-ink-black dark:text-white focus:outline-none focus:border-comic-orange"
+              />
+            </div>
+
+            {/* 등장 캐릭터 */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400">등장 캐릭터</label>
+                <button
+                  onClick={addBriefCharacter}
+                  className="text-xs font-bold text-comic-orange hover:underline flex items-center gap-0.5"
+                >
+                  <Plus size={12} /> 추가
+                </button>
+              </div>
+              {ideaBrief.characters?.map((c, i) => (
+                <div key={i} className="flex items-center gap-2 mb-1.5">
+                  <input
+                    value={c.name}
+                    onChange={(e) => updateBriefCharacter(i, 'name', e.target.value)}
+                    onBlur={() => saveBriefField('characters', ideaBrief.characters)}
+                    placeholder="이름"
+                    className="w-24 min-w-0 px-2 py-1.5 border-2 border-border dark:border-zinc-700 bg-transparent rounded-lg text-sm font-bold text-ink-black dark:text-white focus:outline-none focus:border-comic-orange"
+                  />
+                  <input
+                    value={c.description || ''}
+                    onChange={(e) => updateBriefCharacter(i, 'description', e.target.value)}
+                    onBlur={() => saveBriefField('characters', ideaBrief.characters)}
+                    placeholder="특징"
+                    className="flex-1 min-w-0 px-2 py-1.5 border-2 border-border dark:border-zinc-700 bg-transparent rounded-lg text-sm font-bold text-ink-black dark:text-white focus:outline-none focus:border-comic-orange"
+                  />
+                  <button
+                    onClick={() => { removeBriefCharacter(i); saveBriefField('characters', ideaBrief.characters.filter((_, j) => j !== i)); }}
+                    className="p-1 text-gray-300 hover:text-red-500 dark:text-zinc-600 dark:hover:text-red-400 transition-colors"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* 이야기 기승전결 */}
+            <div>
+              <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">이야기</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {[['ki', '도입'], ['seung', '전개'], ['jeon', '전환'], ['gyeol', '결말']].map(([key, label]) => (
+                  <div key={key}>
+                    <span className="text-[11px] font-bold text-gray-400 dark:text-zinc-500">{label}</span>
+                    <textarea
+                      value={ideaBrief.story?.[key] || ''}
+                      onChange={(e) => updateBriefStory(key, e.target.value)}
+                      onBlur={() => saveBriefField('story', ideaBrief.story)}
+                      className="w-full px-2 py-1.5 border-2 border-border dark:border-zinc-700 bg-transparent rounded-lg text-sm font-bold text-gray-700 dark:text-gray-300 focus:outline-none focus:border-comic-orange resize-none"
+                      rows={2}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 톤 */}
+            <div>
+              <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">톤</label>
+              <input
+                type="text"
+                value={ideaBrief.tone || ''}
+                onChange={(e) => updateBriefField('tone', e.target.value)}
+                onBlur={() => saveBriefField('tone', ideaBrief.tone)}
+                className="w-full px-3 py-2 border-2 border-border dark:border-zinc-700 bg-transparent rounded-xl text-sm font-bold text-ink-black dark:text-white focus:outline-none focus:border-comic-orange"
+              />
+            </div>
+
+            {/* "이렇게 바꿔줘" 재정리 */}
+            <div className="flex items-center gap-2 pt-1">
+              <input
+                type="text"
+                value={reviseHint}
+                onChange={(e) => setReviseHint(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleRevise()}
+                placeholder="이렇게 바꿔줘 (예: 결말을 해피엔딩으로)"
+                className="flex-1 px-3 py-2 border-2 border-border dark:border-zinc-700 bg-transparent rounded-full text-sm font-bold text-ink-black dark:text-white focus:outline-none focus:border-comic-orange placeholder-gray-400"
+              />
+              <button
+                onClick={handleRevise}
+                disabled={revising || !reviseHint.trim()}
+                className="flex items-center gap-1 px-4 py-2 text-xs font-bold text-white bg-comic-orange rounded-full hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50"
+              >
+                {revising ? <RefreshCw size={12} className="animate-spin" /> : <Send size={12} />}
+                {revising ? '정리 중...' : '다시 정리'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* idea_brief가 아직 없고 raw도 없을 때 (기존 에피소드 호환) */}
+        {!ideaBrief?.raw && !briefLoading && (
+          <p className="text-sm text-gray-400 dark:text-zinc-500 py-2">
+            이 에피소드는 아이디어 정리 없이 생성되었습니다. 아래에서 직접 기획을 생성하세요.
+          </p>
+        )}
+      </div>
+
+      {/* 기존 게이트1 설정 (장르/분위기/전개/등장인물/기획 생성) */}
       <div className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl p-6 backdrop-blur-sm">
         <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2 mb-4">
           <Lightbulb size={20} className="text-amber-500" />
@@ -218,38 +580,6 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, initial
         </h2>
 
         <div className="space-y-5">
-          {/* 아이디어 입력 */}
-          <div>
-            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">웹툰 아이디어</label>
-            <textarea
-              id="idea-textarea"
-              value={idea}
-              onChange={(e) => setIdea(e.target.value)}
-              placeholder="예: 평범한 고등학생이 시간을 되돌릴 수 있는 회중시계를 발견하고, 시간여행 능력을 얻게 되는 이야기"
-              className="w-full px-4 py-2 border-2 border-border dark:border-zinc-700 bg-transparent rounded-xl text-ink-black dark:text-white focus:outline-none focus:border-comic-orange focus:ring-4 focus:ring-comic-orange/20 transition-all font-bold text-sm resize-none"
-              rows={3}
-            />
-            {/* 예시 칩 */}
-            <div className="mt-3">
-              <div className="flex items-baseline gap-1.5 mb-1.5">
-                <span className="text-xs font-bold text-gray-600 dark:text-gray-400">아이디어 예시</span>
-                <span className="text-[11px] text-gray-400 dark:text-zinc-500">눌러서 채운 뒤 자유롭게 수정하세요</span>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                {visibleChips.map((chip, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => handleChipClick(chip)}
-                    className="px-3 py-1.5 text-xs font-bold text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-zinc-800 border border-border dark:border-zinc-700 rounded-xl hover:border-comic-orange hover:text-comic-orange hover:bg-comic-orange/5 transition-all text-left whitespace-normal"
-                  >
-                    💡 {chip.text}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
           {/* 3축 선택 */}
           <div className="space-y-3">
             {/* 장르 */}
@@ -328,7 +658,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, initial
               <div className="flex gap-2">
                 <button
                   onClick={handleSuggestCharacters}
-                  disabled={suggesting || !idea.trim()}
+                  disabled={suggesting || !(ideaBrief?.raw || '').trim()}
                   className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-comic-blue hover:text-white border-2 border-comic-blue/30 hover:bg-comic-blue rounded-full transition-all disabled:opacity-50"
                 >
                   {suggesting ? (
@@ -402,7 +732,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, initial
           {/* 기획 생성 버튼 */}
           <button
             onClick={handleGenerate}
-            disabled={generating || !idea.trim()}
+            disabled={generating || (!(ideaBrief?.raw || '').trim() && !(ideaBrief?.story?.ki || '').trim())}
             className="flex items-center gap-1.5 px-5 py-2.5 bg-ink-black text-white dark:bg-white dark:text-ink-black rounded-full text-sm font-bold hover:bg-comic-blue dark:hover:bg-comic-orange hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50"
           >
             {generating ? <><RefreshCw size={14} className="animate-spin" /> 생성 중...</> : '기획 생성'}

@@ -35,9 +35,11 @@ class ProjectResponse(BaseModel):
 class EpisodeCreate(BaseModel):
     episode_no: int
     title: str | None = None
-    idea: str
+    idea: str = ""
     mood: str | None = None
     is_ad: bool = False
+    product_name: str = ""
+    product_features: str = ""
 
 
 class EpisodeResponse(BaseModel):

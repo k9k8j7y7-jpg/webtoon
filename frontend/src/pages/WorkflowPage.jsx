@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import api, { pollJob } from '../api/client';
 import GateProgress from '../components/GateProgress';
 import JobProgress from '../components/JobProgress';
@@ -13,9 +13,6 @@ import { ArrowLeft, Eye, RotateCcw, AlertTriangle, X } from 'lucide-react';
 export default function WorkflowPage() {
   const { projectId, episodeId } = useParams();
   const navigate = useNavigate();
-  const location = useLocation();
-  const initialIdea = location.state?.idea || '';
-  const initialStoryOptions = location.state?.storyOptions || null;
   const [gateStatus, setGateStatus] = useState(null);
   const [job, setJob] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -181,8 +178,6 @@ export default function WorkflowPage() {
         gateStatus={gateStatus}
         onRefresh={loadStatus}
         runJob={runJob}
-        initialIdea={displayGate === 1 && !viewingGate ? initialIdea : ''}
-        initialStoryOptions={displayGate === 1 && !viewingGate ? initialStoryOptions : null}
         readOnly={isViewingPrevious}
         derivedFromSeries={!!gateStatus?.series_id}
       />

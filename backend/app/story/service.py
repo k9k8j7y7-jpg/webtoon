@@ -4,8 +4,12 @@ API-Spec 3장, PRD 3.1 참조.
 """
 
 import json
+from datetime import datetime, timezone
 
 from app.adapters.gemini import generate_text, AI_TOKENS_SHORT
+from app.story.prompt_fragments import (
+    GENRE_FRAGMENTS, MOOD_FRAGMENTS, DEVELOPMENT_FRAGMENTS,
+)
 
 SYSTEM_INSTRUCTION = """너는 웹툰 스토리 기획 전문가야.
 사용자의 아이디어를 받아서 웹툰 기획안을 만들어줘.
@@ -112,3 +116,143 @@ async def generate_planning(idea: str, options_prompt: str | None = None, charac
     )
 
     return _parse_json(raw)
+
+
+# ── idea-brief (아이디어 정리) ──────────────────────────
+
+# 장르·분위기·전개 선택지 키 목록 (suggested 값은 이 중에서만)
+_GENRE_KEYS = list(GENRE_FRAGMENTS.keys())
+_MOOD_KEYS = list(MOOD_FRAGMENTS.keys())
+_DEV_KEYS = list(DEVELOPMENT_FRAGMENTS.keys())
+
+IDEA_BRIEF_INSTRUCTION = f"""너는 웹툰 기획 어시스턴트야.
+사용자가 쓴 아이디어(raw)를 읽고, 구조화된 기획 메모를 만들어줘.
+반드시 아래 JSON 형식으로만 응답해. 다른 텍스트는 절대 넣지 마.
+
+{{
+  "summary": "한 줄 소개 (1문장)",
+  "characters": [
+    {{"name": "이름", "description": "짧은 특징 한 줄"}}
+  ],
+  "story": {{
+    "ki": "도입: 1~3문장",
+    "seung": "전개: 1~3문장",
+    "jeon": "전환/클라이맥스: 1~3문장",
+    "gyeol": "결말: 1~3문장"
+  }},
+  "tone": "톤 한 줄",
+  "suggested": {{
+    "genre": "장르 키 하나",
+    "mood": "분위기 키 하나",
+    "development": "전개 키 하나"
+  }}
+}}
+
+규칙:
+- characters는 2~5명. 동물이면 종·색·특징을 description에 포함
+- story는 단편 완결 구조 — 예고식 결말 금지, 기승전결 각 1~3문장
+- suggested의 genre는 반드시 {_GENRE_KEYS} 중 하나
+- suggested의 mood는 반드시 {_MOOD_KEYS} 중 하나
+- suggested의 development는 반드시 {_DEV_KEYS} 중 하나
+- 사용자가 이미 구조화해서 썼으면(제목/기승전결 등) 그 구조를 존중해서 정리만
+- 한국어로 출력"""
+
+IDEA_BRIEF_AD_ADDON = """
+추가 규칙 (광고 에피소드):
+- 이 에피소드는 광고 웹툰이다.
+- 아래 제품 정보를 참고해서, story 안에 제품이 자연스럽게 쓰이는 장면을 반드시 포함해.
+- 노골적 광고 문구 금지. 등장인물이 제품을 자연스럽게 사용하는 장면으로.
+"""
+
+IDEA_BRIEF_REVISE_INSTRUCTION = f"""너는 웹툰 기획 어시스턴트야.
+사용자가 기존 기획 메모를 보고 수정 요청(hint)을 했다. 기존 메모를 기반으로 수정해줘.
+반드시 아래 JSON 형식으로만 응답해. 다른 텍스트는 절대 넣지 마.
+
+{{
+  "summary": "한 줄 소개 (1문장)",
+  "characters": [
+    {{"name": "이름", "description": "짧은 특징 한 줄"}}
+  ],
+  "story": {{
+    "ki": "도입: 1~3문장",
+    "seung": "전개: 1~3문장",
+    "jeon": "전환/클라이맥스: 1~3문장",
+    "gyeol": "결말: 1~3문장"
+  }},
+  "tone": "톤 한 줄",
+  "suggested": {{
+    "genre": "장르 키 하나",
+    "mood": "분위기 키 하나",
+    "development": "전개 키 하나"
+  }}
+}}
+
+규칙:
+- 사용자의 수정 요청을 정확히 반영
+- 수정 요청에 언급되지 않은 부분은 기존 값 유지
+- suggested의 genre는 반드시 {_GENRE_KEYS} 중 하나
+- suggested의 mood는 반드시 {_MOOD_KEYS} 중 하나
+- suggested의 development는 반드시 {_DEV_KEYS} 중 하나
+- 한국어로 출력"""
+
+
+async def generate_idea_brief(
+    raw: str,
+    is_ad: bool = False,
+    product_name: str = "",
+    product_features: str = "",
+) -> dict:
+    """아이디어 원문(raw)으로부터 구조화된 idea_brief를 생성한다."""
+    prompt = f"아이디어:\n{raw}"
+
+    system = IDEA_BRIEF_INSTRUCTION
+    if is_ad:
+        system += IDEA_BRIEF_AD_ADDON
+        if product_name:
+            prompt += f"\n\n제품 정보:\n- 제품명: {product_name}"
+            if product_features:
+                prompt += f"\n- 특징: {product_features}"
+
+    text = await generate_text(
+        prompt=prompt,
+        system_instruction=system,
+        temperature=0.8,
+        max_output_tokens=AI_TOKENS_SHORT,
+    )
+    result = _parse_json(text)
+
+    # 필수 키 보정
+    result.setdefault("summary", "")
+    result.setdefault("characters", [])
+    result.setdefault("story", {"ki": "", "seung": "", "jeon": "", "gyeol": ""})
+    result.setdefault("tone", "")
+    result.setdefault("suggested", {})
+    result["generated_at"] = datetime.now(timezone.utc).isoformat()
+
+    return result
+
+
+async def revise_idea_brief(existing_brief: dict, hint: str) -> dict:
+    """기존 idea_brief를 사용자 힌트로 재정리한다."""
+    prompt = f"""## 기존 기획 메모
+{json.dumps(existing_brief, ensure_ascii=False, indent=2)}
+
+## 사용자 수정 요청
+{hint}"""
+
+    text = await generate_text(
+        prompt=prompt,
+        system_instruction=IDEA_BRIEF_REVISE_INSTRUCTION,
+        temperature=0.7,
+        max_output_tokens=AI_TOKENS_SHORT,
+    )
+    result = _parse_json(text)
+
+    result.setdefault("summary", "")
+    result.setdefault("characters", [])
+    result.setdefault("story", {"ki": "", "seung": "", "jeon": "", "gyeol": ""})
+    result.setdefault("tone", "")
+    result.setdefault("suggested", existing_brief.get("suggested", {}))
+    result["generated_at"] = datetime.now(timezone.utc).isoformat()
+
+    return result
