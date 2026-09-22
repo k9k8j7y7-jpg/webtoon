@@ -199,13 +199,27 @@ async def create_planning(
         so = {"genre": None, "mood": body.mood, "development": None}
     options_prompt = build_story_options_prompt(so)
 
-    result = await generate_planning(body.idea, options_prompt, chars)
+    # idea_brief를 planning에 전달
+    gs = episode.gate_status or {}
+    idea_brief = get_idea_brief(gs)
 
-    # 에피소드에 기획 결과 저장 (사용자가 입력한 제목이 있으면 유지)
-    if not episode.title:
-        episode.title = result.get("title")
+    result = await generate_planning(body.idea, options_prompt, chars, idea_brief=idea_brief)
+
+    # 제목: 사용자가 모달에서 쓴 제목이 있으면 유지, AI 추천 제목은 suggested_title로 별도 저장
+    ai_title = result.get("title", "")
+    if episode.title:
+        # 사용자 제목 유지, AI 추천은 별도 보관
+        result["suggested_title"] = ai_title
+        result["title"] = episode.title
+    else:
+        episode.title = ai_title
+
     episode.logline = result.get("logline")
-    episode.synopsis = result.get("synopsis")
+
+    # synopsis: 4단 dict면 합친 문자열로 저장, synopsis_parts는 planning에 보관
+    synopsis_text = result.get("synopsis", "")
+    episode.synopsis = synopsis_text
+
     # world와 characters는 script JSON에 임시 저장 (3단계에서 script로 확장)
     episode.script = {
         "planning": result,

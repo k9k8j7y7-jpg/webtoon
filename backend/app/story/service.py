@@ -16,9 +16,14 @@ SYSTEM_INSTRUCTION = """너는 웹툰 스토리 기획 전문가야.
 반드시 아래 JSON 형식으로만 응답해. 다른 텍스트는 절대 넣지 마.
 
 {
-  "title": "웹툰 제목",
+  "title": "웹툰 제목 (AI 추천 — 사용자 제목과 다를 수 있음)",
   "logline": "한 줄 요약 (1~2문장)",
-  "synopsis": "시놉시스 (3~5문단, 전체 줄거리)",
+  "synopsis": {
+    "ki": "도입 (1~3문장)",
+    "seung": "전개 (1~3문장)",
+    "jeon": "전환/클라이맥스 (1~3문장)",
+    "gyeol": "결말 (1~3문장)"
+  },
   "world": "세계관 설명 (배경, 시대, 특수 규칙 등)",
   "characters": [
     {
@@ -35,7 +40,8 @@ SYSTEM_INSTRUCTION = """너는 웹툰 스토리 기획 전문가야.
 - 아이디어에 동물이 등장하면 반드시 등장인물(characters)에 포함할 것
 - 동물의 description에는 품종/종을 적을 것 (아이디어에 명시되어 있으면 그대로)
 - 동물의 나이는 해당 동물 기준의 자연스러운 나이로
-- 사람의 description에는 외형·역할을 한 줄로"""
+- 사람의 description에는 외형·역할을 한 줄로
+- synopsis는 반드시 4단 dict 형식(ki/seung/jeon/gyeol)으로 출력"""
 
 SUGGEST_CHARACTERS_INSTRUCTION = """너는 웹툰 캐릭터 기획 전문가야.
 사용자의 아이디어를 바탕으로 어울리는 등장인물을 제안해줘.
@@ -88,9 +94,56 @@ async def suggest_characters(idea: str) -> list[dict]:
     return result.get("characters", [])
 
 
-async def generate_planning(idea: str, options_prompt: str | None = None, characters: list[dict] | None = None) -> dict:
-    """아이디어로부터 기획안을 생성한다."""
+async def generate_planning(
+    idea: str,
+    options_prompt: str | None = None,
+    characters: list[dict] | None = None,
+    idea_brief: dict | None = None,
+) -> dict:
+    """아이디어로부터 기획안을 생성한다.
+
+    idea_brief가 있으면 기획서(아이디어 정리)의 인물·사건·결말을
+    프롬프트에 주입하여 AI가 이를 충실히 따르도록 한다.
+    """
     prompt = f"아이디어: {idea}"
+
+    # idea_brief 전체 주입
+    if idea_brief:
+        prompt += "\n\n## 기획서 (아이디어 정리) — 아래 내용을 충실히 따를 것"
+        if idea_brief.get("summary"):
+            prompt += f"\n한 줄 소개: {idea_brief['summary']}"
+        if idea_brief.get("characters"):
+            prompt += "\n기획서 등장인물:"
+            for bc in idea_brief["characters"]:
+                parts = [bc.get("name", "")]
+                if bc.get("description"):
+                    parts.append(bc["description"])
+                if bc.get("gender"):
+                    parts.append(f"성별: {bc['gender']}")
+                if bc.get("age"):
+                    parts.append(f"나이: {bc['age']}")
+                prompt += f"\n- {', '.join(p for p in parts if p)}"
+        if idea_brief.get("story"):
+            s = idea_brief["story"]
+            prompt += "\n기획서 줄거리:"
+            if s.get("ki"):
+                prompt += f"\n  [도입] {s['ki']}"
+            if s.get("seung"):
+                prompt += f"\n  [전개] {s['seung']}"
+            if s.get("jeon"):
+                prompt += f"\n  [전환] {s['jeon']}"
+            if s.get("gyeol"):
+                prompt += f"\n  [결말] {s['gyeol']}"
+        if idea_brief.get("tone"):
+            prompt += f"\n톤: {idea_brief['tone']}"
+        if idea_brief.get("product"):
+            p = idea_brief["product"]
+            if p.get("name"):
+                prompt += f"\n제품: {p['name']}"
+            if p.get("features"):
+                prompt += f" — {p['features']}"
+        prompt += "\n\n중요: 위 기획서의 인물·사건·결말을 그대로 따를 것. 기획서에 없는 새 인물을 추가하지 말 것(단역 제외)."
+
     if options_prompt:
         prompt += options_prompt
     if characters:
@@ -115,7 +168,24 @@ async def generate_planning(idea: str, options_prompt: str | None = None, charac
         max_output_tokens=4096,
     )
 
-    return _parse_json(raw)
+    result = _parse_json(raw)
+
+    # synopsis가 dict(4단)이면 그대로, 문자열이면 기존 호환
+    syn = result.get("synopsis")
+    if isinstance(syn, str):
+        # 기존 호환: 문자열을 그대로 두되, synopsis_parts는 없음
+        pass
+    elif isinstance(syn, dict):
+        # 4단 dict → synopsis_parts로 보관, synopsis는 합친 문자열
+        result["synopsis_parts"] = syn
+        parts = []
+        for k, label in [("ki", "기"), ("seung", "승"), ("jeon", "전"), ("gyeol", "결")]:
+            v = syn.get(k, "")
+            if v:
+                parts.append(f"{label}: {v}")
+        result["synopsis"] = "\n".join(parts)
+
+    return result
 
 
 # ── idea-brief (아이디어 정리) ──────────────────────────
@@ -132,7 +202,7 @@ IDEA_BRIEF_INSTRUCTION = f"""너는 웹툰 기획 어시스턴트야.
 {{
   "summary": "한 줄 소개 (1문장)",
   "characters": [
-    {{"name": "이름", "description": "짧은 특징 한 줄"}}
+    {{"name": "이름", "description": "짧은 특징 한 줄", "gender": "남 또는 여 또는 기타", "age": "나이(숫자 또는 빈 문자열)"}}
   ],
   "story": {{
     "ki": "도입: 1~3문장",
@@ -150,6 +220,8 @@ IDEA_BRIEF_INSTRUCTION = f"""너는 웹툰 기획 어시스턴트야.
 
 규칙:
 - characters는 2~5명. 동물이면 종·색·특징을 description에 포함
+- characters의 gender는 "남", "여", "기타" 중 하나. 동물도 성별 추정(불명이면 "기타")
+- characters의 age는 숫자 문자열. 동물이면 해당 동물 기준 나이 추정, 불명이면 빈 문자열
 - story는 단편 완결 구조 — 예고식 결말 금지, 기승전결 각 1~3문장
 - suggested의 genre는 반드시 {_GENRE_KEYS} 중 하나
 - suggested의 mood는 반드시 {_MOOD_KEYS} 중 하나
@@ -171,7 +243,7 @@ IDEA_BRIEF_REVISE_INSTRUCTION = f"""너는 웹툰 기획 어시스턴트야.
 {{
   "summary": "한 줄 소개 (1문장)",
   "characters": [
-    {{"name": "이름", "description": "짧은 특징 한 줄"}}
+    {{"name": "이름", "description": "짧은 특징 한 줄", "gender": "남/여/기타", "age": "나이 또는 빈 문자열"}}
   ],
   "story": {{
     "ki": "도입: 1~3문장",

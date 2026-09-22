@@ -85,11 +85,23 @@ async def generate_script(planning: dict, series_context: dict | None = None, is
     series_block = build_series_context_block(series_context) if series_context else ""
     ep_label = f"{series_context['episode_no']}화" if series_context else "1화"
 
+    # synopsis: synopsis_parts(4단)가 있으면 구조화 표시, 없으면 기존 문자열
+    synopsis_parts = planning.get("synopsis_parts")
+    if synopsis_parts and isinstance(synopsis_parts, dict):
+        synopsis_text = (
+            f"[도입] {synopsis_parts.get('ki', '')}\n"
+            f"[전개] {synopsis_parts.get('seung', '')}\n"
+            f"[전환] {synopsis_parts.get('jeon', '')}\n"
+            f"[결말] {synopsis_parts.get('gyeol', '')}"
+        )
+    else:
+        synopsis_text = planning.get("synopsis", "")
+
     prompt = f"""아래 기획안을 바탕으로 웹툰 {ep_label} 대본을 만들어줘.
 
 제목: {planning.get('title', '')}
 로그라인: {planning.get('logline', '')}
-시놉시스: {planning.get('synopsis', '')}
+시놉시스: {synopsis_text}
 세계관: {planning.get('world', '')}
 등장인물: {json.dumps(planning.get('characters', []), ensure_ascii=False, indent=2)}
 """

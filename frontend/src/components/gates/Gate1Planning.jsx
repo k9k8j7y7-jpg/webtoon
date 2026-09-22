@@ -30,6 +30,8 @@ const DEVELOPMENT_OPTIONS = [
   { key: 'cliffhanger', label: '클리프행어', desc: '다음 화가 궁금해지는 끝맺음' },
 ];
 
+const SYNOPSIS_LABELS = [['ki', '도입'], ['seung', '전개'], ['jeon', '전환'], ['gyeol', '결말']];
+
 export default function Gate1Planning({ projectId, episodeId, onRefresh, gateStatus, readOnly = false, derivedFromSeries = false }) {
   // idea_brief 상태
   const [ideaBrief, setIdeaBrief] = useState(null);
@@ -40,6 +42,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
   const [revising, setRevising] = useState(false);
 
   const [characters, setCharacters] = useState([]);
+  const [charTouched, setCharTouched] = useState(false); // 등장인물 user_touched
   const [planning, setPlanning] = useState(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -50,12 +53,13 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
   const [editData, setEditData] = useState(null);
   const [error, setError] = useState('');
 
-  // 3축 선택 상태
+  // 3축 선택 상태 + 개별 touched
   const [genre, setGenre] = useState(null);
   const [mood, setMood] = useState(null);
   const [development, setDevelopment] = useState(null);
-  // user_touched: 사용자가 장르/분위기/전개를 직접 바꿨는지
-  const [userTouched, setUserTouched] = useState(false);
+  const [genreTouched, setGenreTouched] = useState(false);
+  const [moodTouched, setMoodTouched] = useState(false);
+  const [devTouched, setDevTouched] = useState(false);
 
   const saveTimer = useRef(null);
 
@@ -78,7 +82,10 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
             setGenre(data.story_options.genre || null);
             setMood(data.story_options.mood || null);
             setDevelopment(data.story_options.development || null);
-            setUserTouched(true); // 이전에 저장된 값이면 touched
+            // 이전에 저장된 값이면 touched
+            setGenreTouched(true);
+            setMoodTouched(true);
+            setDevTouched(true);
           }
         }
       } catch {}
@@ -96,6 +103,25 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, gateStatus?.idea_brief]);
 
+  // idea_brief에서 등장인물/3축 채우기 공용 함수
+  const applyBriefSuggestions = (data) => {
+    // 3축: 개별 touched 안 된 것만 갱신
+    if (data.suggested) {
+      if (!genreTouched && data.suggested.genre) setGenre(data.suggested.genre);
+      if (!moodTouched && data.suggested.mood) setMood(data.suggested.mood);
+      if (!devTouched && data.suggested.development) setDevelopment(data.suggested.development);
+    }
+    // 등장인물: charTouched 안 되었고 비어있을 때만 채움
+    if (data.characters?.length > 0 && !charTouched && characters.length === 0) {
+      setCharacters(data.characters.map(c => ({
+        name: c.name,
+        description: c.description || '',
+        gender: c.gender || '기타',
+        age: c.age || '',
+      })));
+    }
+  };
+
   const triggerIdeaBrief = async (raw = null) => {
     setBriefLoading(true);
     setError('');
@@ -105,16 +131,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
       });
       setIdeaBrief(data);
       setRawEdit(data.raw || '');
-      // suggested로 장르/분위기/전개 미리 선택 (userTouched 안 되었을 때만)
-      if (data.suggested && !userTouched) {
-        setGenre(data.suggested.genre || null);
-        setMood(data.suggested.mood || null);
-        setDevelopment(data.suggested.development || null);
-      }
-      // characters 미리 채움 (비어있을 때만)
-      if (data.characters?.length > 0 && characters.length === 0) {
-        setCharacters(data.characters.map(c => ({ name: c.name, description: c.description || '', gender: '남', age: '' })));
-      }
+      applyBriefSuggestions(data);
     } catch (err) {
       setError(err.response?.data?.detail || '아이디어 정리에 실패했습니다.');
     } finally {
@@ -132,15 +149,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
       });
       setIdeaBrief(data);
       setReviseHint('');
-      // suggested 반영 (userTouched가 아닐 때만)
-      if (data.suggested && !userTouched) {
-        setGenre(data.suggested.genre || null);
-        setMood(data.suggested.mood || null);
-        setDevelopment(data.suggested.development || null);
-      }
-      if (data.characters?.length > 0 && characters.length === 0) {
-        setCharacters(data.characters.map(c => ({ name: c.name, description: c.description || '', gender: '남', age: '' })));
-      }
+      applyBriefSuggestions(data);
     } catch (err) {
       setError(err.response?.data?.detail || '재정리에 실패했습니다.');
     } finally {
@@ -193,21 +202,25 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
     }));
   };
 
-  const toggleOption = (current, setter, key) => {
+  const toggleOption = (current, setter, key, touchSetter) => {
     setter(current === key ? null : key);
-    setUserTouched(true);
+    touchSetter(true);
   };
 
   const handleSuggestCharacters = async () => {
-    const ideaText = ideaBrief?.raw || '';
-    if (!ideaText.trim()) return;
+    // idea_brief 기준으로 등장인물 다시 뽑기
+    if (!ideaBrief?.raw?.trim()) return;
+    if (characters.length > 0) {
+      if (!window.confirm('지금 등장인물을 기획서 기준으로 다시 채울까요?')) return;
+    }
     setSuggesting(true);
     setError('');
     try {
       const { data } = await api.post(`/projects/${projectId}/episodes/${episodeId}/planning/suggest-characters`, {
-        idea: ideaText.trim(),
+        idea: ideaBrief.raw.trim(),
       });
       setCharacters(data.characters || []);
+      setCharTouched(false); // 자동 생성이므로 touched 리셋
     } catch (err) {
       setError(err.response?.data?.detail || '캐릭터 제안에 실패했습니다.');
     } finally {
@@ -217,16 +230,33 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
 
   const addCharacter = () => {
     setCharacters([...characters, { name: '', description: '', gender: '남', age: '' }]);
+    setCharTouched(true);
   };
 
   const updateCharacter = (index, field, value) => {
     const updated = [...characters];
     updated[index] = { ...updated[index], [field]: value };
     setCharacters(updated);
+    setCharTouched(true);
   };
 
   const removeCharacter = (index) => {
     setCharacters(characters.filter((_, i) => i !== index));
+    setCharTouched(true);
+  };
+
+  // synopsis를 4단 또는 문자열로 표시하는 헬퍼
+  const getSynopsisParts = (p) => {
+    if (p?.synopsis_parts) return p.synopsis_parts;
+    return null;
+  };
+
+  const formatSynopsisText = (p) => {
+    const parts = getSynopsisParts(p);
+    if (parts) {
+      return SYNOPSIS_LABELS.map(([k, label]) => parts[k] ? `${label}: ${parts[k]}` : '').filter(Boolean).join('\n');
+    }
+    return p?.synopsis || '';
   };
 
   const handleGenerate = async () => {
@@ -284,8 +314,21 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
   // 연작 파생 기획: Gate 1은 항상 읽기 전용
   const isSeriesDerived = derivedFromSeries && planning?.derived_from_series;
 
+  // ── 시놉시스 4단 렌더 컴포넌트 ──
+  const SynopsisParts = ({ parts }) => (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
+      {SYNOPSIS_LABELS.map(([k, label]) => (
+        <div key={k}>
+          <span className="text-[11px] font-bold text-gray-400 dark:text-zinc-500">{label}</span>
+          <p className="text-sm font-bold text-gray-700 dark:text-gray-300 mt-0.5">{parts[k] || ''}</p>
+        </div>
+      ))}
+    </div>
+  );
+
   // ── 읽기 전용 뷰 ──
   if (readOnly || isSeriesDerived) {
+    const synParts = getSynopsisParts(planning);
     return (
       <div className="space-y-4">
         {isSeriesDerived && (
@@ -328,7 +371,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
             )}
             {ideaBrief.story && (
               <div className="mb-2 grid grid-cols-2 gap-2">
-                {[['ki', '도입'], ['seung', '전개'], ['jeon', '전환'], ['gyeol', '결말']].map(([k, label]) => (
+                {SYNOPSIS_LABELS.map(([k, label]) => (
                   <div key={k}>
                     <span className="text-xs font-bold text-gray-400 dark:text-zinc-500">{label}</span>
                     <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">{ideaBrief.story[k]}</p>
@@ -387,7 +430,11 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
               </div>
               <div>
                 <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">시놉시스</span>
-                <p className="text-sm font-bold text-gray-700 dark:text-gray-300 mt-1 whitespace-pre-wrap">{planning.synopsis}</p>
+                {synParts ? (
+                  <SynopsisParts parts={synParts} />
+                ) : (
+                  <p className="text-sm font-bold text-gray-700 dark:text-gray-300 mt-1 whitespace-pre-wrap">{planning.synopsis}</p>
+                )}
               </div>
               {planning.characters?.length > 0 && (
                 <div>
@@ -515,7 +562,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
             <div>
               <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">이야기</label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {[['ki', '도입'], ['seung', '전개'], ['jeon', '전환'], ['gyeol', '결말']].map(([key, label]) => (
+                {SYNOPSIS_LABELS.map(([key, label]) => (
                   <div key={key}>
                     <span className="text-[11px] font-bold text-gray-400 dark:text-zinc-500">{label}</span>
                     <textarea
@@ -590,7 +637,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                   <button
                     key={opt.key}
                     type="button"
-                    onClick={() => toggleOption(genre, setGenre, opt.key)}
+                    onClick={() => toggleOption(genre, setGenre, opt.key, setGenreTouched)}
                     className={`px-3 py-1.5 text-xs font-bold rounded-full border-2 transition-all ${
                       genre === opt.key
                         ? 'border-comic-orange bg-comic-orange text-white'
@@ -611,7 +658,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                   <button
                     key={opt.key}
                     type="button"
-                    onClick={() => toggleOption(mood, setMood, opt.key)}
+                    onClick={() => toggleOption(mood, setMood, opt.key, setMoodTouched)}
                     className={`px-3 py-1.5 text-xs font-bold rounded-full border-2 transition-all ${
                       mood === opt.key
                         ? 'border-comic-blue bg-comic-blue text-white'
@@ -632,7 +679,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                   <button
                     key={opt.key}
                     type="button"
-                    onClick={() => toggleOption(development, setDevelopment, opt.key)}
+                    onClick={() => toggleOption(development, setDevelopment, opt.key, setDevTouched)}
                     className={`group flex flex-col items-start px-3 py-1.5 text-xs font-bold rounded-xl border-2 transition-all ${
                       development === opt.key
                         ? 'border-green-500 bg-green-500 text-white'
@@ -742,9 +789,11 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
         {error && <p className="text-red-500 dark:text-red-400 text-sm font-bold mt-3">{error}</p>}
       </div>
 
-      {planning && (
+      {planning && (() => {
+        const synParts = getSynopsisParts(planning);
+        return (
         <div className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl p-6 backdrop-blur-sm space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-start justify-between gap-2">
             {editing ? (
               <input
                 value={editData.title}
@@ -752,12 +801,34 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                 className="text-lg font-bold font-serif text-ink-black dark:text-white bg-transparent border-b-2 border-comic-orange focus:outline-none w-full"
               />
             ) : (
-              <h3 className="font-bold font-serif text-ink-black dark:text-white">{planning.title}</h3>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-bold font-serif text-ink-black dark:text-white break-words">{planning.title}</h3>
+                {planning.suggested_title && planning.suggested_title !== planning.title && (
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-xs text-gray-400 dark:text-zinc-500">AI 추천:</span>
+                    <span className="text-xs font-bold text-gray-500 dark:text-gray-400">{planning.suggested_title}</span>
+                    <button
+                      onClick={async () => {
+                        try {
+                          await api.put(`/projects/${projectId}/episodes/${episodeId}/planning`, {
+                            title: planning.suggested_title,
+                            planning: { ...planning, title: planning.suggested_title },
+                          });
+                          setPlanning({ ...planning, title: planning.suggested_title, suggested_title: undefined });
+                        } catch {}
+                      }}
+                      className="text-xs font-bold text-comic-blue hover:underline"
+                    >
+                      적용
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
             {!editing && (
               <button
-                onClick={() => { setEditing(true); setEditData({ title: planning.title, logline: planning.logline, synopsis: planning.synopsis, characters: planning.characters ? planning.characters.map(c => ({ ...c })) : [] }); }}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-gray-500 dark:text-gray-400 hover:text-comic-orange border-2 border-border dark:border-zinc-700 rounded-full transition-all"
+                onClick={() => { setEditing(true); setEditData({ title: planning.title, logline: planning.logline, synopsis: planning.synopsis, synopsis_parts: planning.synopsis_parts || null, characters: planning.characters ? planning.characters.map(c => ({ ...c })) : [] }); }}
+                className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-gray-500 dark:text-gray-400 hover:text-comic-orange border-2 border-border dark:border-zinc-700 rounded-full transition-all shrink-0"
               >
                 <Pencil size={12} /> 수정
               </button>
@@ -781,14 +852,38 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
           <div>
             <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">시놉시스</span>
             {editing ? (
-              <textarea
-                value={editData.synopsis}
-                onChange={(e) => setEditData({ ...editData, synopsis: e.target.value })}
-                className="w-full mt-1 px-3 py-2 border-2 border-border dark:border-zinc-700 bg-transparent rounded-xl text-sm font-bold text-gray-700 dark:text-gray-300 focus:outline-none focus:border-comic-orange resize-none"
-                rows={6}
-              />
+              editData.synopsis_parts ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
+                  {SYNOPSIS_LABELS.map(([key, label]) => (
+                    <div key={key}>
+                      <span className="text-[11px] font-bold text-gray-400 dark:text-zinc-500">{label}</span>
+                      <textarea
+                        value={editData.synopsis_parts[key] || ''}
+                        onChange={(e) => {
+                          const newParts = { ...editData.synopsis_parts, [key]: e.target.value };
+                          const synText = SYNOPSIS_LABELS.map(([k, l]) => newParts[k] ? `${l}: ${newParts[k]}` : '').filter(Boolean).join('\n');
+                          setEditData({ ...editData, synopsis_parts: newParts, synopsis: synText });
+                        }}
+                        className="w-full px-2 py-1.5 border-2 border-border dark:border-zinc-700 bg-transparent rounded-lg text-sm font-bold text-gray-700 dark:text-gray-300 focus:outline-none focus:border-comic-orange resize-none"
+                        rows={2}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <textarea
+                  value={editData.synopsis}
+                  onChange={(e) => setEditData({ ...editData, synopsis: e.target.value })}
+                  className="w-full mt-1 px-3 py-2 border-2 border-border dark:border-zinc-700 bg-transparent rounded-xl text-sm font-bold text-gray-700 dark:text-gray-300 focus:outline-none focus:border-comic-orange resize-none"
+                  rows={6}
+                />
+              )
             ) : (
-              <p className="text-sm font-bold text-gray-700 dark:text-gray-300 mt-1 whitespace-pre-wrap">{planning.synopsis}</p>
+              synParts ? (
+                <SynopsisParts parts={synParts} />
+              ) : (
+                <p className="text-sm font-bold text-gray-700 dark:text-gray-300 mt-1 whitespace-pre-wrap">{planning.synopsis}</p>
+              )
             )}
           </div>
 
@@ -833,13 +928,14 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                   onClick={async () => {
                     setSaving(true);
                     try {
-                      await api.put(`/projects/${projectId}/episodes/${episodeId}/planning`, {
+                      const saveData = {
                         title: editData.title,
                         logline: editData.logline,
                         synopsis: editData.synopsis,
-                        planning: { ...planning, title: editData.title, logline: editData.logline, synopsis: editData.synopsis, characters: editData.characters },
-                      });
-                      setPlanning({ ...planning, title: editData.title, logline: editData.logline, synopsis: editData.synopsis, characters: editData.characters });
+                        planning: { ...planning, title: editData.title, logline: editData.logline, synopsis: editData.synopsis, synopsis_parts: editData.synopsis_parts, characters: editData.characters },
+                      };
+                      await api.put(`/projects/${projectId}/episodes/${episodeId}/planning`, saveData);
+                      setPlanning({ ...planning, title: editData.title, logline: editData.logline, synopsis: editData.synopsis, synopsis_parts: editData.synopsis_parts, characters: editData.characters });
                       setEditing(false);
                     } catch (err) {
                       setError('수정 저장에 실패했습니다.');
@@ -870,7 +966,8 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
             )}
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
