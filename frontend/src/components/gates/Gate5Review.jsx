@@ -8,6 +8,7 @@ import CutEditor from '../CutEditor';
 import SfxLayer from '../SfxLayer';
 import EffectLayer from '../EffectLayer';
 import ProductLayer from '../ProductLayer';
+import PngBubbleLayer from '../PngBubbleLayer';
 import ExportProgressModal from '../ExportProgressModal';
 import { exportAsPNGZip, exportAsVertical, exportAsInstagram, exportAsA4Single, exportAsA4Grid } from '../../utils/exportRenderer';
 
@@ -50,6 +51,10 @@ function CutImageWithBubbles({ cut, imageUrl, onZoom, products }) {
           width={dims.w}
           height={dims.h}
         />
+      )}
+      {/* PNG 말풍선 오버레이 */}
+      {dims.w > 0 && (
+        <PngBubbleLayer pngbubbleItems={cut.pngbubble_items} width={dims.w} height={dims.h} />
       )}
       {/* SVG 효과음 오버레이 */}
       {dims.w > 0 && (
@@ -117,6 +122,9 @@ function LightboxImageWithBubbles({ cut, imgSrc, products }) {
           width={dims.w}
           height={dims.h}
         />
+      )}
+      {dims.w > 0 && (
+        <PngBubbleLayer pngbubbleItems={cut.pngbubble_items} width={dims.w} height={dims.h} />
       )}
       {dims.w > 0 && (
         <SfxLayer sfxItems={cut.sfx_items} width={dims.w} height={dims.h} />
@@ -1074,7 +1082,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
         const hasNext = editCutIndex < cuts.length - 1 && cuts[editCutIndex + 1]?.image_url;
         return (
           <CutEditor
-            cut={{ ...cut, dialogue: cut.dialogue || [], sfx_items: cut.sfx_items || [], effect_items: cut.effect_items || [], product_items: cut.product_items || [] }}
+            cut={{ ...cut, dialogue: cut.dialogue || [], sfx_items: cut.sfx_items || [], effect_items: cut.effect_items || [], product_items: cut.product_items || [], pngbubble_items: cut.pngbubble_items || [] }}
             products={products}
             imageUrl={imageUrl(getCutImageUrl(cut))}
             characters={cut.characters || []}

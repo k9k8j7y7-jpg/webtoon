@@ -176,6 +176,11 @@ async def update_dialogue(
         from app.storyboard.router import _validate_product_items
         _validate_product_items(product_items)
         spec["product_items"] = product_items
+    pngbubble_items = body.get("pngbubble_items")
+    if pngbubble_items is not None:
+        from app.storyboard.router import _validate_pngbubble_items
+        _validate_pngbubble_items(pngbubble_items)
+        spec["pngbubble_items"] = pngbubble_items
     cut.spec = spec
 
     # 원본 이미지 위에 재조판 (12종 말풍선 자동 매핑)

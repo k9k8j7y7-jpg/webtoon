@@ -138,6 +138,7 @@ def get_viewer_data(
                 "sfx_items": (c.spec or {}).get("sfx_items", []),
                 "effect_items": (c.spec or {}).get("effect_items", []),
                 "product_items": (c.spec or {}).get("product_items", []),
+                "pngbubble_items": (c.spec or {}).get("pngbubble_items", []),
                 "characters": (c.spec or {}).get("characters", []),
             }
             for c in cuts

@@ -16,11 +16,13 @@ import BubbleOverlay, { BUBBLE_CONFIGS, SingleBubble, BubbleMiniIcon, wrapText, 
 import SfxLayer from './SfxLayer';
 import EffectLayer from './EffectLayer';
 import ProductLayer from './ProductLayer';
+import PngBubbleLayer from './PngBubbleLayer';
 import EFFECT_CATALOG from '../utils/effectCatalog';
+import PNGBUBBLE_CATALOG from '../utils/pngBubbleCatalog';
 import { resolveBubbleStyle } from '../utils/bubbleMapping';
 import bubbleSpec from '../utils/bubbleSpec.json';
 import { getFontById, getFontsByUsage } from '../utils/fontCatalog';
-import { X, Save, Pencil, Eye, Info, Zap, Sparkles, Trash2, ChevronLeft, ChevronRight, Image as ImageIcon } from 'lucide-react';
+import { X, Save, Pencil, Eye, Info, Zap, Sparkles, MessageCircle, Trash2, ChevronLeft, ChevronRight, Image as ImageIcon } from 'lucide-react';
 import { computeInitialLayouts } from '../utils/bubbleLayout';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
@@ -95,8 +97,11 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
   const [selectedSfxIdx, setSelectedSfxIdx] = useState(null); // 선택된 효과음 인덱스
   const [selectedEffectIdx, setSelectedEffectIdx] = useState(null); // 선택된 배경효과 인덱스
   const [selectedProductIdx, setSelectedProductIdx] = useState(null); // 선택된 제품 인덱스
+  const [pngbubbleItems, setPngbubbleItems] = useState(() => (cut.pngbubble_items || []).map(p => ({ ...p })));
+  const [selectedPngbubbleIdx, setSelectedPngbubbleIdx] = useState(null); // 선택된 PNG 말풍선 인덱스
   const [showEffectPicker, setShowEffectPicker] = useState(false);
   const [showProductPicker, setShowProductPicker] = useState(false);
+  const [showPngbubblePicker, setShowPngbubblePicker] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [openPalette, setOpenPalette] = useState(false);
@@ -124,6 +129,8 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
   const productDragRef   = useRef(null); // 제품 드래그
   const productRotateRef = useRef(null); // 제품 회전
   const productAspects   = useRef({}); // 제품 이미지 종횡비 캐시
+  const pngbubbleDragRef   = useRef(null); // PNG 말풍선 드래그
+  const pngbubbleRotateRef = useRef(null); // PNG 말풍선 회전
 
   // 컨테이너 실측 → 이미지 표시 크기 계산
   const recalcSize = useCallback(() => {
@@ -194,12 +201,15 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
     setSfxItems((cut.sfx_items || []).map(s => ({ ...s })));
     setEffectItems((cut.effect_items || []).map(e => ({ ...e })));
     setProductItems((cut.product_items || []).map(p => ({ ...p })));
+    setPngbubbleItems((cut.pngbubble_items || []).map(p => ({ ...p })));
     setSelectedIdx(null);
     setSelectedSfxIdx(null);
     setSelectedEffectIdx(null);
     setSelectedProductIdx(null);
+    setSelectedPngbubbleIdx(null);
     setShowEffectPicker(false);
     setShowProductPicker(false);
+    setShowPngbubblePicker(false);
     setMode('edit');
   };
 
@@ -208,13 +218,16 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
     setSfxItems((cut.sfx_items || []).map(s => ({ ...s })));
     setEffectItems((cut.effect_items || []).map(e => ({ ...e })));
     setProductItems((cut.product_items || []).map(p => ({ ...p })));
+    setPngbubbleItems((cut.pngbubble_items || []).map(p => ({ ...p })));
     setSelectedIdx(null);
     setSelectedSfxIdx(null);
     setSelectedEffectIdx(null);
     setSelectedProductIdx(null);
+    setSelectedPngbubbleIdx(null);
     setOpenPalette(false);
     setShowEffectPicker(false);
     setShowProductPicker(false);
+    setShowPngbubblePicker(false);
     setMode('view');
   };
 
@@ -229,6 +242,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
         sfx_items: sfxItems,
         effect_items: effectItems,
         product_items: productItems,
+        pngbubble_items: pngbubbleItems,
       });
       if (onSave) await onSave();
       setMode('view');
@@ -348,6 +362,44 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
   const handleDeleteProduct = (idx) => {
     setProductItems(prev => prev.filter((_, i) => i !== idx));
     setSelectedProductIdx(null);
+  };
+
+  // ── PNG 말풍선 업데이트 ──────────────────────────────────
+
+  const updatePngbubbleItem = useCallback((idx, updates) => {
+    setPngbubbleItems(prev => prev.map((p, i) => i === idx ? { ...p, ...updates } : p));
+  }, []);
+
+  const handleAddPngbubble = (bubbleId) => {
+    const entry = PNGBUBBLE_CATALOG.find(e => e.id === bubbleId);
+    if (!entry) return;
+    const newItem = {
+      id: `pb_${Date.now()}`,
+      bubble_id: bubbleId,
+      x: 0.5,
+      y: 0.5,
+      width: 0.35,
+      rotation: 0,
+      opacity: 1,
+      flip_h: false,
+      text: '',
+      font_size: 0, // 0 = auto
+      font_family: 'pretendard',
+      text_align: 'center',
+    };
+    const newIdx = pngbubbleItems.length;
+    setPngbubbleItems(prev => [...prev, newItem]);
+    setSelectedPngbubbleIdx(newIdx);
+    setSelectedIdx(null);
+    setSelectedSfxIdx(null);
+    setSelectedEffectIdx(null);
+    setSelectedProductIdx(null);
+    setShowPngbubblePicker(false);
+  };
+
+  const handleDeletePngbubble = (idx) => {
+    setPngbubbleItems(prev => prev.filter((_, i) => i !== idx));
+    setSelectedPngbubbleIdx(null);
   };
 
   const handleDeleteBubble = (idx) => {
@@ -631,6 +683,78 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
     ));
   }, []);
 
+  // ── PNG 말풍선 드래그 ────────────────────────────────────────
+
+  const handlePngbubblePointerDown = (e, idx) => {
+    e.stopPropagation();
+    if (e.touches) e.preventDefault();
+    setSelectedPngbubbleIdx(idx);
+    setSelectedIdx(null);
+    setSelectedSfxIdx(null);
+    setSelectedEffectIdx(null);
+    setSelectedProductIdx(null);
+    setOpenPalette(false);
+    setShowPngbubblePicker(false);
+    setShowEffectPicker(false);
+    setShowProductPicker(false);
+    dragMoved.current = false;
+
+    const item = pngbubbleItems[idx];
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    pngbubbleDragRef.current = {
+      idx,
+      startX: clientX, startY: clientY,
+      origX: item.x ?? 0.5, origY: item.y ?? 0.5,
+    };
+  };
+
+  const applyPngbubbleDrag = useCallback((clientX, clientY) => {
+    const pd = pngbubbleDragRef.current;
+    if (!pd) return;
+    const { w, h } = imgSizeRef.current;
+    if (!w || !h) return;
+    if (Math.hypot(clientX - pd.startX, clientY - pd.startY) < DRAG_THRESHOLD) return;
+    dragMoved.current = true;
+    const dx = (clientX - pd.startX) / w;
+    const dy = (clientY - pd.startY) / h;
+    setPngbubbleItems(prev => prev.map((item, i) => i !== pd.idx ? item : {
+      ...item,
+      x: Math.max(0, Math.min(1, pd.origX + dx)),
+      y: Math.max(0, Math.min(1, pd.origY + dy)),
+    }));
+  }, []);
+
+  // ── PNG 말풍선 회전 ────────────────────────────────────────
+
+  const handlePngbubbleRotateStart = (e, idx) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const item = pngbubbleItems[idx];
+    const imgRect = imgRef.current?.getBoundingClientRect();
+    if (!imgRect) return;
+    const { w, h } = imgSizeRef.current;
+    const centerX = imgRect.left + (item.x ?? 0.5) * w;
+    const centerY = imgRect.top + (item.y ?? 0.5) * h;
+    const startAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * 180 / Math.PI;
+    pngbubbleRotateRef.current = {
+      idx, centerX, centerY,
+      startAngle,
+      origRotation: item.rotation || 0,
+    };
+  };
+
+  const applyPngbubbleRotate = useCallback((clientX, clientY) => {
+    const pr = pngbubbleRotateRef.current;
+    if (!pr) return;
+    const angle = Math.atan2(clientY - pr.centerY, clientX - pr.centerX) * 180 / Math.PI;
+    let newRotation = pr.origRotation + (angle - pr.startAngle);
+    newRotation = ((newRotation % 360) + 360) % 360;
+    setPngbubbleItems(prev => prev.map((item, i) =>
+      i === pr.idx ? { ...item, rotation: Math.round(newRotation) } : item
+    ));
+  }, []);
+
   // ── window 이벤트 (mousemove/mouseup/touch) ───────────────
 
   const handleMouseMove = useCallback((e) => {
@@ -638,11 +762,13 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
     else if (sfxDragRef.current) applySfxDrag(e.clientX, e.clientY);
     else if (effectDragRef.current) applyEffectDrag(e.clientX, e.clientY);
     else if (productDragRef.current) applyProductDrag(e.clientX, e.clientY);
+    else if (pngbubbleDragRef.current) applyPngbubbleDrag(e.clientX, e.clientY);
     else if (resizeRef.current)  applyResize(e.clientX);
     else if (rotateRef.current)  applyRotate(e.clientX, e.clientY);
     else if (effectRotateRef.current) applyEffectRotate(e.clientX, e.clientY);
     else if (productRotateRef.current) applyProductRotate(e.clientX, e.clientY);
-  }, [applyDrag, applySfxDrag, applyEffectDrag, applyProductDrag, applyResize, applyRotate, applyEffectRotate, applyProductRotate]);
+    else if (pngbubbleRotateRef.current) applyPngbubbleRotate(e.clientX, e.clientY);
+  }, [applyDrag, applySfxDrag, applyEffectDrag, applyProductDrag, applyPngbubbleDrag, applyResize, applyRotate, applyEffectRotate, applyProductRotate, applyPngbubbleRotate]);
 
   const handleMouseUp = useCallback((e) => {
     // 말풍선 드래그 클릭 판정
@@ -677,11 +803,20 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
     }
     productDragRef.current = null;
 
+    // PNG 말풍선 드래그 클릭 판정
+    const pbd = pngbubbleDragRef.current;
+    if (pbd) {
+      const dist = Math.hypot((e?.clientX ?? pbd.startX) - pbd.startX, (e?.clientY ?? pbd.startY) - pbd.startY);
+      if (dist < DRAG_THRESHOLD) setSelectedPngbubbleIdx(pbd.idx);
+    }
+    pngbubbleDragRef.current = null;
+
     resizeRef.current = null;
     rotateRef.current = null;
     effectRotateRef.current = null;
     productRotateRef.current = null;
-  }, [setSelectedIdx, setSelectedSfxIdx, setSelectedEffectIdx, setSelectedProductIdx]);
+    pngbubbleRotateRef.current = null;
+  }, [setSelectedIdx, setSelectedSfxIdx, setSelectedEffectIdx, setSelectedProductIdx, setSelectedPngbubbleIdx]);
 
   const handleTouchMove = useCallback((e) => {
     if (!e.touches?.length) return;
@@ -691,9 +826,11 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
     else if (sfxDragRef.current)    applySfxDrag(t.clientX, t.clientY);
     else if (effectDragRef.current) applyEffectDrag(t.clientX, t.clientY);
     else if (productDragRef.current) applyProductDrag(t.clientX, t.clientY);
+    else if (pngbubbleDragRef.current) applyPngbubbleDrag(t.clientX, t.clientY);
     else if (effectRotateRef.current) applyEffectRotate(t.clientX, t.clientY);
     else if (productRotateRef.current) applyProductRotate(t.clientX, t.clientY);
-  }, [applyDrag, applySfxDrag, applyEffectDrag, applyProductDrag, applyEffectRotate, applyProductRotate]);
+    else if (pngbubbleRotateRef.current) applyPngbubbleRotate(t.clientX, t.clientY);
+  }, [applyDrag, applySfxDrag, applyEffectDrag, applyProductDrag, applyPngbubbleDrag, applyEffectRotate, applyProductRotate, applyPngbubbleRotate]);
 
   const handleTouchEnd = useCallback((e) => {
     const t = e.changedTouches?.[0];
@@ -722,11 +859,18 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
     }
     productDragRef.current = null;
 
+    const pbd2 = pngbubbleDragRef.current;
+    if (pbd2 && t) {
+      if (Math.hypot(t.clientX - pbd2.startX, t.clientY - pbd2.startY) < DRAG_THRESHOLD) setSelectedPngbubbleIdx(pbd2.idx);
+    }
+    pngbubbleDragRef.current = null;
+
     resizeRef.current = null;
     rotateRef.current = null;
     effectRotateRef.current = null;
     productRotateRef.current = null;
-  }, [setSelectedIdx, setSelectedSfxIdx, setSelectedEffectIdx, setSelectedProductIdx]);
+    pngbubbleRotateRef.current = null;
+  }, [setSelectedIdx, setSelectedSfxIdx, setSelectedEffectIdx, setSelectedProductIdx, setSelectedPngbubbleIdx]);
 
   useEffect(() => {
     window.addEventListener('mousemove', handleMouseMove);
@@ -759,6 +903,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
   const selectedSfxItem = selectedSfxIdx !== null ? sfxItems[selectedSfxIdx] : null;
   const selectedEffectItem = selectedEffectIdx !== null ? effectItems[selectedEffectIdx] : null;
   const selectedProductItem = selectedProductIdx !== null ? productItems[selectedProductIdx] : null;
+  const selectedPngbubbleItem = selectedPngbubbleIdx !== null ? pngbubbleItems[selectedPngbubbleIdx] : null;
   const productMap = Object.fromEntries(products.map(p => [p.id, p]));
   const { w: imgW, h: imgH } = imgSizeState;
 
@@ -769,7 +914,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
   return (
     <div
       className="fixed inset-0 z-50 bg-black flex flex-col"
-      onClick={() => { setSelectedIdx(null); setSelectedSfxIdx(null); setSelectedEffectIdx(null); setSelectedProductIdx(null); setOpenPalette(false); setShowEffectPicker(false); setShowProductPicker(false); }}
+      onClick={() => { setSelectedIdx(null); setSelectedSfxIdx(null); setSelectedEffectIdx(null); setSelectedProductIdx(null); setSelectedPngbubbleIdx(null); setOpenPalette(false); setShowEffectPicker(false); setShowProductPicker(false); setShowPngbubblePicker(false); }}
     >
       {/* ── 상단 바 ── */}
       <div
@@ -827,6 +972,15 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
               >
                 <Sparkles size={12} /> 배경효과
               </button>
+              {/* 특수 말풍선 추가 버튼 */}
+              <button
+                onClick={() => setShowPngbubblePicker(p => !p)}
+                className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold transition-colors shadow-sm ${
+                  showPngbubblePicker ? 'bg-violet-500 text-white' : 'bg-violet-600 hover:bg-violet-700 text-white'
+                }`}
+              >
+                <MessageCircle size={12} /> 특수 말풍선
+              </button>
               {/* 효과음 추가 버튼 */}
               <button
                 onClick={handleAddSfx}
@@ -881,6 +1035,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
               <ProductLayer productItems={productItems} products={products} width={imgW} height={imgH} />
               <EffectLayer effectItems={effectItems} width={imgW} height={imgH} />
               <BubbleOverlay dialogue={bubbles} characters={characters} width={imgW} height={imgH} />
+              <PngBubbleLayer pngbubbleItems={pngbubbleItems} width={imgW} height={imgH} />
               <SfxLayer sfxItems={sfxItems} width={imgW} height={imgH} />
             </>
           )}
@@ -908,8 +1063,10 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                   setSelectedIdx(null);
                   setSelectedSfxIdx(null);
                   setSelectedEffectIdx(null);
+                  setSelectedPngbubbleIdx(null);
                   setOpenPalette(false);
                   setShowEffectPicker(false);
+                  setShowPngbubblePicker(false);
                 }}
               />
 
@@ -1174,6 +1331,71 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                           style={{ cursor: 'crosshair', pointerEvents: 'all' }}
                           onMouseDown={e => handleRotateStart(e, i)} />
                         <text x="0" y={-hitH/2-28} textAnchor="middle" dominantBaseline="middle"
+                          fill="white" fontSize={13} style={{ pointerEvents: 'none' }}>↻</text>
+                      </g>
+                    )}
+                  </g>
+                );
+              })}
+            </svg>
+            {/* PNG 말풍선 레이어 (SVG 말풍선 뒤, 효과음 앞) */}
+            <PngBubbleLayer pngbubbleItems={pngbubbleItems} width={imgW} height={imgH} showTextArea={selectedPngbubbleIdx !== null} />
+            {/* PNG 말풍선 히트박스 (드래그·회전 조작용) */}
+            <svg
+              className="absolute inset-0"
+              width={imgW} height={imgH}
+              overflow="visible"
+              style={{ top: 0, left: 0 }}
+            >
+              {pngbubbleItems.map((item, i) => {
+                const entry = PNGBUBBLE_CATALOG.find(e => e.id === item.bubble_id);
+                if (!entry) return null;
+                const px = (item.x ?? 0.5) * imgW;
+                const py = (item.y ?? 0.5) * imgH;
+                const pbW = (item.width ?? 0.35) * imgW;
+                const aspect = entry.size[1] / entry.size[0];
+                const pbH = pbW * aspect;
+                const rotation = item.rotation || 0;
+                const isSelected = selectedPngbubbleIdx === i;
+
+                return (
+                  <g key={`pb-${i}`} transform={`translate(${px}, ${py}) rotate(${rotation})`}>
+                    {isSelected && (
+                      <rect x={-pbW/2-4} y={-pbH/2-4} width={pbW+8} height={pbH+8}
+                        fill="none" stroke="#8b5cf6" strokeWidth={2}
+                        strokeDasharray="6,3" rx={4} style={{ pointerEvents: 'none' }} />
+                    )}
+                    <rect
+                      x={-pbW/2} y={-pbH/2} width={pbW} height={pbH}
+                      fill="transparent" style={{ cursor: 'grab', pointerEvents: 'all' }}
+                      onMouseDown={e => handlePngbubblePointerDown(e, i)}
+                      onTouchStart={e => { e.preventDefault(); handlePngbubblePointerDown(e, i); }}
+                      onClick={e => {
+                        e.stopPropagation();
+                        dragMoved.current = false;
+                        setSelectedPngbubbleIdx(i);
+                        setSelectedIdx(null);
+                        setSelectedSfxIdx(null);
+                        setSelectedEffectIdx(null);
+                        setSelectedProductIdx(null);
+                        setShowPngbubblePicker(false);
+                      }}
+                    />
+                    <text x={-pbW/2+2} y={-pbH/2-6}
+                      fill={isSelected ? '#8b5cf6' : 'rgba(139,92,246,0.45)'}
+                      fontSize={8} fontWeight="bold"
+                      stroke="rgba(0,0,0,0.5)" strokeWidth={0.8} paintOrder="stroke"
+                      style={{ pointerEvents: 'none' }}>
+                      B{i+1}
+                    </text>
+                    {isSelected && (
+                      <g>
+                        <line x1="0" y1={-pbH/2-4} x2="0" y2={-pbH/2-28}
+                          stroke="#8b5cf6" strokeWidth={1.5} style={{ pointerEvents: 'none' }} />
+                        <circle cx="0" cy={-pbH/2-32} r={10} fill="#8b5cf6" opacity={0.9}
+                          style={{ cursor: 'crosshair', pointerEvents: 'all' }}
+                          onMouseDown={e => handlePngbubbleRotateStart(e, i)} />
+                        <text x="0" y={-pbH/2-28} textAnchor="middle" dominantBaseline="middle"
                           fill="white" fontSize={13} style={{ pointerEvents: 'none' }}>↻</text>
                       </g>
                     )}
@@ -1680,8 +1902,162 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
             </div>
           )}
 
+          {/* PNG 말풍선 선택 패널 */}
+          {!selectedBubble && !selectedSfxItem && !selectedEffectItem && !selectedProductItem && selectedPngbubbleItem && (
+            <div className="px-4 py-3 space-y-2.5">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-violet-400 flex items-center gap-1">
+                  <MessageCircle size={12} /> {PNGBUBBLE_CATALOG.find(e => e.id === selectedPngbubbleItem.bubble_id)?.label || 'B'} (B{selectedPngbubbleIdx + 1})
+                </span>
+                <button
+                  onClick={() => handleDeletePngbubble(selectedPngbubbleIdx)}
+                  className="ml-auto flex items-center gap-1 text-xs font-bold text-red-400 hover:text-red-300 transition-colors"
+                >
+                  <Trash2 size={12} /> 삭제
+                </button>
+              </div>
+
+              {/* 텍스트 입력 */}
+              <div>
+                <p className="text-[10px] text-zinc-500 font-bold mb-1">텍스트</p>
+                <textarea
+                  value={selectedPngbubbleItem.text || ''}
+                  onChange={e => updatePngbubbleItem(selectedPngbubbleIdx, { text: e.target.value })}
+                  rows={2}
+                  maxLength={200}
+                  className="w-full px-2.5 py-1.5 text-sm font-bold bg-zinc-800 border border-zinc-700 text-white rounded-lg focus:outline-none focus:border-violet-500 resize-none"
+                  placeholder="으아아악!"
+                  onClick={e => e.stopPropagation()}
+                />
+              </div>
+
+              <div className="flex items-start gap-4 flex-wrap">
+                {/* 글자 크기 */}
+                <div className="shrink-0">
+                  <p className="text-[10px] text-zinc-500 font-bold mb-1">
+                    글자 크기 {selectedPngbubbleItem.font_size || '자동'}
+                  </p>
+                  <input type="range" min={0} max={80} step={1}
+                    value={selectedPngbubbleItem.font_size || 0}
+                    onChange={e => updatePngbubbleItem(selectedPngbubbleIdx, { font_size: Number(e.target.value) })}
+                    className="w-28 accent-violet-500 cursor-pointer" />
+                  <span className="text-[9px] text-zinc-600 ml-1">0=자동</span>
+                </div>
+
+                {/* 크기 (너비) */}
+                <div className="shrink-0">
+                  <p className="text-[10px] text-zinc-500 font-bold mb-1">
+                    크기 {Math.round((selectedPngbubbleItem.width ?? 0.35) * 100)}%
+                  </p>
+                  <input type="range" min={10} max={100} step={1}
+                    value={Math.round((selectedPngbubbleItem.width ?? 0.35) * 100)}
+                    onChange={e => updatePngbubbleItem(selectedPngbubbleIdx, { width: Number(e.target.value) / 100 })}
+                    className="w-28 accent-violet-500 cursor-pointer" />
+                </div>
+
+                {/* 회전 */}
+                <div className="shrink-0">
+                  <p className="text-[10px] text-zinc-500 font-bold mb-1">
+                    회전 {selectedPngbubbleItem.rotation || 0}°
+                  </p>
+                  <input type="range" min={0} max={360} step={1}
+                    value={selectedPngbubbleItem.rotation || 0}
+                    onChange={e => updatePngbubbleItem(selectedPngbubbleIdx, { rotation: Number(e.target.value) })}
+                    className="w-28 accent-violet-500 cursor-pointer" />
+                </div>
+
+                {/* 좌우 반전 */}
+                <div className="shrink-0">
+                  <p className="text-[10px] text-zinc-500 font-bold mb-1">좌우 반전</p>
+                  <button
+                    onClick={() => updatePngbubbleItem(selectedPngbubbleIdx, { flip_h: !selectedPngbubbleItem.flip_h })}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                      selectedPngbubbleItem.flip_h ? 'bg-violet-600 text-white' : 'bg-zinc-700 text-zinc-400 hover:bg-zinc-600'
+                    }`}
+                  >
+                    ↔ {selectedPngbubbleItem.flip_h ? 'ON' : 'OFF'}
+                  </button>
+                </div>
+              </div>
+
+              {/* 폰트 + 정렬 */}
+              <div className="flex items-start gap-4 flex-wrap">
+                <div className="shrink-0">
+                  <p className="text-[10px] text-zinc-500 font-bold mb-1">폰트</p>
+                  <select
+                    value={selectedPngbubbleItem.font_family || 'pretendard'}
+                    onChange={e => updatePngbubbleItem(selectedPngbubbleIdx, { font_family: e.target.value })}
+                    className="px-2 py-1.5 text-xs font-bold bg-zinc-800 border border-zinc-700 text-white rounded-lg focus:outline-none focus:border-violet-500"
+                    onClick={e => e.stopPropagation()}
+                  >
+                    {[...getFontsByUsage('bubble'), ...getFontsByUsage('sfx')].map(f => (
+                      <option key={f.id} value={f.id}>{f.label}</option>
+                    ))}
+                    <option value="pretendard">프리텐다드</option>
+                  </select>
+                </div>
+
+                <div className="shrink-0">
+                  <p className="text-[10px] text-zinc-500 font-bold mb-1">정렬</p>
+                  <div className="flex gap-1">
+                    {['left', 'center', 'right'].map(align => (
+                      <button key={align}
+                        onClick={() => updatePngbubbleItem(selectedPngbubbleIdx, { text_align: align })}
+                        className={`px-2 py-1 rounded text-xs font-bold transition-colors ${
+                          (selectedPngbubbleItem.text_align || 'center') === align
+                            ? 'bg-violet-600 text-white' : 'bg-zinc-700 text-zinc-400 hover:bg-zinc-600'
+                        }`}
+                      >
+                        {align === 'left' ? '←' : align === 'right' ? '→' : '↔'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 대사 가져오기 */}
+                {bubbles.length > 0 && (
+                  <div className="shrink-0">
+                    <p className="text-[10px] text-zinc-500 font-bold mb-1">대사 가져오기</p>
+                    <select
+                      value=""
+                      onChange={e => {
+                        if (e.target.value) updatePngbubbleItem(selectedPngbubbleIdx, { text: e.target.value });
+                      }}
+                      className="px-2 py-1.5 text-xs font-bold bg-zinc-800 border border-zinc-700 text-white rounded-lg focus:outline-none focus:border-violet-500 max-w-[160px]"
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <option value="">선택...</option>
+                      {bubbles.filter(b => b.text).map((b, i) => (
+                        <option key={i} value={b.text}>{b.text.slice(0, 30)}{b.text.length > 30 ? '...' : ''}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* PNG 말풍선 피커 */}
+          {showPngbubblePicker && !selectedBubble && !selectedSfxItem && !selectedEffectItem && !selectedProductItem && !selectedPngbubbleItem && (
+            <div className="px-4 py-3 space-y-2">
+              <p className="text-xs font-bold text-violet-400 flex items-center gap-1">
+                <MessageCircle size={12} /> 특수 말풍선 선택
+              </p>
+              <div className="flex gap-2 flex-wrap">
+                {PNGBUBBLE_CATALOG.map(entry => (
+                  <button key={entry.id} onClick={() => handleAddPngbubble(entry.id)}
+                    className="flex flex-col items-center gap-1 p-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-violet-500 rounded-lg transition-colors"
+                  >
+                    <img src={entry.src} alt={entry.label} className="w-12 h-12 object-contain opacity-80" draggable={false} />
+                    <span className="text-[10px] text-zinc-400 font-bold">{entry.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* 아무것도 선택 안 됨 */}
-          {!selectedBubble && !selectedSfxItem && !selectedEffectItem && !selectedProductItem && !showEffectPicker && !showProductPicker && (
+          {!selectedBubble && !selectedSfxItem && !selectedEffectItem && !selectedProductItem && !selectedPngbubbleItem && !showEffectPicker && !showProductPicker && !showPngbubblePicker && (
             <div className="flex items-center justify-center gap-1.5 py-3 text-xs text-zinc-500 font-bold">
               <Info size={13} />
               말풍선, 효과음, 배경효과를 클릭하면 편집할 수 있습니다

@@ -148,6 +148,7 @@ async def list_cuts(
             "sfx_items": (c.spec or {}).get("sfx_items", []),
             "effect_items": (c.spec or {}).get("effect_items", []),
             "product_items": (c.spec or {}).get("product_items", []),
+            "pngbubble_items": (c.spec or {}).get("pngbubble_items", []),
             "has_product": (c.spec or {}).get("has_product", False),
             "emphasis": (c.spec or {}).get("emphasis"),
             "prompt_override": bool((c.spec or {}).get("prompt_override")),
@@ -293,11 +294,67 @@ def _validate_product_items(items: list[dict]) -> None:
             )
 
 
+VALID_PNGBUBBLE_IDS = {
+    "bubble_burst", "bubble_shout", "bubble_think",
+    "bubble_burst_wide", "bubble_burst_tall",
+}
+
+
+def _validate_pngbubble_items(items: list[dict]) -> None:
+    """pngbubble_items 배열 검증. 위반 시 HTTPException(400)."""
+    for i, item in enumerate(items):
+        bid = item.get("bubble_id")
+        if bid not in VALID_PNGBUBBLE_IDS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"pngbubble_items[{i}]: invalid bubble_id '{bid}'. "
+                       f"Must be one of: {', '.join(sorted(VALID_PNGBUBBLE_IDS))}",
+            )
+        for field in ("x", "y", "opacity"):
+            val = item.get(field)
+            if val is not None and not (0 <= float(val) <= 1):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"pngbubble_items[{i}].{field}: {val} out of range 0~1",
+                )
+        w_val = item.get("width")
+        if w_val is not None and not (0 < float(w_val) <= 2):
+            raise HTTPException(
+                status_code=400,
+                detail=f"pngbubble_items[{i}].width: {w_val} out of range (0,2]",
+            )
+        rotation = item.get("rotation")
+        if rotation is not None and not (0 <= float(rotation) <= 360):
+            raise HTTPException(
+                status_code=400,
+                detail=f"pngbubble_items[{i}].rotation: {rotation} out of range 0~360",
+            )
+        flip_h = item.get("flip_h")
+        if flip_h is not None and not isinstance(flip_h, bool):
+            raise HTTPException(
+                status_code=400,
+                detail=f"pngbubble_items[{i}].flip_h: must be boolean",
+            )
+        text = item.get("text")
+        if text is not None and len(str(text)) > 200:
+            raise HTTPException(
+                status_code=400,
+                detail=f"pngbubble_items[{i}].text: exceeds 200 characters",
+            )
+        font_size = item.get("font_size")
+        if font_size is not None and not (8 <= float(font_size) <= 200):
+            raise HTTPException(
+                status_code=400,
+                detail=f"pngbubble_items[{i}].font_size: {font_size} out of range 8~200",
+            )
+
+
 class DialogueUpdateRequest(BaseModel):
     dialogue: list[dict]
     sfx_items: list[dict] | None = None  # 효과음 요소 (선택, 없으면 기존 유지)
     effect_items: list[dict] | None = None  # 배경효과 요소 (선택, 없으면 기존 유지)
     product_items: list[dict] | None = None  # 제품 배치 요소 (선택, 없으면 기존 유지)
+    pngbubble_items: list[dict] | None = None  # 특수 말풍선 PNG (선택, 없으면 기존 유지)
 
 
 @router.put("/cuts/{cut_id}/dialogue")
@@ -322,6 +379,9 @@ async def update_cut_dialogue(
     if body.product_items is not None:
         _validate_product_items(body.product_items)
         spec["product_items"] = body.product_items
+    if body.pngbubble_items is not None:
+        _validate_pngbubble_items(body.pngbubble_items)
+        spec["pngbubble_items"] = body.pngbubble_items
     cut.spec = spec
 
     # 원본 이미지 위에 재조판 (말풍선만, 효과음은 프론트엔드 SVG로 렌더링)
@@ -341,6 +401,7 @@ async def update_cut_dialogue(
         "sfx_items": spec.get("sfx_items", []),
         "effect_items": spec.get("effect_items", []),
         "product_items": spec.get("product_items", []),
+        "pngbubble_items": spec.get("pngbubble_items", []),
     }
 
 
