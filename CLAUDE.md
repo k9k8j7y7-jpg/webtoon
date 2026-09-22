@@ -149,6 +149,8 @@ WEBTOON/
 - [x] ep30 광고 샘플 showcase 공개 (완료 2026-09-19, 카테고리 자동 결정 버그 수정+AD 배지, 랜딩 광고 탭 오픈, 도도 검증 통과)
 - [x] v2 1단계 비율 5종 (완료 2026-09-20, Gate3 UI 5버튼+백엔드 검증+프롬프트 분기+인스타 letterbox+prompt-preview API). 말풍선 여백 프롬프트·고급 프롬프트 편집 UI는 도도 판단으로 제거(사용자 불필요). 16:9 실생성 검증 대기(ep31 슛돌이 단편)
 - [x] **게이트1 기획서 개편** (완료 2026-09-22, 1~3단계, idea_brief 구조+등장인물 미리 채움+기획 생성 idea_brief 주입+시놉시스 4단+제목 유지+읽기 전용 보강)
+- [ ] GPT Image 품질 실험 (gpt_image_test.py, "여름날의 작은 기적" #1·#4·#5 × 2) → C 모델 선택 구조 여부 결정
+- [ ] 장소 텍스트화 조사 (콘티&장소)
 - [ ] 16:9 실생성 검증 (ep32 슛돌이 단편, v2 비율 5종 관련)
 - [ ] B 스타일 썸네일 (15종 프리셋 이미지 생성+Gate3 카드 표시)
 - [ ] C 이미지 모델 선택 (에피소드 단위 모델 잠금, openai_image.py 어댑터)
@@ -163,6 +165,7 @@ WEBTOON/
 - **말풍선 렌더러 수정 시:** `composition/service.py`의 `RENDERER_VERSION` 올리고, `frontend/src/utils/bubbleSpec.json` + `backend/app/composition/bubble_spec.json` 동시 업데이트
 - **텍스트 렌더 이원 모드:** 화면=`<foreignObject>` / export=SVG `<text>/<tspan>` (`renderMode='svg-text'`). 수정 시 두 모드 동시 수정 + `node scripts/bubble-shot.mjs` 비교 판정 통과 필수
 - **Gemini:** API 키 `.env`의 `GEMINI_API_KEY`. 이미지 모델 `.env`의 `IMAGE_MODEL` (현재 `gemini-3.1-flash-image`), 텍스트 모델 `gemini-2.5-flash`
+- **서버 .env 안전:** 서버 .env는 로컬과 다르다(GEMINI_API_KEY·SECRET_KEY·TOSS 키·IMAGE_MODEL 등 운영 전용 값). **절대 파일 통째로 scp 덮어쓰지 말 것.** 키 추가/변경은 서버에서 해당 줄만 `sed`/`echo >>` 로. 변경 전 `cp .env .env.bak.$(date +%Y%m%d)` 백업, 변경 후 `GEMINI_API_KEY` 등 기존 키 길이 확인. OAuth 키는 콘솔에서만 조회 가능, 서버 .env 백업은 날짜별 유지
 - **DB 마이그레이션:** `stepN.sql` + `stepN_down.sql` 쌍. 리허설 up→verify→down→재-up + mysqldump 백업 + 사용자 승인 필수. DB 덤프 .sql 커밋 금지 (stepN은 예외). 마이그레이션 백업은 데이터 포함(no-data 금지)
 - **운영 DB 데이터 변경 금지:** DDL뿐 아니라 단일 행 UPDATE/INSERT/DELETE도 예외 없음. SQL 텍스트 보고 → 도도 "실행해" 승인 → 실행 순서 필수. Python ORM 직접 실행도 동일
 - **마이그레이션 리허설:** 반드시 별도 DB(`project_t_test`)에서만 실행. 운영 DB에는 도도의 "실행해" 승인 후 단 1회 적용. 리허설·테스트 목적으로 운영 테이블에 DDL/DML 실행 금지. `project_t_test`가 없으면 리허설 전에 먼저 생성 (운영 스키마 복제, 데이터 불필요)
@@ -172,7 +175,7 @@ WEBTOON/
 - **컷 프롬프트 한글 금지:** 외형은 appearance_en(영어)만 주입. 지문(action)에는 한국어 짧은 괄호 외형만
 - **서브 경로:** Vite `base: '/WEBTOON/'`, FastAPI `root_path="/WEBTOON"` — 새 컴포넌트 작성 시 prefix 반영
 - **정적 파일:** `app.mount()` 미사용 → SPA fallback 핸들러에서 storage/assets/frontend 통합 서빙
-- **배포:** 파일별 `scp` → uvicorn `--reload` 자동 감지 (프론트는 빌드 후 dist 배포)
+- **배포:** 파일별 `scp` → uvicorn `--reload` 자동 감지 (프론트는 빌드 후 dist 배포). **`.env` 변경은 `--reload`가 감지 못함** → 변경 후 반드시 `touch app/config.py`로 재시작 + `tail /tmp/uvicorn.log`에서 `Started server process` 확인
 - **dev 서버:** 항상 백그라운드 기동 + curl 폴링 후 진행. 재시작 시 묻지 않고 수행, 한 줄 보고
 - **다단계 지시서:** `docs/PROGRESS.md`에 현재 단계 갱신. 맥락 불확실 시 이 파일부터 읽기
 - **D: 드라이브:** I/O 에러 이력 있음. 이상 시 즉시 C:로 사본

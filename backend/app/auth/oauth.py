@@ -26,6 +26,9 @@ async def exchange_google(code: str) -> OAuthUserInfo:
                 "grant_type": "authorization_code",
             },
         )
+        if token_resp.status_code != 200:
+            import logging
+            logging.error(f"Google token exchange failed: {token_resp.status_code} {token_resp.text}")
         token_resp.raise_for_status()
         access_token = token_resp.json()["access_token"]
 
