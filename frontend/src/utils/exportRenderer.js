@@ -14,7 +14,9 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import BubbleOverlayComponent from '../components/BubbleOverlay';
 import SfxLayerComponent from '../components/SfxLayer';
+import PngBubbleLayerComponent from '../components/PngBubbleLayer';
 import EFFECT_CATALOG from './effectCatalog';
+import PNGBUBBLE_CATALOG from './pngBubbleCatalog';
 import { loadFontCSS, collectUsedFonts, ensureFontsLoaded } from './fontEmbed';
 import { computeInitialLayouts } from './bubbleLayout';
 
@@ -60,8 +62,8 @@ export async function renderCutToCanvas(cut, characters, imageUrl, fontCSS, prod
   // 1. 베이스 이미지
   ctx.drawImage(img, 0, 0, W, H);
 
-  // 2. SVG 오버레이 (제품 + 효과 + 말풍선 + 효과음) — CutEditor 보기모드와 동일한 배치
-  // 레이어 순서: 이미지 → 제품 → 효과 → 말풍선 → 효과음
+  // 2. SVG 오버레이 (제품 + 효과 + 말풍선 + PNG말풍선 + 효과음) — CutEditor 보기모드와 동일한 배치
+  // 레이어 순서: 이미지 → 제품 → 효과 → SVG말풍선 → PNG말풍선 → 효과음
   const dialogue = computeInitialLayouts(cut.dialogue || []);
   const hasBubbles = dialogue.length > 0;
   const hasSfx = cut.sfx_items?.length > 0;
@@ -70,6 +72,8 @@ export async function renderCutToCanvas(cut, characters, imageUrl, fontCSS, prod
   const productItems = cut.product_items || [];
   const productMap = products ? Object.fromEntries(products.map(p => [p.id, p])) : {};
   const hasProducts = productItems.length > 0 && products?.length > 0;
+  const pngbubbleItems = cut.pngbubble_items || [];
+  const hasPngbubbles = pngbubbleItems.length > 0;
 
   // 배경효과 PNG → Base64 변환 (CORS taint 방지)
   const effectBase64Cache = {};
@@ -121,7 +125,31 @@ export async function renderCutToCanvas(cut, characters, imageUrl, fontCSS, prod
     }
   }
 
-  if (hasBubbles || hasSfx || hasEffects || hasProducts) {
+  // PNG 말풍선 이미지 → Base64 변환
+  const pngbubbleBase64Cache = {};
+  if (hasPngbubbles) {
+    const uniqueIds = [...new Set(pngbubbleItems.map(p => p.bubble_id))];
+    for (const id of uniqueIds) {
+      const entry = PNGBUBBLE_CATALOG.find(e => e.id === id);
+      if (!entry) continue;
+      const pbImg = await loadImage(entry.src, false);
+      const tmpCanvas = document.createElement('canvas');
+      tmpCanvas.width = pbImg.naturalWidth;
+      tmpCanvas.height = pbImg.naturalHeight;
+      const tmpCtx = tmpCanvas.getContext('2d');
+      tmpCtx.drawImage(pbImg, 0, 0);
+      pngbubbleBase64Cache[id] = {
+        dataUrl: tmpCanvas.toDataURL('image/png'),
+        aspect: pbImg.naturalHeight / pbImg.naturalWidth,
+        size: [pbImg.naturalWidth, pbImg.naturalHeight],
+        text_area: entry.text_area,
+      };
+      tmpCanvas.width = 0;
+      tmpCanvas.height = 0;
+    }
+  }
+
+  if (hasBubbles || hasSfx || hasEffects || hasProducts || hasPngbubbles) {
     // viewBox 참조 크기: 화면 비율 유지, 고정 너비
     const refW = REF_WIDTH;
     const refH = Math.round(refW * H / W);
@@ -172,6 +200,27 @@ export async function renderCutToCanvas(cut, characters, imageUrl, fontCSS, prod
         }),
       );
       innerContent += extractSvgContent(bubbleSvg);
+    }
+
+    // PNG 말풍선 (SVG 말풍선 뒤, 효과음 앞)
+    if (hasPngbubbles) {
+      const pbSvg = renderToStaticMarkup(
+        createElement(PngBubbleLayerComponent, {
+          pngbubbleItems: pngbubbleItems,
+          width: refW,
+          height: refH,
+        }),
+      );
+      // PngBubbleLayer의 <image href>를 Base64로 치환 (CORS taint 방지)
+      let pbContent = extractSvgContent(pbSvg);
+      for (const [id, cached] of Object.entries(pngbubbleBase64Cache)) {
+        const entry = PNGBUBBLE_CATALOG.find(e => e.id === id);
+        if (entry) {
+          // src 경로를 Base64 dataUrl로 치환
+          pbContent = pbContent.split(entry.src).join(cached.dataUrl);
+        }
+      }
+      innerContent += pbContent;
     }
 
     if (hasSfx) {

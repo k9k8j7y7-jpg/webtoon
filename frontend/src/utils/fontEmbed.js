@@ -118,6 +118,10 @@ export function collectUsedFonts(cuts) {
       const fontId = d.bubble_layout?.font;
       if (fontId) ids.add(fontId);
     }
+    for (const pb of cut.pngbubble_items || []) {
+      const fontId = pb.font_family;
+      if (fontId) ids.add(fontId);
+    }
   }
   return [...ids];
 }

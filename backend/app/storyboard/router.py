@@ -342,10 +342,10 @@ def _validate_pngbubble_items(items: list[dict]) -> None:
                 detail=f"pngbubble_items[{i}].text: exceeds 200 characters",
             )
         font_size = item.get("font_size")
-        if font_size is not None and not (8 <= float(font_size) <= 200):
+        if font_size is not None and float(font_size) != 0 and not (8 <= float(font_size) <= 200):
             raise HTTPException(
                 status_code=400,
-                detail=f"pngbubble_items[{i}].font_size: {font_size} out of range 8~200",
+                detail=f"pngbubble_items[{i}].font_size: {font_size} out of range (0 or 8~200)",
             )
 
 
