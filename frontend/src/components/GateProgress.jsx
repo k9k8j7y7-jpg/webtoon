@@ -1,6 +1,6 @@
 import { Check, Lock, AlertTriangle, Pencil } from 'lucide-react';
 
-const GATE_LABELS = ['기획', '대본', '자산', '콘티', '이미지'];
+const GATE_LABELS = ['기획', '대본', '자산', '콘티&장소', '이미지'];
 const GATE_KEYS = ['1_planning', '2_script', '3_assets', '4_storyboard', '5_review'];
 
 const statusIcon = (status) => {

@@ -11,7 +11,12 @@ from app.auth.deps import get_current_user
 from app.users.models import User
 from app.projects.models import Project, Episode
 from app.locations.models import Location
-from app.locations.service import generate_location_images, convert_photo_to_illustration
+from app.locations.service import (
+    generate_location_images,
+    convert_photo_to_illustration,
+    extract_photo_description,
+    generate_location_spec_en,
+)
 from app.storage import upload_image
 from app.jobs import create_job, run_job_in_background
 from app.workflow.gate import get_gate_number, get_aspect_ratio
@@ -27,6 +32,7 @@ class LocationsGenerateRequest(BaseModel):
 
 class LocationUpdateRequest(BaseModel):
     name: str | None = None
+    description: str | None = None
     mood_notes: str | None = None
 
 
@@ -56,8 +62,8 @@ async def create_locations(
     episode = _get_episode_for_user(db, project_id, episode_id, current_user.id)
 
     gate = get_gate_number(episode.gate_status)
-    if gate != 3:
-        raise HTTPException(status_code=400, detail=f"Current gate is {gate}, locations require gate 3")
+    if gate not in (3, 4, 5):
+        raise HTTPException(status_code=400, detail=f"Current gate is {gate}, locations require gate 3-5")
 
     # 사용자 확정 목록이 있으면 사용, 없으면 대본에서 추출
     if body and body.locations:
@@ -69,8 +75,11 @@ async def create_locations(
     if not locations_data:
         raise HTTPException(status_code=400, detail="No locations found")
 
-    # 패킷 사전 확인: 사진 대체 아닌 장소만 1패킷씩
-    gen_loc_count = sum(1 for l in locations_data if not l.get("reference_photo_url"))
+    # 패킷 사전 확인: 이미지 생성 대상만 1패킷씩 (사진 대체·텍스트 전용 제외)
+    gen_loc_count = sum(
+        1 for l in locations_data
+        if not l.get("reference_photo_url") and not l.get("skip_images")
+    )
     if gen_loc_count > 0:
         require_packets(current_user.id, gen_loc_count, db)
 
@@ -110,10 +119,12 @@ async def get_location(
         "name": location.name,
         "description": location.description,
         "mood_notes": location.mood_notes,
+        "location_spec_en": location.location_spec_en,
         "status": location.status,
         "reference_photo_url": location.reference_photo_url,
         "converted_photo_url": location.converted_photo_url,
         "images": [{"url": img.image_url, "seed": img.seed} for img in location.images],
+        "image_url": location.images[0].image_url if location.images else None,
     }
 
 
@@ -124,29 +135,40 @@ async def update_location(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """장소 분위기(mood_notes) 수정. 이름 변경은 이미지가 있으면 차단(수정 7)."""
+    """장소 이름·묘사·분위기 수정 + 영문 스펙 자동 재생성."""
     location = db.query(Location).filter(Location.id == location_id).first()
     if not location:
         raise HTTPException(status_code=404, detail="Location not found")
 
-    # 수정 7: 이미지가 있는 장소의 이름(정체성) 변경 차단
-    if body.name and body.name != location.name and len(location.images) > 0:
-        raise HTTPException(
-            status_code=400,
-            detail="장소를 다른 곳으로 바꾸려면 대본에서 수정해주세요. 분위기(무드) 조정만 여기서 가능합니다.",
-        )
-
-    if body.name is not None:
+    changed = False
+    if body.name is not None and body.name != location.name:
         location.name = body.name
-    if body.mood_notes is not None:
+        changed = True
+    if body.description is not None and body.description != location.description:
+        location.description = body.description or None
+        changed = True
+    if body.mood_notes is not None and body.mood_notes != location.mood_notes:
         location.mood_notes = body.mood_notes or None
+        changed = True
+
+    # 텍스트 변경 시 spec_en 자동 재생성
+    if changed:
+        try:
+            spec_en = await generate_location_spec_en(
+                location.name, location.description, location.mood_notes,
+            )
+            location.location_spec_en = spec_en or None
+        except Exception:
+            pass  # 실패해도 저장은 진행
 
     db.commit()
     return {
         "id": location.id,
         "ref_key": location.ref_key,
         "name": location.name,
+        "description": location.description,
         "mood_notes": location.mood_notes,
+        "location_spec_en": location.location_spec_en,
     }
 
 
@@ -207,11 +229,14 @@ async def list_locations(
             "id": l.id,
             "ref_key": l.ref_key,
             "name": l.name,
+            "description": l.description,
             "mood_notes": l.mood_notes,
+            "location_spec_en": l.location_spec_en,
             "status": l.status,
             "reference_photo_url": l.reference_photo_url,
             "converted_photo_url": l.converted_photo_url,
             "image_count": len(l.images),
+            "image_url": l.images[0].image_url if l.images else None,
         }
         for l in locations
     ]
@@ -259,13 +284,10 @@ async def upload_location_photo(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """장소 참고 사진 업로드 + 스타일 변환 (JPEG/PNG, 최대 5MB, 1패킷)."""
+    """장소 참고 사진 업로드 → 비전으로 묘사 추출 (무료, 이미지 변환은 옵션)."""
     location = db.query(Location).filter(Location.id == location_id).first()
     if not location:
         raise HTTPException(status_code=404, detail="Location not found")
-
-    # 패킷 사전 확인: 사진→일러스트 = 1패킷
-    require_packets(current_user.id, 1, db)
 
     from app.image_util import validate_and_process
 
@@ -289,17 +311,15 @@ async def upload_location_photo(
     location.converted_photo_url = None  # 기존 변환본 초기화
     db.commit()
 
-    # 즉시 변환
-    style = db.query(Style).filter(Style.episode_id == location.episode_id).first()
-    style_prompt = style.prompt_snippet if style else STYLE_PRESETS["korean_webtoon"]["prompt"]
-    ep = db.query(Episode).filter(Episode.id == location.episode_id).first()
-    ep_ar = get_aspect_ratio(ep.gate_status) if ep else "9:16"
-    converted_url = await convert_photo_to_illustration(location, style_prompt, db, aspect_ratio=ep_ar)
+    # 비전으로 묘사 추출 (패킷 무료) — 이미지 변환은 하지 않음
+    spatial_desc = await extract_photo_description(location, db)
 
     return {
         "id": location.id,
         "reference_photo_url": url,
-        "converted_photo_url": converted_url,
+        "converted_photo_url": None,
+        "description": location.description,
+        "location_spec_en": location.location_spec_en,
     }
 
 
@@ -347,6 +367,43 @@ async def delete_location_photo(
     db.commit()
 
     return {"id": location.id, "reference_photo_url": None, "converted_photo_url": None}
+
+
+@router.delete("/locations/{location_id}")
+async def delete_location(
+    location_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """장소 삭제. 컷이 참조 중이면 거부."""
+    location = db.query(Location).filter(Location.id == location_id).first()
+    if not location:
+        raise HTTPException(status_code=404, detail="Location not found")
+
+    from app.storyboard.models import Cut
+    # 이 장소를 참조하는 컷 수 확인
+    referring_cuts = (
+        db.query(Cut)
+        .filter(Cut.episode_id == location.episode_id)
+        .all()
+    )
+    ref_count = sum(
+        1 for c in referring_cuts
+        if (c.spec or {}).get("location_id") == location.ref_key
+    )
+    if ref_count > 0:
+        raise HTTPException(
+            status_code=409,
+            detail=f"{ref_count}개 컷이 이 장소를 쓰고 있어요. 컷의 장소를 먼저 바꿔주세요.",
+        )
+
+    # 연결된 이미지 삭제
+    from app.locations.models import LocationImage
+    db.query(LocationImage).filter(LocationImage.location_id == location.id).delete()
+    db.delete(location)
+    db.commit()
+
+    return {"deleted": True, "id": location_id}
 
 
 def _get_episode_for_user(db, project_id, episode_id, user_id):

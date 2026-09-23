@@ -1,14 +1,17 @@
-"""Location Engine — 게이트 3: 장소 레퍼런스 이미지 생성.
+"""Location Engine — 장소 레퍼런스 이미지 생성 + 장소 영문 스펙.
 
 PRD 4.3: 대본에서 주요 장소를 추출해 레퍼런스 이미지를 생성.
 캐릭터와 동일한 자산 패턴(location_id 참조).
 """
+
+import logging
 
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.locations.models import Location, LocationImage
 from app.adapters.gemini_image import get_image_adapter
+from app.adapters.gemini import generate_text, AI_TOKENS_SHORT
 
 settings = get_settings()
 from app.storage import upload_image
@@ -16,6 +19,52 @@ from app.images.service import _load_image_bytes
 from app.jobs import get_job, update_job
 from app.database import SessionLocal
 from app.packets.service import charge_packets
+
+logger = logging.getLogger(__name__)
+
+
+async def generate_location_spec_en(
+    name: str | None,
+    description: str | None,
+    mood_notes: str | None,
+) -> str:
+    """장소 이름·묘사·분위기 → 영문 스펙 한 줄 (컷 프롬프트 주입용).
+
+    appearance_en 패턴: 한글 입력 → Gemini 텍스트로 영문 변환.
+    ≤80 단어. 공간 종류, 핵심 가구/구조 3~5개, 색·재질, 조명·시간대, 분위기.
+    사람·캐릭터 언급 금지. 무료(텍스트 LLM).
+    """
+    parts = []
+    if name:
+        parts.append(f"장소 이름: {name}")
+    if description:
+        parts.append(f"묘사: {description}")
+    if mood_notes:
+        parts.append(f"분위기: {mood_notes}")
+
+    if not parts:
+        return ""
+
+    korean_input = "\n".join(parts)
+
+    try:
+        result = await generate_text(
+            prompt=(
+                "You are a location description writer for webtoon illustration prompts.\n"
+                "Convert the following Korean location info into ONE concise English line (≤80 words).\n"
+                "Include: space type, 3-5 key furniture/structures, colors/materials, "
+                "lighting/time of day, atmosphere.\n"
+                "Do NOT mention any people, characters, or animals.\n"
+                "Output ONLY the English description, nothing else.\n\n"
+                f"{korean_input}"
+            ),
+            temperature=0.3,
+            max_output_tokens=AI_TOKENS_SHORT,
+        )
+        return result.strip().replace("\n", " ")[:500]
+    except Exception as e:
+        logger.warning("generate_location_spec_en failed: %s", e)
+        return ""
 
 
 async def generate_location_images(
@@ -61,9 +110,23 @@ async def generate_location_images(
             if mood_notes:
                 location.mood_notes = mood_notes
 
-        # 사진으로 대체된 장소: AI 생성 스킵
+        # 영문 스펙 생성 (없을 때만 — 이미 있으면 수동 갱신 대기)
+        if not location.location_spec_en:
+            try:
+                spec_en = await generate_location_spec_en(
+                    location.name, location.description, location.mood_notes,
+                )
+                if spec_en:
+                    location.location_spec_en = spec_en
+            except Exception as e:
+                logger.warning("spec_en generation failed for '%s': %s", ref_key, e)
+
+        # 사진으로 대체된 장소 또는 텍스트 전용: AI 이미지 생성 스킵
         photo_url = loc_data.get("reference_photo_url")
-        if photo_url:
+        skip_images = photo_url == "__text_only__" or loc_data.get("skip_images")
+        if skip_images:
+            results.append({"ref_key": ref_key, "name": name, "status": "text_only"})
+        elif photo_url:
             location.reference_photo_url = photo_url
             results.append({"ref_key": ref_key, "name": name, "status": "photo"})
         else:
@@ -136,6 +199,59 @@ async def generate_location_images(
     return {"locations": results}
 
 
+async def extract_photo_description(location: Location, db: Session) -> str:
+    """업로드 사진 → 비전으로 공간 묘사 추출 → description·spec_en 저장.
+
+    이미지 생성 없음, 패킷 차감 없음. 사진 업로드 시 자동 호출.
+    Returns: 추출된 공간 묘사 텍스트
+    """
+    photo_bytes = _load_image_bytes(location.reference_photo_url)
+    if not photo_bytes:
+        raise RuntimeError("원본 사진을 읽을 수 없습니다")
+
+    from google.genai import types
+    from app.adapters.gemini import get_client
+
+    client = get_client()
+    vision_response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=[
+            types.Part.from_bytes(data=photo_bytes, mime_type="image/jpeg"),
+            (
+                "Describe this room's spatial layout in English, under 150 words. "
+                "Focus on: room shape, wall colors, floor material, window positions and size, "
+                "furniture types and placement (e.g. 'beige L-shaped sofa on the left, "
+                "round wooden table in center'), lighting direction, and camera angle. "
+                "Ignore any people, animals, or small clutter. "
+                "Do NOT describe the image as a photo — write as if describing a room to an illustrator."
+            ),
+        ],
+        config=types.GenerateContentConfig(
+            temperature=0.3,
+            max_output_tokens=AI_TOKENS_SHORT,
+        ),
+    )
+    spatial_desc = vision_response.text.strip()
+    logger.warning("Photo→text for '%s': %s", location.ref_key, spatial_desc[:200])
+
+    # description이 비어 있으면 채움 (있으면 유지 — 사용자 입력 보호)
+    if not location.description or not location.description.strip():
+        location.description = spatial_desc
+
+    # spec_en 재생성
+    try:
+        spec_en = await generate_location_spec_en(
+            location.name, location.description, location.mood_notes,
+        )
+        if spec_en:
+            location.location_spec_en = spec_en
+    except Exception as e:
+        logger.warning("spec_en regen after photo for '%s': %s", location.ref_key, e)
+
+    db.commit()
+    return spatial_desc
+
+
 async def convert_photo_to_illustration(
     location: Location,
     style_prompt: str,
@@ -182,6 +298,19 @@ async def convert_photo_to_illustration(
     )
     spatial_desc = vision_response.text.strip()
     logger.warning("Photo→text for '%s': %s", location.ref_key, spatial_desc[:200])
+
+    # spatial_desc를 description에 저장 (비어 있을 때만 — 사용자 입력 보호)
+    if not location.description or not location.description.strip():
+        location.description = spatial_desc
+    # spec_en 재생성 (사진 업로드 시 묘사가 바뀔 수 있으므로)
+    try:
+        spec_en = await generate_location_spec_en(
+            location.name, location.description, location.mood_notes,
+        )
+        if spec_en:
+            location.location_spec_en = spec_en
+    except Exception as e:
+        logger.warning("spec_en regen after photo for '%s': %s", location.ref_key, e)
 
     # ── 2단계: 텍스트→이미지 (참조 이미지 없음) ──
     adapter = get_image_adapter()

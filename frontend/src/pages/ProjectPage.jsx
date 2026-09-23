@@ -174,7 +174,7 @@ export default function ProjectPage() {
     if (!gs) return '시작 전';
     if (isEpisodeCompleted(gs)) return null;
     const g = gs.current_gate;
-    const labels = { 1: '기획', 2: '대본', 3: '자산', 4: '콘티', 5: '이미지' };
+    const labels = { 1: '기획', 2: '대본', 3: '자산', 4: '콘티&장소', 5: '이미지' };
     return `게이트 ${g} — ${labels[g]}`;
   };
 

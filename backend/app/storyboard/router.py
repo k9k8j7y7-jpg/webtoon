@@ -81,6 +81,29 @@ async def create_storyboard(
                 detail=f"최대 {rec['recommended_max']}컷까지 가능합니다.",
             )
 
+    # 장소 누락 체크: 대본이 참조하는 location_id 중 DB에 없는 것
+    from app.locations.models import Location as LocModel
+    script_location_ids = set()
+    for scene in script_data.get("scenes", []):
+        for cut_data in scene.get("cuts", []):
+            loc_id = cut_data.get("location_id")
+            if loc_id:
+                script_location_ids.add(loc_id)
+    if script_location_ids:
+        existing_refs = {
+            l.ref_key for l in
+            db.query(LocModel.ref_key).filter(
+                LocModel.episode_id == episode_id,
+                LocModel.ref_key.in_(script_location_ids),
+            ).all()
+        }
+        missing = script_location_ids - existing_refs
+        if missing:
+            raise HTTPException(
+                status_code=400,
+                detail=f"장소를 먼저 정리해 주세요. 누락: {', '.join(sorted(missing))}",
+            )
+
     # 기존 컷 삭제 (재생성 시)
     db.query(Cut).filter(Cut.episode_id == episode_id).delete()
     db.flush()
@@ -170,7 +193,7 @@ async def update_cut(
         raise HTTPException(status_code=404, detail="Cut not found")
 
     spec = dict(cut.spec)
-    for key in ["shot", "action", "emphasis", "transition", "prompt_override"]:
+    for key in ["shot", "action", "emphasis", "transition", "prompt_override", "location_id"]:
         if key in body:
             spec[key] = body[key]
     if "dialogue" in body:

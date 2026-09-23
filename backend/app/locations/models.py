@@ -13,6 +13,7 @@ class Location(Base):
     name = Column(String(100), nullable=True)
     description = Column(String(2000), nullable=True)
     mood_notes = Column(Text, nullable=True)
+    location_spec_en = Column(String(500), nullable=True)
     reference_photo_url = Column(String(500), nullable=True)
     converted_photo_url = Column(String(500), nullable=True)
     status = Column(

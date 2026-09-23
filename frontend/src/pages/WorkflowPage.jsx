@@ -114,7 +114,7 @@ export default function WorkflowPage() {
   };
   const GateComponent = gateComponents[displayGate];
 
-  const gateLabels = { 1: '기획', 2: '대본', 3: '자산', 4: '콘티', 5: '이미지' };
+  const gateLabels = { 1: '기획', 2: '대본', 3: '자산', 4: '콘티&장소', 5: '이미지' };
 
   return (
     <div>

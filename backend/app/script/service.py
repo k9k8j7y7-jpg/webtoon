@@ -65,7 +65,8 @@ SYSTEM_INSTRUCTION = """너는 웹툰 대본 작가야.
 - transition: null 또는 "scene_break"
 - character_id는 기획안 등장인물의 ref_key를 그대로 사용. 새 키를 만들지 말 것
 - 각 씬에는 최소 2컷 이상
-- action(지문)에서 인물 위치는 가구 기준으로 명시 (예: '소파에 앉아', '테이블 옆에 서서'). 위치 불명 서술 금지"""
+- action(지문)에서 인물 위치는 가구 기준으로 명시 (예: '소파에 앉아', '테이블 옆에 서서'). 위치 불명 서술 금지
+- 장소(location)는 물리적으로 다른 공간만 구분하라. 같은 공간의 다른 앵글·창밖 풍경·입구/내부는 하나의 location_id로 통합. 단편 기준 보통 2~4개, 최대 5개"""
 
 
 async def generate_script(planning: dict, series_context: dict | None = None, is_ad: bool = False) -> dict:

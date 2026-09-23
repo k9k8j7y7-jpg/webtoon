@@ -40,6 +40,8 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
   const [rawEdit, setRawEdit] = useState('');
   const [reviseHint, setReviseHint] = useState('');
   const [revising, setRevising] = useState(false);
+  // 기획서 저장 상태: null | 'dirty' | 'saving' | 'saved' | 'error'
+  const [briefSaveStatus, setBriefSaveStatus] = useState(null);
 
   const [characters, setCharacters] = useState([]);
   const [charTouched, setCharTouched] = useState(false); // 등장인물 user_touched
@@ -157,20 +159,44 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
     }
   };
 
-  // blur 시 idea_brief 필드 저장
+  // blur 시 idea_brief 필드 저장 (자동)
   const saveBriefField = (field, value) => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
+      setBriefSaveStatus('saving');
       try {
         await api.put(`/projects/${projectId}/episodes/${episodeId}/idea-brief`, {
           [field]: value,
         });
-      } catch {}
+        setBriefSaveStatus('saved');
+        setTimeout(() => setBriefSaveStatus(prev => prev === 'saved' ? null : prev), 2000);
+      } catch {
+        setBriefSaveStatus('error');
+      }
     }, 500);
+  };
+
+  // [저장] 버튼 — 전체 필드 즉시 저장
+  const saveBriefAll = async () => {
+    if (!ideaBrief) return;
+    setBriefSaveStatus('saving');
+    try {
+      await api.put(`/projects/${projectId}/episodes/${episodeId}/idea-brief`, {
+        summary: ideaBrief.summary,
+        characters: ideaBrief.characters,
+        story: ideaBrief.story,
+        tone: ideaBrief.tone,
+      });
+      setBriefSaveStatus('saved');
+      setTimeout(() => setBriefSaveStatus(prev => prev === 'saved' ? null : prev), 2000);
+    } catch {
+      setBriefSaveStatus('error');
+    }
   };
 
   const updateBriefField = (field, value) => {
     setIdeaBrief(prev => ({ ...prev, [field]: value }));
+    setBriefSaveStatus('dirty');
   };
 
   const updateBriefStory = (key, value) => {
@@ -178,6 +204,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
       ...prev,
       story: { ...(prev?.story || {}), [key]: value },
     }));
+    setBriefSaveStatus('dirty');
   };
 
   const addBriefCharacter = () => {
@@ -193,6 +220,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
       chars[index] = { ...chars[index], [field]: value };
       return { ...prev, characters: chars };
     });
+    setBriefSaveStatus('dirty');
   };
 
   const removeBriefCharacter = (index) => {
@@ -509,6 +537,19 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
         {/* idea_brief 내용 5칸 */}
         {ideaBrief?.summary && !briefLoading && (
           <div className="space-y-3">
+            {/* 저장 상태 */}
+            {briefSaveStatus && (
+              <div className="flex justify-end">
+                {briefSaveStatus === 'dirty' && (
+                  <button onClick={saveBriefAll} className="px-2.5 py-0.5 text-[10px] font-bold text-white bg-comic-blue rounded-full hover:bg-blue-600 transition-colors">저장</button>
+                )}
+                {briefSaveStatus === 'saving' && <span className="text-[10px] text-blue-500 font-bold">저장 중…</span>}
+                {briefSaveStatus === 'saved' && <span className="text-[10px] text-emerald-600 font-bold">저장됨 ✓</span>}
+                {briefSaveStatus === 'error' && (
+                  <button onClick={saveBriefAll} className="px-2.5 py-0.5 text-[10px] font-bold text-white bg-red-500 rounded-full hover:bg-red-600 transition-colors">저장 실패 — 다시</button>
+                )}
+              </div>
+            )}
             {/* 한 줄 소개 */}
             <div>
               <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">한 줄 소개</label>
@@ -786,7 +827,18 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
           </button>
         </div>
 
-        {error && <p className="text-red-500 dark:text-red-400 text-sm font-bold mt-3">{error}</p>}
+        {error && (
+          <div className="flex items-center gap-2 mt-3">
+            <p className="text-red-500 dark:text-red-400 text-sm font-bold">{error}</p>
+            <button
+              onClick={() => triggerIdeaBrief()}
+              disabled={briefLoading}
+              className="flex items-center gap-1 px-3 py-1 text-xs font-bold text-white bg-red-500 hover:bg-red-600 rounded-full transition-colors disabled:opacity-50"
+            >
+              <RefreshCw size={10} /> 다시 정리
+            </button>
+          </div>
+        )}
       </div>
 
       {planning && (() => {

@@ -212,7 +212,13 @@ def _get_location_reference(episode_id: int, location_id: str, db: Session) -> t
     if not location:
         return None, "", False
 
-    loc_desc = f"{location.name}. {location.description or ''}"
+    # location_spec_en 우선, 없으면 한글 폴백 (기존 에피소드 호환)
+    if location.location_spec_en:
+        loc_desc = location.location_spec_en
+        logger.info("Location '%s': spec=en", location.ref_key)
+    else:
+        loc_desc = f"{location.name}. {location.description or ''}"
+        logger.info("Location '%s': spec=ko (fallback)", location.ref_key)
 
     # 변환본(일러스트화된 사진) 최우선
     if location.converted_photo_url:

@@ -709,7 +709,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
   const hasStyle = !!styles?.preset_key;
   const currentGate = gateStatus?.current_gate || 1;
   const isReadOnly = currentGate > 3;
-  const canApprove = hasCharacters && hasLocations && hasStyle && !isReadOnly;
+  const canApprove = hasCharacters && hasStyle && !isReadOnly;
 
   const StyleButton = ({ preset, selected }) => (
     <button
@@ -1146,283 +1146,33 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
         )}
       </div>
 
-      {/* 장소 */}
-      {job && phase === 'locations' && <JobProgress job={job} label="장소 레퍼런스 생성" />}
+      {/* 장소 — 간소화: 새 에피소드는 안내만, 기존 에피소드는 읽기 전용 요약 */}
       <div className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl p-6 backdrop-blur-sm">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2">
-            <MapPin size={20} className="text-emerald-500" /> 장소 레퍼런스
-          </h2>
-          {hasLocations && !showSuggestEditor && (
-            <button
-              onClick={loadSuggestions}
-              disabled={!!job || !hasStyle || suggestLoading}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-lg transition-colors disabled:opacity-50"
-            >
-              <Sparkles size={12} /> 다시 제안받기
-            </button>
-          )}
-        </div>
-
-        {!hasStyle && (
-          <p className="text-sm font-bold text-amber-500 dark:text-amber-400 mb-3">스타일을 먼저 선택해주세요</p>
-        )}
-
-        {locError && (
-          <p className="text-red-500 dark:text-red-400 text-xs font-bold mb-3">{locError}</p>
-        )}
-
-        {/* ── 제안·편집 단계 ── */}
-        {showSuggestEditor && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-bold text-gray-500 dark:text-gray-400">
-                대본에서 추출한 장소 목록입니다. 이름 수정·삭제·추가 후 이미지를 생성하세요.
-              </p>
-              <button onClick={() => setShowSuggestEditor(false)} className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300">취소</button>
-            </div>
-
-            {suggestionList.map((item, idx) => (
-              <div key={idx} className="flex gap-2 p-3 border border-border dark:border-zinc-700 rounded-xl bg-white/50 dark:bg-zinc-800/50">
-                <div className="flex-1 space-y-2">
-                  <div>
-                    <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400">장소 이름</label>
-                    <input
-                      value={item.name}
-                      onChange={e => updateSuggestion(idx, 'name', e.target.value)}
-                      placeholder="예: 학교 옥상, 카페 내부"
-                      className="w-full mt-0.5 px-2.5 py-1.5 text-sm font-bold rounded-lg border border-border dark:border-zinc-600 bg-white dark:bg-zinc-800 text-ink-black dark:text-white placeholder-gray-400"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400">분위기 <span className="font-normal">(선택)</span></label>
-                    <textarea
-                      value={item.mood_notes}
-                      onChange={e => updateSuggestion(idx, 'mood_notes', e.target.value)}
-                      placeholder="예: 따뜻한 오후 햇살이 드는, 아늑한 분위기"
-                      rows={2}
-                      className="w-full mt-0.5 px-2.5 py-1.5 text-xs rounded-lg border border-border dark:border-zinc-600 bg-white dark:bg-zinc-800 text-ink-black dark:text-white placeholder-gray-400 dark:placeholder-gray-500 resize-none"
-                    />
-                  </div>
-
-                  {/* 사진 대체 */}
-                  <div>
-                    {item.photoUrl ? (
-                      <div className="flex items-center gap-2 px-2.5 py-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-300 dark:border-emerald-700 rounded-lg">
-                        <img src={item.photoPreview || imageUrl(item.photoUrl)} alt="참고 사진" className="w-12 h-9 object-cover rounded" />
-                        <span className="flex-1 text-xs font-bold text-emerald-700 dark:text-emerald-400">사진 사용</span>
-                        <button
-                          onClick={() => clearSuggestionPhoto(idx)}
-                          className="p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded transition-colors"
-                          title="사진 취소 (AI 생성으로 되돌리기)"
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
-                    ) : (
-                      <label className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 border border-dashed border-emerald-300 dark:border-emerald-700 rounded-lg cursor-pointer hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-colors">
-                        <Camera size={12} />
-                        {uploadingSuggestIdx === idx ? '업로드 중...' : '사진으로 대체'}
-                        <input
-                          type="file"
-                          accept="image/jpeg,image/png,image/webp,image/heic"
-                          className="hidden"
-                          disabled={uploadingSuggestIdx !== null}
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) uploadSuggestionPhoto(idx, file);
-                            e.target.value = '';
-                          }}
-                        />
-                      </label>
-                    )}
+        <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2 mb-3">
+          <MapPin size={20} className="text-emerald-500" /> 장소
+        </h2>
+        {!hasLocations ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            장소는 다음 단계(<strong>콘티&장소</strong>)에서 정리해요
+          </p>
+        ) : (
+          <div className="space-y-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {locations.map((l) => (
+                <div key={l.id} className="flex items-center gap-3 p-3 border border-border dark:border-zinc-700 rounded-xl bg-white/50 dark:bg-zinc-800/50">
+                  {(l.image_url || l.images?.[0]?.url || l.converted_photo_url || l.reference_photo_url) && (
+                    <img src={imageUrl(l.image_url || l.images?.[0]?.url || l.converted_photo_url || l.reference_photo_url)} alt={l.name} className="w-16 h-12 object-cover rounded-lg border border-border dark:border-zinc-600 flex-shrink-0" />
+                  )}
+                  <div className="min-w-0">
+                    <div className="font-bold text-sm text-ink-black dark:text-white truncate">{l.name}</div>
+                    <div className="text-xs text-gray-400 dark:text-gray-500">{l.ref_key}</div>
                   </div>
                 </div>
-                <button onClick={() => removeSuggestion(idx)}
-                  className="self-start mt-1 p-1.5 text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            ))}
-
-            <div className="flex gap-2">
-              <button onClick={addSuggestionItem}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-gray-600 dark:text-gray-300 border border-dashed border-border dark:border-zinc-600 rounded-lg hover:border-emerald-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">
-                <Plus size={12} /> 장소 추가
-              </button>
-              <button
-                onClick={generateFromSuggestions}
-                disabled={!!job || !suggestionList.filter(l => l.name.trim()).length}
-                className="flex-1 flex items-center justify-center gap-1 px-4 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-colors disabled:opacity-50"
-              >
-                {(() => {
-                  const valid = suggestionList.filter(l => l.name.trim());
-                  const photoCount = valid.filter(l => l.photoUrl).length;
-                  const aiCount = valid.length - photoCount;
-                  const packetLabel = aiCount > 0 ? ` · ${aiCount}패킷` : '';
-                  if (photoCount === 0) return `레퍼런스 이미지 생성 (${valid.length}개${packetLabel})`;
-                  if (aiCount === 0) return `장소 등록 (${photoCount}개 사진 사용)`;
-                  return `레퍼런스 이미지 생성 (${aiCount}개${packetLabel} · ${photoCount}개는 사진 사용)`;
-                })()}
-              </button>
+              ))}
             </div>
-          </div>
-        )}
-
-        {/* ── 이미지 없고 편집기도 없음 → CTA ── */}
-        {!hasLocations && !showSuggestEditor && hasStyle && (
-          <div className="flex flex-col items-center gap-3 py-8 text-center">
-            <MapPin size={32} className="text-emerald-300 dark:text-emerald-700" />
-            <p className="text-sm font-bold text-gray-500 dark:text-gray-400">
-              AI가 대본을 분석해 필요한 장소를 제안합니다.<br />
-              <span className="text-xs font-normal text-gray-400 dark:text-gray-500">제안 목록을 확인하고 수정한 뒤 이미지를 생성하세요.</span>
+            <p className="text-xs text-gray-400 dark:text-gray-500">
+              장소 편집은 <strong>콘티&장소</strong> 단계에서 가능합니다
             </p>
-            <button
-              onClick={loadSuggestions}
-              disabled={suggestLoading || !!job}
-              className="flex items-center gap-1.5 px-5 py-2.5 bg-emerald-600 text-white rounded-full text-sm font-bold hover:bg-emerald-700 hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50"
-            >
-              <Sparkles size={14} />
-              {suggestLoading ? '대본 분석 중...' : 'AI 장소 제안 받기'}
-            </button>
-          </div>
-        )}
-
-        {/* ── 이미지 있음 → 카드 뷰 ── */}
-        {hasLocations && !showSuggestEditor && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {locations.map((l) => (
-              <div key={l.id} className="border-2 border-border dark:border-zinc-700 rounded-xl p-3 bg-white/50 dark:bg-zinc-800/50 space-y-2">
-                {/* 헤더 */}
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-bold text-sm text-ink-black dark:text-white">{l.name}</div>
-                    <div className="text-xs font-bold text-gray-400 dark:text-gray-500">{l.ref_key}</div>
-                  </div>
-                  <div className={`text-xs font-bold px-2 py-0.5 rounded-full ${l.status === 'approved' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-500'}`}>
-                    {l.status}
-                  </div>
-                </div>
-
-                {/* 이미지 */}
-                {l.images && l.images.length > 0 && (
-                  <div className="flex gap-2">
-                    {l.images.map((img, idx) => (
-                      <div key={idx} className="cursor-pointer" onClick={() => setLightbox({ url: imageUrl(img.url), label: l.name })}>
-                        <img
-                          src={imageUrl(img.url)}
-                          alt={l.name}
-                          className="w-28 h-20 object-cover rounded-lg border border-border dark:border-zinc-600 hover:ring-2 hover:ring-emerald-400 transition-all"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* 분위기 서술 편집 */}
-                <div>
-                  <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400">분위기 서술</label>
-                  <textarea
-                    value={locMoodEdit[l.id] ?? l.mood_notes ?? ''}
-                    onChange={e => setLocMoodEdit(prev => ({ ...prev, [l.id]: e.target.value }))}
-                    placeholder="예: 따뜻한 오후 햇살이 드는, 아늑한 분위기"
-                    rows={2}
-                    className="w-full mt-0.5 px-2 py-1.5 text-xs rounded-lg border border-border dark:border-zinc-600 bg-white dark:bg-zinc-800 text-ink-black dark:text-white placeholder-gray-400 dark:placeholder-gray-500 resize-none"
-                  />
-                </div>
-
-                {/* 참고 사진 업로드 + 변환본 */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400">
-                    실사 참고 사진 <span className="font-normal">(업로드 시 웹툰 스타일로 자동 변환 · 1패킷)</span>
-                  </label>
-                  {l.reference_photo_url ? (
-                    <div className="space-y-2">
-                      {/* 변환본 (메인) + 원본 (작게) */}
-                      <div className="flex items-center gap-2">
-                        {l.converted_photo_url ? (
-                          <div className="cursor-pointer" onClick={() => setLightbox({ url: imageUrl(l.converted_photo_url), label: `${l.name} — 변환본` })}>
-                            <img
-                              src={imageUrl(l.converted_photo_url)}
-                              alt="변환본"
-                              className="w-28 h-20 object-cover rounded-lg border-2 border-emerald-400 dark:border-emerald-600 hover:ring-2 hover:ring-emerald-300 transition-all"
-                            />
-                            <div className="text-[10px] text-center text-emerald-600 dark:text-emerald-400 mt-0.5 font-bold">변환본</div>
-                          </div>
-                        ) : (
-                          <div className="w-28 h-20 rounded-lg border-2 border-dashed border-amber-300 dark:border-amber-700 flex items-center justify-center bg-amber-50/50 dark:bg-amber-900/10">
-                            <span className="text-[10px] text-amber-500 font-bold">변환 필요</span>
-                          </div>
-                        )}
-                        <div className="cursor-pointer" onClick={() => setLightbox({ url: imageUrl(l.reference_photo_url), label: `${l.name} — 원본 사진` })}>
-                          <img
-                            src={imageUrl(l.reference_photo_url)}
-                            alt="원본"
-                            className="w-12 h-9 object-cover rounded border border-gray-300 dark:border-zinc-600 opacity-70 hover:opacity-100 transition-opacity"
-                          />
-                          <div className="text-[9px] text-center text-gray-400 mt-0.5">원본</div>
-                        </div>
-                      </div>
-                      {/* 버튼: 다시 변환 + 삭제 */}
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => reconvertLocationPhoto(l.id)}
-                          disabled={reconvertingLocId === l.id}
-                          className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-700 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors disabled:opacity-50"
-                        >
-                          <RefreshCw size={10} className={reconvertingLocId === l.id ? 'animate-spin' : ''} />
-                          {reconvertingLocId === l.id ? '변환 중...' : '다시 변환 (1패킷)'}
-                        </button>
-                        <button
-                          onClick={() => deleteLocationPhoto(l.id)}
-                          className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-red-500 hover:text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                        >
-                          <X size={10} /> 삭제
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-emerald-300 dark:border-emerald-700 rounded-lg cursor-pointer hover:border-emerald-500 dark:hover:border-emerald-500 hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10 transition-colors">
-                      <Camera size={12} className="text-emerald-500" />
-                      <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                        {uploadingPhotoLocId === l.id ? '업로드 + 변환 중...' : '사진 추가'}
-                      </span>
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp,image/heic"
-                        className="hidden"
-                        disabled={uploadingPhotoLocId === l.id}
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) uploadLocationPhoto(l.id, file);
-                          e.target.value = '';
-                        }}
-                      />
-                    </label>
-                  )}
-                </div>
-
-                {/* 액션 버튼 */}
-                <div className="flex gap-2">
-                  {locMoodEdit[l.id] !== undefined && (
-                    <button
-                      onClick={() => saveLocationMood(l.id)}
-                      disabled={savingLocId === l.id}
-                      className="flex items-center gap-1 px-3 py-1 text-xs font-bold bg-emerald-600 text-white rounded-full hover:bg-emerald-700 transition-colors disabled:opacity-50"
-                    >
-                      {savingLocId === l.id ? '저장 중...' : <><Check size={10} /> 분위기 저장</>}
-                    </button>
-                  )}
-                  <button
-                    onClick={() => regenerateLocation(l.id)}
-                    disabled={!!job}
-                    className="flex items-center gap-1 px-3 py-1 text-xs font-bold text-gray-600 dark:text-gray-300 border border-border dark:border-zinc-600 rounded-full hover:border-emerald-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors disabled:opacity-50"
-                  >
-                    <RefreshCw size={10} /> 재생성 (1패킷)
-                  </button>
-                </div>
-              </div>
-            ))}
           </div>
         )}
       </div>

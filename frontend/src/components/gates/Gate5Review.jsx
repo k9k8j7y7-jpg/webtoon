@@ -8,6 +8,7 @@ import CutEditor from '../CutEditor';
 import SfxLayer from '../SfxLayer';
 import EffectLayer from '../EffectLayer';
 import ProductLayer from '../ProductLayer';
+import { locationName, locationOptionLabel, characterName } from '../../utils/refNames';
 import PngBubbleLayer from '../PngBubbleLayer';
 import ExportProgressModal from '../ExportProgressModal';
 import { exportAsPNGZip, exportAsVertical, exportAsInstagram, exportAsA4Single, exportAsA4Grid } from '../../utils/exportRenderer';
@@ -361,6 +362,14 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
       .catch(() => {});
   }, [projectId, episodeId]);
 
+  // ── 장소 목록 (콘티 수정 모달 드롭다운용) ──
+  const [episodeLocations, setEpisodeLocations] = useState([]);
+  useEffect(() => {
+    api.get(`/projects/${projectId}/episodes/${episodeId}/locations`)
+      .then(({ data }) => setEpisodeLocations(data))
+      .catch(() => {});
+  }, [projectId, episodeId]);
+
   // ── 콘티 수정 모달 ──
   const [storyboardEdit, setStoryboardEdit] = useState(null); // { cut, form: { shot, action, characters } }
   const [savingStoryboard, setSavingStoryboard] = useState(false);
@@ -382,6 +391,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
         action: cut.action || '',
         characterIds: currentCharIds,
         has_product: cut.has_product || false,
+        location_id: cut.location_id || '',
       },
     });
   };
@@ -447,6 +457,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
         action: form.action,
         characters,
         has_product: form.has_product,
+        location_id: form.location_id || null,
       });
 
       if (andRegenerate) {
@@ -888,6 +899,21 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
               <button onClick={() => setStoryboardEdit(null)} className="p-1 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full">
                 <X size={18} />
               </button>
+            </div>
+
+            {/* 장소 */}
+            <div className="mb-4">
+              <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-2">장소</label>
+              <select
+                value={storyboardEdit.form.location_id || ''}
+                onChange={(e) => updateStoryboardForm('location_id', e.target.value || null)}
+                className="w-full px-3 py-2 border border-gray-200 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-ink-black dark:text-white"
+              >
+                <option value="">장소 없음</option>
+                {episodeLocations.map(l => (
+                  <option key={l.ref_key} value={l.ref_key}>{locationOptionLabel(l.ref_key, l.name)}</option>
+                ))}
+              </select>
             </div>
 
             {/* 샷 타입 */}
