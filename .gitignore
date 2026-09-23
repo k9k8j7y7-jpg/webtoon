@@ -14,3 +14,4 @@ frontend/dist/
 backup_*.sql
 project_t_before_*.sql
 0
+scripts/gpt_test_out/
