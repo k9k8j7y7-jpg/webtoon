@@ -36,7 +36,7 @@ WEBTOON/
 ## 서버 접속 정보
 
 - **도메인:** `ssagda.com` — **서비스:** `https://ssagda.com/WEBTOON` — **API:** `https://ssagda.com/WEBTOON/docs`
-- **SSH:** `bitnami@52.79.94.122` (키: `DONGHAESSHKE.pem`) — **배포 경로:** `/home/bitnami/project-t/`
+- **SSH:** `bitnami@52.79.94.122` (키: `C:\Users\user\.ssh\DONGHAESSHKEy.pem`) — **배포 경로:** `/home/bitnami/project-t/`
 - **DB:** MariaDB, 비밀번호 `AWS.txt` 참조
 - **웹서버:** Apache 2.4 (Bitnami), HTTPS — **리버스 프록시:** `/WEBTOON/` → `localhost:8000/`
 
@@ -50,6 +50,7 @@ WEBTOON/
 - **레퍼런스 주입:** 캐릭터 시트(정면) + 장소 레퍼런스를 매 컷 생성 시 Gemini에 전달
 - **무효화 전파:** 대본 수정 → diff 판정 → 영향 자산/컷만 invalidated
 - **과금:** 패킷 차감 (컷 1, 시트 2, 장소 1, 사진변환 1, 텍스트 0). 생성 전 잔량 가드(402), 실패 미차감
+- **패킷 가격 정책:** 순마진 = 결제액×0.872 − 93원×패킷수 기준으로 소량 45% / 중량 40% / 대량 35% 계단. 패킷당 판매가 최저 178원. 이미지 모델·환율 변경으로 원가가 바뀌면 재계산. 고품질 모델은 가격표 대신 패킷 차감 수(2패킷 등)로 반영. 가격 값은 /admin에서만 변경(코드에 박지 않음)
 
 ## 현재 상태 (2026-09-23)
 
@@ -112,7 +113,7 @@ WEBTOON/
 - [x] 1단계: 소셜 로그인 3사 + 본계정 확정(구글 id=3, 김김준) + 프로젝트 4·5·6 귀속 마이그레이션 완료 (2026-09-09)
 - [x] 2단계: 대시보드 완료 (2026-09-09, 공지 바·헤더 리뉴얼·패킷 잔량 API·법률 페이지 3종·EziToon 전환·step18 마이그레이션). 구글 OAuth 앱 게시 완료(프로덕션 — 아무 구글 계정 로그인 가능). 네이버 검수는 오픈 준비 때
 - [x] 3단계: 패킷 시스템 완료 (2026-09-11 검증 통과). 생성 5지점 차감(컷1/시트2/장소1/사진변환1/텍스트0) + 잔량 가드(402) + 실패 미차감 + /packets 현황 페이지 + admin_grant.py + 402 alert 팝업 통일(axios 인터셉터). 도도 실서버 테스트 완료: 잔량 표시·버튼 비용 표시·차감·부족 차단 alert 확인
-- [x] 4단계: 토스페이먼츠 결제 완료 (2026-09-13 테스트 키 기준). 위젯 SDK v2 + API 개별 연동 키(ck) 조합 확정. step19 orders 테이블, payments 모듈(상품 정의·주문·승인·내역), 프론트 위젯 연동. 서버 검증 통과: 금액 불일치 거부·토스 거부·패킷 지급(purchase reason)·멱등(already_paid)·failed 주문 거부. 상품: packet_30(5,900원)/packet_100(14,900원)/packet_300(34,900원). 남은 것: 라이브 키 전환(가맹 심사 후) + 실카드 1건 최종 확인
+- [x] 4단계: 토스페이먼츠 결제 완료 (2026-09-13 테스트 키 기준). 위젯 SDK v2 + API 개별 연동 키(ck) 조합 확정. step19 orders 테이블, payments 모듈(상품 정의·주문·승인·내역), 프론트 위젯 연동. 서버 검증 통과: 금액 불일치 거부·토스 거부·패킷 지급(purchase reason)·멱등(already_paid)·failed 주문 거부. 상품: packet_30(6,900원)/packet_100(19,900원)/packet_300(54,900원). 남은 것: 라이브 키 전환(가맹 심사 후) + 실카드 1건 최종 확인
 - [x] 5단계 1차: 랜딩 페이지 배포 (2026-09-14, 네온 다크 디자인, antigravity 제작 — LandingPage.jsx, 비로그인 루트=랜딩 / 로그인=대시보드)
 - [x] 5단계 2차: 공개 뷰어 + 갤러리 실데이터 배포 (2026-09-14). 공개 뷰어(/view/{UUID 토큰}, 비로그인 열람, BubbleOverlay+SfxLayer+EffectLayer 재사용). 갤러리 실데이터(episodes.showcase 플래그 + showcase_category + share_token, step20 마이그레이션, admin SQL 지정). 공개 API 2개(showcase/episodes + showcase/view/{token}). optional auth(get_optional_user). 이미지 URL /WEBTOON prefix 수정(resolveUrl 헬퍼). 노출작: ep26(연작), ep25·ep20(단편), ep30(광고)
 - [x] 5단계 마무리: 도도 재확인 4항목 통과 (2026-09-15, 시크릿 창 갤러리 썸네일→뷰어 컷 표시→폰 공유 링크 → 2층 공식 완공)
@@ -195,11 +196,12 @@ WEBTOON/
 - **dev 서버:** 항상 백그라운드 기동 + curl 폴링 후 진행. 재시작 시 묻지 않고 수행, 한 줄 보고
 - **다단계 지시서:** `docs/PROGRESS.md`에 현재 단계 갱신. 맥락 불확실 시 이 파일부터 읽기
 - **D: 드라이브:** I/O 에러 이력 있음. 이상 시 즉시 C:로 사본
+- **작업 환경:** 저장소는 각 PC의 `C:\vibecoding\WEBTOON` (외장하드에 두지 않음). PC 이동 = 떠나기 전 커밋+push, 앉으면 git pull. 외장하드는 백업 전용. `.env`·SSH 키는 git 밖 — 각 PC에 한 번씩 수동 배치. 정적 에셋(`public/`)은 반드시 git 추적 — clone만으로 동일 환경
 
 ## 배포 명령 참고
 
 ```bash
-# 백엔드: scp -i "C:/Users/k9k8j/Downloads/DONGHAESSHKE.pem" <파일> bitnami@52.79.94.122:/home/bitnami/project-t/backend/<경로>
+# 백엔드: scp -i "C:/Users/user/.ssh/DONGHAESSHKEy.pem" <파일> bitnami@52.79.94.122:/home/bitnami/project-t/backend/<경로>
 # 프론트: cd frontend && npx vite build && scp -r dist/. bitnami@52.79.94.122:/home/bitnami/project-t/backend/frontend/dist/
 # DB: ssh bitnami@52.79.94.122 '/opt/bitnami/mariadb/bin/mariadb -u root -p"<비밀번호>" project_t < /home/bitnami/project-t/backend/stepN.sql'
 # JWT: ssh -i "..." bitnami@52.79.94.122 'cd /home/bitnami/project-t/backend && source venv/bin/activate && python3 -c "from app.auth.jwt import create_access_token; print(create_access_token(user_id=1))"'
