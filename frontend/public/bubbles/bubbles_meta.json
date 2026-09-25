@@ -1,0 +1,72 @@
+{
+  "bubble_burst": {
+    "size": [
+      1024,
+      878
+    ],
+    "text_area": {
+      "x": 0.24,
+      "y": 0.22,
+      "w": 0.52,
+      "h": 0.56
+    },
+    "label": "외침 (폭발)",
+    "has_tail": false
+  },
+  "bubble_shout": {
+    "size": [
+      1024,
+      885
+    ],
+    "text_area": {
+      "x": 0.28,
+      "y": 0.22,
+      "w": 0.46,
+      "h": 0.4
+    },
+    "label": "외침 (꼬리)",
+    "has_tail": true
+  },
+  "bubble_think": {
+    "size": [
+      1024,
+      972
+    ],
+    "text_area": {
+      "x": 0.22,
+      "y": 0.2,
+      "w": 0.58,
+      "h": 0.5
+    },
+    "label": "생각 (구름)",
+    "has_tail": true
+  },
+  "bubble_burst_wide": {
+    "size": [
+      1024,
+      608
+    ],
+    "text_area": {
+      "x": 0.2,
+      "y": 0.2,
+      "w": 0.6,
+      "h": 0.6
+    },
+    "label": "폭발 가로",
+    "has_tail": false
+  },
+  "bubble_burst_tall": {
+    "size": [
+      608,
+      1024
+    ],
+    "text_area": {
+      "x": 0.2,
+      "y": 0.2,
+      "w": 0.6,
+      "h": 0.6
+    },
+    "label": "폭발 세로",
+    "has_tail": false
+  }
+}
