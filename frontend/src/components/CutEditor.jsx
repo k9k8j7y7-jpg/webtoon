@@ -1345,7 +1345,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
               className="absolute inset-0"
               width={imgW} height={imgH}
               overflow="visible"
-              style={{ top: 0, left: 0 }}
+              style={{ top: 0, left: 0, pointerEvents: 'none' }}
             >
               {pngbubbleItems.map((item, i) => {
                 const entry = PNGBUBBLE_CATALOG.find(e => e.id === item.bubble_id);
