@@ -650,8 +650,12 @@ export default function Gate4Storyboard({ projectId, episodeId, onRefresh, readO
                         <MessageSquare size={10} className="text-comic-orange flex-shrink-0 mt-0.5" />
                         <p className="text-[11px] text-gray-600 dark:text-gray-400 leading-relaxed">
                           <span className="font-bold text-gray-800 dark:text-gray-300">
-                            {d.speaker ? `${d.speaker}` : dialogueTypeLabel[d.type] || d.type}:
-                          </span>{' '}
+                            {d.speaker ? characterName(d.speaker, episodeCharacters) : dialogueTypeLabel[d.type] || d.type}
+                          </span>
+                          {d.speaker && characterName(d.speaker, episodeCharacters) !== d.speaker && (
+                            <span className="text-[10px] text-gray-400 dark:text-gray-500 ml-1">{d.speaker}</span>
+                          )}
+                          <span className="font-bold text-gray-800 dark:text-gray-300">:</span>{' '}
                           <span className="line-clamp-2">{d.text}</span>
                         </p>
                       </div>
@@ -770,6 +774,12 @@ export default function Gate4Storyboard({ projectId, episodeId, onRefresh, readO
                           placeholder="화자"
                           className="flex-1 px-2 py-1 border border-gray-200 dark:border-zinc-700 rounded-lg text-xs bg-white dark:bg-zinc-800 text-ink-black dark:text-white"
                         />
+                        {d.speaker && characterName(d.speaker, episodeCharacters) !== d.speaker && (
+                          <span className="text-xs font-bold text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                            {characterName(d.speaker, episodeCharacters)}
+                            <span className="text-[10px] font-normal text-gray-400 dark:text-gray-500 ml-1">{d.speaker}</span>
+                          </span>
+                        )}
                       </div>
                       <textarea
                         value={d.text || ''}

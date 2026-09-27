@@ -795,7 +795,14 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                       }`}>
                         {dialogueTypeLabel[d.type] || d.type}
                       </span>
-                      {d.speaker && <span className="text-xs font-bold text-gray-600 dark:text-gray-400">{d.speaker}</span>}
+                      {d.speaker && (
+                        <span className="text-xs font-bold text-gray-600 dark:text-gray-400">
+                          {characterName(d.speaker, episodeCharacters)}
+                          {characterName(d.speaker, episodeCharacters) !== d.speaker && (
+                            <span className="text-[10px] font-normal text-gray-400 dark:text-gray-500 ml-1">{d.speaker}</span>
+                          )}
+                        </span>
+                      )}
                       <div className="ml-auto relative">
                         {d.type === 'narration' ? (
                           <span className="text-[10px] font-bold px-2 py-1 bg-gray-100 dark:bg-zinc-700 text-gray-400 dark:text-gray-500 rounded-lg">
