@@ -78,6 +78,14 @@ WEBTOON/
 - 대본 장소 지침: "물리적으로 다른 공간만 구분, 같은 앵글·입구/내부 통합, 단편 2~4개 최대 5개"
 - UI 표시: ref_key 직접 노출 금지 — 한글 이름 + 작은 회색 ref_key (`utils/refNames.js` 공용 헬퍼). 컷 카드 장소·인물, 편집 모달 드롭다운에 적용
 
+**스타일 썸네일 (2026-09-27, 1·2단계 완료):** 지시서 `docs/지시서-스타일썸네일.md`
+- 파일: `frontend/public/styles/{key}.jpg` 15장 (STYLE_PRESETS 키와 1:1). 미리보기 `docs/스타일썸네일-미리보기.jpg`, 프롬프트 전문 `docs/스타일썸네일-프롬프트.md`
+- 생성: `scripts/style_thumbs.py` — 게이트5와 동일한 `build_cut_prompt` + `STYLE_PRESETS` 프롬프트, 1:1 → 768px JPEG q85. `--keys a,b` / `--all`(기존 파일 건너뜀) / `--force`(덮어쓰기) / `--dry-run`. 로컬 API 직접 호출(패킷 무관, 장당 ~$0.07)
+- **스타일 프리셋 문구를 바꾸면 그 키의 썸네일도 재생성**
+- 현재: 15장 생성 완료·게이트3 카드 UI 미적용, marvel·western_fantasy 재생성 예정
+
+**알려진 버그 — 장소 문장 (수정 예정):** `prompts/service.py` `build_cut_prompt`가 location_desc만 있으면 `LOCATION_REFRAME`("The attached location image… behind her")을 무조건 넣음. 장소 이미지 미첨부(bust/close_up text_only, MAX_REF_IMAGES 5장 한도 초과) 컷에도 들어가고 "her"는 성별 무관. → 첨부 여부 플래그를 `generate_cut_image`에서 넘겨 분기하도록 수정 예정 (썸네일 스크립트는 결과 문자열에서 임시 제거 중)
+
 **주요 기능 요약:**
 - 게이트 1~5: 기획→대본→자산(캐릭터·스타일·비율·제품)→**콘티&장소**(장소 패널+콘티 생성)→이미지(배치 5컷씩/부분 실패 UI)
 - 컷 비율: 에피소드별 5종 선택(1:1 정사각/9:16 세로/16:9 가로/3:4 세로/4:3 가로). Gate3 UI 5버튼, 첫 이미지 생성 후 잠금(프론트 비활성+백엔드 거부). 기존 에피소드 1:1 잠금, 신규 기본 9:16. gate_status JSON 저장(step24). Gemini image_config.aspect_ratio 실전달. 시트 1:1 고정, 장소 16:9 고정, 컷은 에피소드 비율. 가로 비율 프롬프트: 풀샷 앵커 "characters occupy 60-80% HEIGHT" 보강. 인스타 캐러셀 export: letterbox(비율 유지+흰 배경, center-crop 폐지)
@@ -167,7 +175,7 @@ WEBTOON/
 - [x] GPT Image 품질 실험 (완료 2026-09-23, gpt_image_test.py, ep30 광고 #1·#4·#5 × 2 = 6장, gpt-image-2.5-sunburst images.edit)
 - [x] 장소 텍스트화 1·2단계 (완료 2026-09-23, step27+location_spec_en+게이트4 콘티&장소+장소 이미지 옵션+사진 비전 전용+컷 카드 한글 이름)
 - [ ] 16:9 실생성 검증 (ep32 슛돌이 단편, v2 비율 5종 관련)
-- [ ] B 스타일 썸네일 (15종 프리셋 이미지 생성+Gate3 카드 표시)
+- [ ] B 스타일 썸네일 — 1·2단계 완료(15장 생성, 2026-09-27). **다음 순서:** 썸네일 3단계(Gate3 카드 UI)·4단계(마무리, marvel·western_fantasy 재생성) → 장소 문장 버그 수정(LOCATION_REFRAME 첨부 여부 플래그) → 모바일 레이아웃 정리
 - [ ] C 이미지 모델 선택 (에피소드 단위 모델 잠금, openai_image.py 어댑터) — 형식/레이아웃 이후
 - [ ] 폴리싱 잔여: 뷰어 컷 클릭 확대 모달(게이트5 미리보기 스타일)
 - [ ] 후순위: ep_no 중복 정리, 텍스트 모델(gemini-2.5-flash) 교체(종료일 발표 시)
@@ -196,6 +204,7 @@ WEBTOON/
 - **배포:** 파일별 `scp` → uvicorn `--reload` 자동 감지 (프론트는 빌드 후 dist 배포). **`.env` 변경은 `--reload`가 감지 못함** → 변경 후 반드시 `touch app/config.py`로 재시작 + `tail /tmp/uvicorn.log`에서 `Started server process` 확인
 - **dev 서버:** 항상 백그라운드 기동 + curl 폴링 후 진행. 재시작 시 묻지 않고 수행, 한 줄 보고
 - **다단계 지시서:** `docs/PROGRESS.md`에 현재 단계 갱신. 맥락 불확실 시 이 파일부터 읽기
+- **로컬 스크립트 실행 전제:** `backend/.env`에 `IMAGE_MODEL`(없으면 config 기본값 2.5로 생성됨)·`GEMINI_API_KEY` 값 필요. venv는 PC별 Python 경로에 묶이므로 다른 PC면 `backend/venv` 재생성
 - **D: 드라이브:** I/O 에러 이력 있음. 이상 시 즉시 C:로 사본
 - **작업 환경:** 저장소는 각 PC의 `C:\vibecoding\WEBTOON` (외장하드에 두지 않음). PC 이동 = 떠나기 전 커밋+push, 앉으면 git pull. 외장하드는 백업 전용. `.env`·SSH 키는 git 밖 — 각 PC에 한 번씩 수동 배치. 정적 에셋(`public/`)은 반드시 git 추적 — clone만으로 동일 환경
 
