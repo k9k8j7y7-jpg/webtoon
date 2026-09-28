@@ -36,7 +36,7 @@ WEBTOON/
 ## 서버 접속 정보
 
 - **도메인:** `ssagda.com` — **서비스:** `https://ssagda.com/WEBTOON` — **API:** `https://ssagda.com/WEBTOON/docs`
-- **SSH:** `bitnami@52.79.94.122` (키: `C:\Users\user\.ssh\DONGHAESSHKEy.pem`) — **배포 경로:** `/home/bitnami/project-t/`
+- **SSH:** `bitnami@52.79.94.122` (키: `%USERPROFILE%\.ssh\DONGHAESSHKEy.pem`) — **배포 경로:** `/home/bitnami/project-t/`
 - **DB:** MariaDB, 비밀번호 `AWS.txt` 참조
 - **웹서버:** Apache 2.4 (Bitnami), HTTPS — **리버스 프록시:** `/WEBTOON/` → `localhost:8000/`
 
@@ -211,7 +211,7 @@ WEBTOON/
 ## 배포 명령 참고
 
 ```bash
-# 백엔드: scp -i "C:/Users/user/.ssh/DONGHAESSHKEy.pem" <파일> bitnami@52.79.94.122:/home/bitnami/project-t/backend/<경로>
+# 백엔드: scp -i "$USERPROFILE/.ssh/DONGHAESSHKEy.pem" <파일> bitnami@52.79.94.122:/home/bitnami/project-t/backend/<경로>
 # 프론트: cd frontend && npx vite build && scp -r dist/. bitnami@52.79.94.122:/home/bitnami/project-t/backend/frontend/dist/
 # DB: ssh bitnami@52.79.94.122 '/opt/bitnami/mariadb/bin/mariadb -u root -p"<비밀번호>" project_t < /home/bitnami/project-t/backend/stepN.sql'
 # JWT: ssh -i "..." bitnami@52.79.94.122 'cd /home/bitnami/project-t/backend && source venv/bin/activate && python3 -c "from app.auth.jwt import create_access_token; print(create_access_token(user_id=1))"'
