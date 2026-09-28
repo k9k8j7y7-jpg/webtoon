@@ -32,7 +32,7 @@ load_dotenv(BACKEND_DIR / ".env")
 from PIL import Image
 from app.config import get_settings
 from app.styles.models import STYLE_PRESETS
-from app.prompts.service import build_cut_prompt, LOCATION_REFRAME
+from app.prompts.service import build_cut_prompt
 from app.adapters.gemini_image import get_image_adapter, IMAGE_MODEL
 
 # ── 상수 ──
@@ -141,19 +141,14 @@ def resolve_shot(key: str) -> str:
 def build_prompt(key: str) -> str:
     """게이트5 컷과 같은 골격의 프롬프트를 조립한다."""
     _, action, location_desc = SCENES[key]
-    prompt = build_cut_prompt(
+    return build_cut_prompt(
         cut_spec={"characters": [], "action": action, "shot": resolve_shot(key)},
         character_descs={},
         location_desc=location_desc,
         style_prompt=STYLE_PRESETS[key]["prompt"],
+        loc_image_attached=False,
         aspect_ratio=ASPECT_RATIO,
     )
-    # 썸네일은 장소 이미지를 첨부하지 않으므로 첨부 이미지 전제 문장(LOCATION_REFRAME) 제거.
-    # build_cut_prompt에 끄는 플래그가 없어 조립 결과에서 해당 part만 뺀다.
-    stripped = prompt.replace(f"{LOCATION_REFRAME}. ", "")
-    if stripped == prompt:
-        raise RuntimeError(f"{key}: LOCATION_REFRAME 제거 실패 — prompts/service.py 문구 변경 확인")
-    return stripped
 
 
 def save_jpeg(image_bytes: bytes, mime_type: str, out_path: Path) -> tuple[int, int]:

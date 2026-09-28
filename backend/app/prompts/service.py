@@ -39,7 +39,7 @@ LOCATION_REFRAME = (
     "Do NOT reproduce it as a separate image or panel. "
     "Draw the scene INSIDE this location from the described camera angle. "
     "Re-frame it from the character's eye level at the described scale — "
-    "do not paste it as a distant wide vista behind her"
+    "do not paste it as a distant wide vista behind the character(s)"
 )
 
 
@@ -64,6 +64,7 @@ def build_cut_prompt(
     style_prompt: str,
     project_rules: dict | None = None,
     loc_is_photo: bool = False,
+    loc_image_attached: bool = False,
     aspect_ratio: str = "9:16",
     product_desc: str = "",
 ) -> str:
@@ -132,8 +133,11 @@ def build_cut_prompt(
 
     # ── 3. 장소·상황 ──
     if location_desc:
-        parts.append(f"Setting: {location_desc}")
-        parts.append(LOCATION_REFRAME)
+        if loc_image_attached:
+            parts.append(f"Setting: {location_desc}")
+            parts.append(LOCATION_REFRAME)
+        else:
+            parts.append(f"Setting (text description only, no location image attached): {location_desc}")
 
     if loc_is_photo:
         parts.append(

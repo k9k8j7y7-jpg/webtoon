@@ -259,6 +259,7 @@ async def generate_cut_image(
     # 2. 장소 레퍼런스 로드 (샷 타입에 따라 이미지 첨부 여부 분기)
     location_id = spec.get("location_id")
     loc_ref, loc_desc, loc_is_photo = None, "", False
+    loc_image_attached = False
     shot_type = spec.get("shot", "full")
     _TEXT_ONLY_SHOTS = frozenset({"bust", "close_up"})
     if location_id:
@@ -268,6 +269,7 @@ async def generate_cut_image(
             if len(ref_images) < MAX_REF_IMAGES:
                 loc_ref = _downscale_image(loc_ref, max_long_side=768)
                 ref_images.append(loc_ref)
+                loc_image_attached = True
                 if loc_is_photo:
                     ref_labels.append(
                         "Location reference photograph — use ONLY for spatial layout and furniture placement, "
@@ -322,6 +324,7 @@ async def generate_cut_image(
         style_prompt=style_prompt,
         project_rules=project_rules,
         loc_is_photo=loc_is_photo,
+        loc_image_attached=loc_image_attached,
         aspect_ratio=ep_aspect_ratio,
         product_desc=product_desc,
     )

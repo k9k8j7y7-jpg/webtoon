@@ -604,18 +604,37 @@ async def get_prompt_preview(
     location_id = spec.get("location_id")
     loc_desc = ""
     loc_is_photo = False
+    loc_image_attached = False
+    shot_type = spec.get("shot", "full")
+    _TEXT_ONLY_SHOTS = {"bust", "close_up"}
     if location_id:
         location = db.query(Location).filter(
             Location.episode_id == episode_id, Location.ref_key == location_id
         ).first()
         if location:
-            loc_desc = f"{location.name}. {location.description or ''}"
+            # location_spec_en 우선, 없으면 한글 폴백 (generate_cut_image과 동일)
+            if location.location_spec_en:
+                loc_desc = location.location_spec_en
+            else:
+                loc_desc = f"{location.name}. {location.description or ''}"
+            has_loc_image = False
+            loc_image_label = None
             if location.converted_photo_url:
-                ref_labels.append(f"[이미지] 장소 '{location_id}' — 변환본")
+                loc_image_label = f"[이미지] 장소 '{location_id}' — 변환본"
+                has_loc_image = True
             else:
                 loc_img = db.query(LocationImage).filter(LocationImage.location_id == location.id).first()
                 if loc_img:
-                    ref_labels.append(f"[이미지] 장소 '{location_id}' — AI 생성")
+                    loc_image_label = f"[이미지] 장소 '{location_id}' — AI 생성"
+                    has_loc_image = True
+            # generate_cut_image과 동일: 샷 타입 + 이미지 존재 + 슬롯 여유
+            loc_image_attached = (
+                has_loc_image
+                and shot_type not in _TEXT_ONLY_SHOTS
+                and len(ref_labels) < 5  # MAX_REF_IMAGES (장소 추가 전 판정)
+            )
+            if loc_image_attached and loc_image_label:
+                ref_labels.append(loc_image_label)
 
     # 제품
     product_desc = ""
@@ -653,6 +672,7 @@ async def get_prompt_preview(
         style_prompt=style_prompt,
         project_rules=project_rules,
         loc_is_photo=loc_is_photo,
+        loc_image_attached=loc_image_attached,
         aspect_ratio=ep_aspect_ratio,
         product_desc=product_desc,
     )

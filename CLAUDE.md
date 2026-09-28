@@ -84,7 +84,7 @@ WEBTOON/
 - **스타일 프리셋 문구를 바꾸면 그 키의 썸네일도 재생성**
 - 현재: 15장 생성·게이트3 카드 UI 적용 완료(2026-09-28). marvel·western_fantasy는 도도 판단으로 유지
 
-**알려진 버그 — 장소 문장 (수정 예정):** `prompts/service.py` `build_cut_prompt`가 location_desc만 있으면 `LOCATION_REFRAME`("The attached location image… behind her")을 무조건 넣음. 장소 이미지 미첨부(bust/close_up text_only, MAX_REF_IMAGES 5장 한도 초과) 컷에도 들어가고 "her"는 성별 무관. → 첨부 여부 플래그를 `generate_cut_image`에서 넘겨 분기하도록 수정 예정 (썸네일 스크립트는 결과 문자열에서 임시 제거 중)
+**장소 문장 버그 수정 완료 (2026-09-28):** `build_cut_prompt`에 `loc_image_attached` 파라미터 추가. True(long/full+이미지 첨부)면 LOCATION_REFRAME, False(bust/close_up 또는 한도 초과)면 `"Setting (text description only, no location image attached): …"`. "behind her"→"behind the character(s)" 성별 중립화. prompt-preview도 동일 로직(ref_labels 미첨부 시 장소 라벨 제외). style_thumbs.py는 문자열 replace 해킹 → `loc_image_attached=False` 파라미터로 정리
 
 **주요 기능 요약:**
 - 게이트 1~5: 기획→대본→자산(캐릭터·스타일·비율·제품)→**콘티&장소**(장소 패널+콘티 생성)→이미지(배치 5컷씩/부분 실패 UI)
@@ -175,7 +175,8 @@ WEBTOON/
 - [x] GPT Image 품질 실험 (완료 2026-09-23, gpt_image_test.py, ep30 광고 #1·#4·#5 × 2 = 6장, gpt-image-2.5-sunburst images.edit)
 - [x] 장소 텍스트화 1·2단계 (완료 2026-09-23, step27+location_spec_en+게이트4 콘티&장소+장소 이미지 옵션+사진 비전 전용+컷 카드 한글 이름)
 - [ ] 16:9 실생성 검증 (ep32 슛돌이 단편, v2 비율 5종 관련)
-- [x] B 스타일 썸네일 — 1~3단계 완료(15장 생성+Gate3 카드 UI, 2026-09-28). **다음 순서:** 4단계(마무리, git 추적+CLAUDE.md+push) → 장소 문장 버그 수정(LOCATION_REFRAME 첨부 여부 플래그) → 모바일 레이아웃 정리
+- [x] B 스타일 썸네일 — 1~3단계 완료(15장 생성+Gate3 카드 UI, 2026-09-28). **다음 순서:** 4단계(마무리, git 추적+CLAUDE.md+push) → 모바일 레이아웃 정리
+- [x] 장소 문장 버그 수정 (완료 2026-09-28, loc_image_attached 플래그+성별 중립+prompt-preview 일치+style_thumbs 정리)
 - [ ] C 이미지 모델 선택 (에피소드 단위 모델 잠금, openai_image.py 어댑터) — 형식/레이아웃 이후
 - [ ] 폴리싱 잔여: 뷰어 컷 클릭 확대 모달(게이트5 미리보기 스타일)
 - [ ] 후순위: ep_no 중복 정리, 텍스트 모델(gemini-2.5-flash) 교체(종료일 발표 시)
