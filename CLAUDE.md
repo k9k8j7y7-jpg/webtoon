@@ -190,6 +190,7 @@ WEBTOON/
 - **말풍선 렌더러 수정 시:** `composition/service.py`의 `RENDERER_VERSION` 올리고, `frontend/src/utils/bubbleSpec.json` + `backend/app/composition/bubble_spec.json` 동시 업데이트
 - **텍스트 렌더 이원 모드:** 화면=`<foreignObject>` / export=SVG `<text>/<tspan>` (`renderMode='svg-text'`). 수정 시 두 모드 동시 수정 + `node scripts/bubble-shot.mjs` 비교 판정 통과 필수
 - **편집기 오버레이:** 편집기 오버레이 레이어는 루트에 pointer-events none, 실제 조작 요소에만 all. 레이어 추가 시 아래 레이어 선택 회귀 테스트 필수(일반 말풍선·효과음·효과·제품)
+- **모바일 레이아웃:** 모바일 기준 640px 미만(`sm:` 경계). 카드 그리드는 모바일 1열, 게이트 스텝바는 가로 스크롤(현재 게이트 자동 가운데). 게이트5 썸네일 틀은 에피소드 `aspect_ratio`(미설정 1:1). 모바일 확인은 `node frontend/scripts/mobile-check.mjs <JWT>` 375/412px 스크린샷(`frontend/scripts/mobile-check/`, gitignore)
 - **Gemini:** API 키 `.env`의 `GEMINI_API_KEY`. 이미지 모델 `.env`의 `IMAGE_MODEL` (현재 `gemini-3.1-flash-image`), 텍스트 모델 `gemini-2.5-flash`
 - **서버 .env 안전:** 서버 .env는 로컬과 다르다(GEMINI_API_KEY·SECRET_KEY·TOSS 키·IMAGE_MODEL 등 운영 전용 값). **절대 파일 통째로 scp 덮어쓰지 말 것.** 키 추가/변경은 서버에서 해당 줄만 `sed`/`echo >>` 로. 변경 전 `cp .env .env.bak.$(date +%Y%m%d)` 백업, 변경 후 `GEMINI_API_KEY` 등 기존 키 길이 확인. OAuth 키는 콘솔에서만 조회 가능, 서버 .env 백업은 날짜별 유지
 - **DB 마이그레이션:** `stepN.sql` + `stepN_down.sql` 쌍. 리허설 up→verify→down→재-up + mysqldump 백업 + 사용자 승인 필수. DB 덤프 .sql 커밋 금지 (stepN은 예외). 마이그레이션 백업은 데이터 포함(no-data 금지)

@@ -14,28 +14,43 @@ import ExportProgressModal from '../ExportProgressModal';
 import { exportAsPNGZip, exportAsVertical, exportAsInstagram, exportAsA4Single, exportAsA4Grid } from '../../utils/exportRenderer';
 
 // ── 그리드 컷 카드: 이미지 + SVG 말풍선 오버레이 ──
-function CutImageWithBubbles({ cut, imageUrl, onZoom, products }) {
-  const containerRef = useRef(null);
-  const [dims, setDims] = useState({ w: 0, h: 0 });
+// 에피소드 비율 "9:16" → CSS aspect-ratio "9 / 16" (미설정 = 기존 에피소드 1:1)
+const cssAspect = (ratio) => (ratio || '1:1').replace(':', ' / ');
 
-  const handleImageLoad = useCallback((e) => {
+function CutImageWithBubbles({ cut, imageUrl, onZoom, products, aspectRatio }) {
+  const containerRef = useRef(null);
+  const imgRef = useRef(null);
+  // 오버레이 박스 = 틀 안에 object-contain으로 실제 그려진 이미지 영역 (틀과 이미지 비율이 달라도 말풍선 위치 정합)
+  const [dims, setDims] = useState({ w: 0, h: 0, x: 0, y: 0 });
+
+  const measure = useCallback(() => {
     const el = containerRef.current;
-    if (el) setDims({ w: el.offsetWidth, h: el.offsetHeight });
+    const img = imgRef.current;
+    if (!el || !img || !img.naturalWidth) return;
+    const cw = el.clientWidth, ch = el.clientHeight;
+    const scale = Math.min(cw / img.naturalWidth, ch / img.naturalHeight);
+    const w = img.naturalWidth * scale, h = img.naturalHeight * scale;
+    setDims({ w, h, x: (cw - w) / 2, y: (ch - h) / 2 });
   }, []);
 
   useEffect(() => {
     const el = containerRef.current;
-    if (el && el.offsetWidth > 0) setDims({ w: el.offsetWidth, h: el.offsetHeight });
-  }, []);
+    if (!el) return;
+    const obs = new ResizeObserver(measure);
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [measure]);
 
   return (
-    <div ref={containerRef} className="relative aspect-square bg-gray-100 dark:bg-zinc-800 group/img overflow-hidden">
+    <div ref={containerRef} className="relative bg-gray-100 dark:bg-zinc-800 group/img overflow-hidden" style={{ aspectRatio: cssAspect(aspectRatio) }}>
       <img
+        ref={imgRef}
         src={imageUrl}
         alt={`컷 ${cut.cut_number}`}
-        className={`w-full h-full object-cover ${cut.status === 'invalidated' ? 'opacity-50' : ''}`}
-        onLoad={handleImageLoad}
+        className={`w-full h-full object-contain ${cut.status === 'invalidated' ? 'opacity-50' : ''}`}
+        onLoad={measure}
       />
+      <div className="absolute pointer-events-none" style={{ left: dims.x, top: dims.y, width: dims.w, height: dims.h }}>
       {/* 제품 오버레이 */}
       {dims.w > 0 && products?.length > 0 && (
         <ProductLayer productItems={cut.product_items} products={products} width={dims.w} height={dims.h} />
@@ -61,6 +76,7 @@ function CutImageWithBubbles({ cut, imageUrl, onZoom, products }) {
       {dims.w > 0 && (
         <SfxLayer sfxItems={cut.sfx_items} width={dims.w} height={dims.h} />
       )}
+      </div>
       {/* 확대 미리보기 오버레이 */}
       <button
         onClick={onZoom}
@@ -510,49 +526,50 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
     <div className="space-y-4">
       {job && <JobProgress job={job} label="이미지 생성" />}
 
-      <div className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl p-6 backdrop-blur-sm">
-        <div className="flex items-center justify-between mb-4">
+      <div className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl p-4 sm:p-6 backdrop-blur-sm">
+        {/* 모바일: 제목 / 생성 버튼 / 내보내기 4개를 세로로 쌓음 (가로 배치 시 제목이 폭 0으로 눌려 글자 단위로 꺾이던 문제) */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
           <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2">
-            <Image size={20} className="text-indigo-500" /> 게이트 5 — 이미지 검수
+            <Image size={20} className="text-indigo-500 shrink-0" /> 게이트 5 — 이미지 검수
           </h2>
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             {pendingCuts.length > 0 && (
               <button
                 onClick={handleGenerateAll}
                 disabled={!!job}
-                className="flex items-center gap-1 px-4 py-2 bg-ink-black dark:bg-white dark:text-ink-black text-white rounded-full text-xs font-bold hover:bg-comic-blue dark:hover:bg-comic-orange hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50"
+                className="flex items-center justify-center gap-1 w-full sm:w-auto h-10 sm:h-auto px-4 py-2 bg-ink-black dark:bg-white dark:text-ink-black text-white rounded-full text-xs font-bold whitespace-nowrap hover:bg-comic-blue dark:hover:bg-comic-orange hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50"
               >
                 <Image size={12} /> {pendingCuts.length}컷 생성 ({pendingCuts.length}패킷)
               </button>
             )}
             {hasImages && (
-              <div className="flex gap-1">
+              <div className="grid grid-cols-4 gap-2 sm:flex sm:gap-1">
                 <button
                   onClick={() => handleExport('vertical_single')}
                   disabled={exporting}
-                  className="flex items-center gap-1 px-3 py-2 bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-300 rounded-full text-xs font-bold hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors shadow-sm disabled:opacity-50"
+                  className="flex flex-1 sm:flex-none items-center justify-center gap-1 h-10 sm:h-auto px-2 sm:px-3 py-2 bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-300 rounded-full text-xs font-bold whitespace-nowrap hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors shadow-sm disabled:opacity-50"
                 >
                   <Download size={12} /> 세로
                 </button>
                 <button
                   onClick={() => handleExport('instagram_carousel')}
                   disabled={exporting}
-                  className="flex items-center gap-1 px-3 py-2 bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-300 rounded-full text-xs font-bold hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors shadow-sm disabled:opacity-50"
+                  className="flex flex-1 sm:flex-none items-center justify-center gap-1 h-10 sm:h-auto px-2 sm:px-3 py-2 bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-300 rounded-full text-xs font-bold whitespace-nowrap hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors shadow-sm disabled:opacity-50"
                 >
                   <Download size={12} /> 인스타
                 </button>
                 <button
                   onClick={() => handleExport('png_cuts')}
                   disabled={exporting}
-                  className="flex items-center gap-1 px-3 py-2 bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-300 rounded-full text-xs font-bold hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors shadow-sm disabled:opacity-50"
+                  className="flex flex-1 sm:flex-none items-center justify-center gap-1 h-10 sm:h-auto px-2 sm:px-3 py-2 bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-300 rounded-full text-xs font-bold whitespace-nowrap hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors shadow-sm disabled:opacity-50"
                 >
                   <Download size={12} /> PNG
                 </button>
-                <div className="relative">
+                <div className="relative flex">
                   <button
                     onClick={() => setA4Mode(a4Mode ? null : 'grid')}
                     disabled={exporting}
-                    className="flex items-center gap-1 px-3 py-2 bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-300 rounded-full text-xs font-bold hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors shadow-sm disabled:opacity-50"
+                    className="flex flex-1 sm:flex-none items-center justify-center gap-1 h-10 sm:h-auto px-2 sm:px-3 py-2 bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-300 rounded-full text-xs font-bold whitespace-nowrap hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors shadow-sm disabled:opacity-50"
                   >
                     <Download size={12} /> A4
                   </button>
@@ -615,7 +632,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
           </div>
         )}
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {cuts.map((cut) => (
             <div
               key={cut.cut_id}
@@ -629,9 +646,10 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                   imageUrl={imageUrl(getCutImageUrl(cut))}
                   onZoom={(e) => { e.stopPropagation(); setPreviewIndex(cuts.indexOf(cut)); }}
                   products={products}
+                  aspectRatio={gateStatus?.aspect_ratio}
                 />
               ) : (
-                <div className="aspect-square bg-gray-50 dark:bg-zinc-800 flex items-center justify-center">
+                <div className="bg-gray-50 dark:bg-zinc-800 flex items-center justify-center" style={{ aspectRatio: cssAspect(gateStatus?.aspect_ratio) }}>
                   <div className="text-center text-gray-300 dark:text-zinc-600">
                     <Image size={32} className="mx-auto mb-1" />
                     <span className="text-xs font-bold">#{cut.cut_number}</span>
@@ -651,22 +669,22 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                     <button
                       onClick={(e) => { e.stopPropagation(); handleRegenerate(cut.cut_id); }}
                       disabled={!!job}
-                      title="재생성"
-                      className="flex items-center gap-1 px-2 py-1 bg-comic-blue/10 text-comic-blue rounded-full font-bold shadow-sm hover:bg-comic-blue/20 text-[11px] disabled:opacity-50 transition-colors"
+                      title="재생성 (1패킷)"
+                      className="flex items-center gap-1 h-10 sm:h-auto px-2.5 sm:px-2 py-1 bg-comic-blue/10 text-comic-blue rounded-full font-bold shadow-sm hover:bg-comic-blue/20 text-[11px] disabled:opacity-50 transition-colors"
                     >
-                      <RefreshCw size={11} /> 재생성 (1패킷)
+                      <RefreshCw size={11} /> 재생성<span className="hidden sm:inline"> (1패킷)</span>
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); handleRevert(cut.cut_id); }}
                       title="되돌리기"
-                      className="flex items-center gap-1 px-2 py-1 bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-300 rounded-full font-bold shadow-sm hover:bg-gray-200 dark:hover:bg-zinc-700 text-[11px] transition-colors"
+                      className="flex items-center justify-center gap-1 min-w-10 sm:min-w-0 h-10 sm:h-auto px-2.5 sm:px-2 py-1 bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-300 rounded-full font-bold shadow-sm hover:bg-gray-200 dark:hover:bg-zinc-700 text-[11px] transition-colors"
                     >
-                      <RotateCcw size={11} />
+                      <RotateCcw size={13} className="sm:w-[11px] sm:h-[11px]" />
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); setEditCutIndex(cuts.indexOf(cut)); }}
                       title="컷 편집"
-                      className="flex items-center gap-1 px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-full font-bold shadow-sm hover:bg-purple-200 dark:hover:bg-purple-900/50 text-[11px] transition-colors"
+                      className="flex items-center gap-1 h-10 sm:h-auto px-2.5 sm:px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-full font-bold shadow-sm hover:bg-purple-200 dark:hover:bg-purple-900/50 text-[11px] transition-colors"
                     >
                       <Pencil size={11} /> 편집
                     </button>
@@ -674,7 +692,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                       onClick={(e) => { e.stopPropagation(); openStoryboardEditor(cut); }}
                       disabled={!!job}
                       title="콘티 수정 (지문·캐릭터·샷 타입)"
-                      className="flex items-center gap-1 px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-full font-bold shadow-sm hover:bg-amber-200 dark:hover:bg-amber-900/50 text-[11px] transition-colors disabled:opacity-50"
+                      className="flex items-center gap-1 h-10 sm:h-auto px-2.5 sm:px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-full font-bold shadow-sm hover:bg-amber-200 dark:hover:bg-amber-900/50 text-[11px] transition-colors disabled:opacity-50"
                     >
                       <SlidersHorizontal size={11} /> 콘티
                     </button>
@@ -682,7 +700,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                       <button
                         onClick={(e) => { e.stopPropagation(); openDialogueEditor(cut); }}
                         title="대사 편집"
-                        className="flex items-center gap-1 px-2 py-1 bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-300 rounded-full font-bold shadow-sm hover:bg-gray-200 dark:hover:bg-zinc-700 text-[11px] transition-colors"
+                        className="flex items-center gap-1 h-10 sm:h-auto px-2.5 sm:px-2 py-1 bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-300 rounded-full font-bold shadow-sm hover:bg-gray-200 dark:hover:bg-zinc-700 text-[11px] transition-colors"
                       >
                         <MessageSquare size={11} /> 대사
                       </button>

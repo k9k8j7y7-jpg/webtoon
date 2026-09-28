@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { Check, Lock, AlertTriangle, Pencil } from 'lucide-react';
 
 const GATE_LABELS = ['기획', '대본', '자산', '콘티&장소', '이미지'];
@@ -22,22 +23,34 @@ const statusColor = (status) => {
 };
 
 export default function GateProgress({ gateStatus, onGateClick, viewingGate }) {
-  if (!gateStatus) return null;
-  const currentGate = gateStatus.current_gate;
+  const scrollRef = useRef(null);
+  const activeRef = useRef(null);
+  const currentGate = gateStatus?.current_gate;
   const activeGate = viewingGate || currentGate;
 
+  // 모바일(가로 스크롤)에서 현재 게이트를 가운데로. scrollIntoView는 페이지 세로 스크롤까지 건드릴 수 있어 scrollLeft만 조정
+  useEffect(() => {
+    const box = scrollRef.current;
+    const btn = activeRef.current;
+    if (!box || !btn || box.scrollWidth <= box.clientWidth) return;
+    box.scrollTo({ left: btn.offsetLeft - (box.clientWidth - btn.offsetWidth) / 2, behavior: 'smooth' });
+  }, [activeGate]);
+
+  if (!gateStatus) return null;
+
   return (
-    <div className="flex items-center gap-1 w-full overflow-x-auto scrollbar-hide">
+    <div ref={scrollRef} className="relative flex flex-nowrap items-center gap-1 w-full overflow-x-auto scrollbar-hide px-1 py-1 sm:p-0">
       {GATE_KEYS.map((key, i) => {
         const gate = gateStatus.gates[key];
         const status = gate?.status || 'locked';
         const isActive = i + 1 === activeGate;
 
         return (
-          <div key={key} className="flex items-center flex-1 min-w-0">
+          <div key={key} className="flex items-center shrink-0 sm:shrink sm:flex-1 sm:min-w-0">
             <button
+              ref={isActive ? activeRef : null}
               onClick={() => onGateClick?.(i + 1)}
-              className={`flex items-center gap-1 md:gap-1.5 px-2 md:px-3 py-1 md:py-1.5 rounded-full text-[11px] md:text-xs font-bold whitespace-nowrap transition-all
+              className={`shrink-0 flex items-center gap-1 md:gap-1.5 px-2 md:px-3 py-1 md:py-1.5 rounded-full text-[11px] md:text-xs font-bold whitespace-nowrap transition-all
                 ${isActive ? 'ring-2 ring-comic-orange ring-offset-1 dark:ring-offset-surface-dark' : ''}
                 ${status === 'locked' ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:opacity-80'}
                 ${statusColor(status)} ${status === 'locked' ? 'text-gray-500 dark:text-gray-400' : 'text-white'}`}
@@ -46,7 +59,7 @@ export default function GateProgress({ gateStatus, onGateClick, viewingGate }) {
               {statusIcon(status)}
               {GATE_LABELS[i]}
             </button>
-            {i < 4 && <div className={`flex-1 h-0.5 mx-0.5 md:mx-1 min-w-1 ${i + 1 < currentGate ? 'bg-green-300 dark:bg-green-700' : 'bg-gray-200 dark:bg-zinc-700'}`} />}
+            {i < 4 && <div className={`w-4 shrink-0 sm:w-auto sm:shrink sm:flex-1 h-0.5 mx-0.5 md:mx-1 sm:min-w-1 ${i + 1 < currentGate ? 'bg-green-300 dark:bg-green-700' : 'bg-gray-200 dark:bg-zinc-700'}`} />}
           </div>
         );
       })}

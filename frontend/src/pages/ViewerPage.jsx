@@ -9,6 +9,9 @@ import PngBubbleLayer from '../components/PngBubbleLayer';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
 
+// 화면 뷰어 컷 사이 세로 간격 (내보내기 [세로] 간격과는 별개)
+const CUT_GAP_PX = 48;
+
 function resolveUrl(path) {
   if (!path) return '';
   if (path.startsWith('http')) return path;
@@ -128,7 +131,7 @@ export default function ViewerPage() {
       </header>
 
       {/* 컷 세로 스크롤 */}
-      <main className="max-w-2xl mx-auto flex flex-col gap-6 pb-12">
+      <main className="max-w-2xl mx-auto flex flex-col pb-12" style={{ gap: CUT_GAP_PX }}>
         {data.cuts.map((cut, i) => (
           <CutViewer key={i} cut={cut} products={data.products} />
         ))}
