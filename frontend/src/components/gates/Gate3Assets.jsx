@@ -711,22 +711,46 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
   const isReadOnly = currentGate > 3;
   const canApprove = hasCharacters && hasStyle && !isReadOnly;
 
-  const StyleButton = ({ preset, selected }) => (
-    <button
-      onClick={() => selectStyle(preset.key)}
-      className={`relative flex flex-col items-center gap-1.5 px-4 py-3 rounded-xl text-sm font-bold border-2 transition-all shadow-sm min-w-[100px]
-        ${selected
-          ? 'bg-comic-orange/10 border-comic-orange text-comic-orange dark:bg-comic-orange/20'
-          : 'bg-white dark:bg-zinc-800 border-border dark:border-zinc-700 text-gray-600 dark:text-gray-300 hover:border-comic-orange/50 dark:hover:border-comic-orange/50 hover:-translate-y-0.5'}`}
-    >
-      {selected && <Check size={14} className="absolute top-1.5 right-1.5 text-comic-orange" />}
-      <Palette size={18} className={selected ? 'text-comic-orange' : 'text-gray-400 dark:text-gray-500'} />
-      <span className="text-xs leading-tight text-center">{preset.label}</span>
-      {preset.tier === 'beta' && (
-        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 font-bold">Beta</span>
-      )}
-    </button>
-  );
+  const StyleButton = ({ preset, selected }) => {
+    const [imgErr, setImgErr] = useState(false);
+    return (
+      <button
+        onClick={() => selectStyle(preset.key)}
+        className={`relative flex flex-col items-center w-[120px] rounded-xl border-2 transition-all shadow-sm overflow-hidden
+          ${selected
+            ? 'bg-comic-orange/10 border-comic-orange dark:bg-comic-orange/20'
+            : 'bg-white dark:bg-zinc-800 border-border dark:border-zinc-700 hover:border-comic-orange/50 dark:hover:border-comic-orange/50 hover:-translate-y-0.5'}`}
+      >
+        {/* 썸네일 */}
+        <div className="relative w-full aspect-square bg-gray-100 dark:bg-zinc-700">
+          {!imgErr ? (
+            <img
+              src={`${API_BASE}/styles/${preset.key}.jpg`}
+              alt={preset.label}
+              className="w-full h-full object-cover rounded-t-[9px]"
+              onError={() => setImgErr(true)}
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <Palette size={28} className="text-gray-300 dark:text-gray-600" />
+            </div>
+          )}
+          {selected && (
+            <div className="absolute top-1.5 right-1.5 w-5 h-5 bg-comic-orange rounded-full flex items-center justify-center shadow">
+              <Check size={12} className="text-white" />
+            </div>
+          )}
+        </div>
+        {/* 라벨 */}
+        <div className="flex flex-col items-center gap-1 px-2 py-2">
+          <span className="text-xs font-bold leading-tight text-center text-gray-700 dark:text-gray-200">{preset.label}</span>
+          {preset.tier === 'beta' && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 font-bold">Beta</span>
+          )}
+        </div>
+      </button>
+    );
+  };
 
   return (
     <div className="space-y-4">
@@ -745,7 +769,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
         {/* 코어 추천 */}
         <div className="mb-3">
           <p className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-2">추천</p>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-3">
             {presets.core.map((p) => (
               <StyleButton key={p.key} preset={p} selected={styles?.preset_key === p.key} />
             ))}
@@ -763,7 +787,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
               확장 스타일 ({presets.beta.length})
             </button>
             {showBeta && (
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-3">
                 {presets.beta.map((p) => (
                   <StyleButton key={p.key} preset={p} selected={styles?.preset_key === p.key} />
                 ))}
