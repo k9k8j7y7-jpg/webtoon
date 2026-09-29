@@ -118,6 +118,8 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
 
   // 드래그/리사이즈/회전 ref
   const DRAG_THRESHOLD = 5;
+  const DRAG_THRESHOLD_TOUCH = 12;
+  const thresholdRef = useRef(DRAG_THRESHOLD); // 현재 인터랙션의 threshold
   const dragMoved    = useRef(false);
   const dragRef      = useRef(null); // 말풍선 드래그
   const resizeRef    = useRef(null); // 말풍선 너비 리사이즈
@@ -411,7 +413,8 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
 
   const handleBubblePointerDown = (e, idx) => {
     e.stopPropagation();
-    if (e.touches) e.preventDefault();
+    e.preventDefault();
+    thresholdRef.current = e.pointerType === 'touch' ? DRAG_THRESHOLD_TOUCH : DRAG_THRESHOLD;
     setSelectedIdx(idx);
     setSelectedSfxIdx(null);
     setSelectedEffectIdx(null);
@@ -421,11 +424,9 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
 
     const b = bubbles[idx];
     if (!b.bubble_layout) return;
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     dragRef.current = {
       idx,
-      startX: clientX, startY: clientY,
+      startX: e.clientX, startY: e.clientY,
       origX: b.bubble_layout.x, origY: b.bubble_layout.y,
     };
   };
@@ -435,7 +436,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
     if (!ds) return;
     const { w, h } = imgSizeRef.current;
     if (!w || !h) return;
-    if (Math.hypot(clientX - ds.startX, clientY - ds.startY) < DRAG_THRESHOLD) return;
+    if (Math.hypot(clientX - ds.startX, clientY - ds.startY) < thresholdRef.current) return;
     dragMoved.current = true;
     const dx = (clientX - ds.startX) / w;
     const dy = (clientY - ds.startY) / h;
@@ -458,7 +459,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
     if (!rs) return;
     const { w } = imgSizeRef.current;
     if (!w) return;
-    if (Math.abs(clientX - rs.startX) < DRAG_THRESHOLD) return;
+    if (Math.abs(clientX - rs.startX) < thresholdRef.current) return;
     dragMoved.current = true;
     const dx = (clientX - rs.startX) / w;
     const newW = Math.max(0.15, Math.min(0.95, rs.origWidth + dx));
@@ -470,6 +471,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
   const handleResizePointerDown = (e, idx) => {
     e.preventDefault();
     e.stopPropagation();
+    thresholdRef.current = e.pointerType === 'touch' ? DRAG_THRESHOLD_TOUCH : DRAG_THRESHOLD;
     const b = bubbles[idx];
     resizeRef.current = { idx, startX: e.clientX, origWidth: b.bubble_layout?.width || 0.5 };
   };
@@ -478,7 +480,8 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
 
   const handleSfxPointerDown = (e, idx) => {
     e.stopPropagation();
-    if (e.touches) e.preventDefault();
+    e.preventDefault();
+    thresholdRef.current = e.pointerType === 'touch' ? DRAG_THRESHOLD_TOUCH : DRAG_THRESHOLD;
     setSelectedSfxIdx(idx);
     setSelectedIdx(null);
     setSelectedEffectIdx(null);
@@ -487,11 +490,9 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
     dragMoved.current = false;
 
     const sfx = sfxItems[idx];
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     sfxDragRef.current = {
       idx,
-      startX: clientX, startY: clientY,
+      startX: e.clientX, startY: e.clientY,
       origX: sfx.sfx_layout.x, origY: sfx.sfx_layout.y,
     };
   };
@@ -501,7 +502,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
     if (!sd) return;
     const { w, h } = imgSizeRef.current;
     if (!w || !h) return;
-    if (Math.hypot(clientX - sd.startX, clientY - sd.startY) < DRAG_THRESHOLD) return;
+    if (Math.hypot(clientX - sd.startX, clientY - sd.startY) < thresholdRef.current) return;
     dragMoved.current = true;
     const dx = (clientX - sd.startX) / w;
     const dy = (clientY - sd.startY) / h;
@@ -520,6 +521,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
   const handleRotateStart = (e, idx) => {
     e.preventDefault();
     e.stopPropagation();
+    thresholdRef.current = e.pointerType === 'touch' ? DRAG_THRESHOLD_TOUCH : DRAG_THRESHOLD;
     const sfx = sfxItems[idx];
     const layout = sfx.sfx_layout;
     const imgRect = imgRef.current?.getBoundingClientRect();
@@ -549,7 +551,8 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
 
   const handleEffectPointerDown = (e, idx) => {
     e.stopPropagation();
-    if (e.touches) e.preventDefault();
+    e.preventDefault();
+    thresholdRef.current = e.pointerType === 'touch' ? DRAG_THRESHOLD_TOUCH : DRAG_THRESHOLD;
     setSelectedEffectIdx(idx);
     setSelectedIdx(null);
     setSelectedSfxIdx(null);
@@ -558,11 +561,9 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
     dragMoved.current = false;
 
     const item = effectItems[idx];
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     effectDragRef.current = {
       idx,
-      startX: clientX, startY: clientY,
+      startX: e.clientX, startY: e.clientY,
       origX: item.x ?? 0.5, origY: item.y ?? 0.5,
     };
   };
@@ -572,7 +573,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
     if (!ed) return;
     const { w, h } = imgSizeRef.current;
     if (!w || !h) return;
-    if (Math.hypot(clientX - ed.startX, clientY - ed.startY) < DRAG_THRESHOLD) return;
+    if (Math.hypot(clientX - ed.startX, clientY - ed.startY) < thresholdRef.current) return;
     dragMoved.current = true;
     const dx = (clientX - ed.startX) / w;
     const dy = (clientY - ed.startY) / h;
@@ -588,6 +589,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
   const handleEffectRotateStart = (e, idx) => {
     e.preventDefault();
     e.stopPropagation();
+    thresholdRef.current = e.pointerType === 'touch' ? DRAG_THRESHOLD_TOUCH : DRAG_THRESHOLD;
     const item = effectItems[idx];
     const imgRect = imgRef.current?.getBoundingClientRect();
     if (!imgRect) return;
@@ -617,7 +619,8 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
 
   const handleProductPointerDown = (e, idx) => {
     e.stopPropagation();
-    if (e.touches) e.preventDefault();
+    e.preventDefault();
+    thresholdRef.current = e.pointerType === 'touch' ? DRAG_THRESHOLD_TOUCH : DRAG_THRESHOLD;
     setSelectedProductIdx(idx);
     setSelectedIdx(null);
     setSelectedSfxIdx(null);
@@ -628,11 +631,9 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
     dragMoved.current = false;
 
     const item = productItems[idx];
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     productDragRef.current = {
       idx,
-      startX: clientX, startY: clientY,
+      startX: e.clientX, startY: e.clientY,
       origX: item.x ?? 0.5, origY: item.y ?? 0.5,
     };
   };
@@ -642,7 +643,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
     if (!pd) return;
     const { w, h } = imgSizeRef.current;
     if (!w || !h) return;
-    if (Math.hypot(clientX - pd.startX, clientY - pd.startY) < DRAG_THRESHOLD) return;
+    if (Math.hypot(clientX - pd.startX, clientY - pd.startY) < thresholdRef.current) return;
     dragMoved.current = true;
     const dx = (clientX - pd.startX) / w;
     const dy = (clientY - pd.startY) / h;
@@ -658,6 +659,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
   const handleProductRotateStart = (e, idx) => {
     e.preventDefault();
     e.stopPropagation();
+    thresholdRef.current = e.pointerType === 'touch' ? DRAG_THRESHOLD_TOUCH : DRAG_THRESHOLD;
     const item = productItems[idx];
     const imgRect = imgRef.current?.getBoundingClientRect();
     if (!imgRect) return;
@@ -687,7 +689,8 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
 
   const handlePngbubblePointerDown = (e, idx) => {
     e.stopPropagation();
-    if (e.touches) e.preventDefault();
+    e.preventDefault();
+    thresholdRef.current = e.pointerType === 'touch' ? DRAG_THRESHOLD_TOUCH : DRAG_THRESHOLD;
     setSelectedPngbubbleIdx(idx);
     setSelectedIdx(null);
     setSelectedSfxIdx(null);
@@ -700,11 +703,9 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
     dragMoved.current = false;
 
     const item = pngbubbleItems[idx];
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     pngbubbleDragRef.current = {
       idx,
-      startX: clientX, startY: clientY,
+      startX: e.clientX, startY: e.clientY,
       origX: item.x ?? 0.5, origY: item.y ?? 0.5,
     };
   };
@@ -714,7 +715,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
     if (!pd) return;
     const { w, h } = imgSizeRef.current;
     if (!w || !h) return;
-    if (Math.hypot(clientX - pd.startX, clientY - pd.startY) < DRAG_THRESHOLD) return;
+    if (Math.hypot(clientX - pd.startX, clientY - pd.startY) < thresholdRef.current) return;
     dragMoved.current = true;
     const dx = (clientX - pd.startX) / w;
     const dy = (clientY - pd.startY) / h;
@@ -730,6 +731,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
   const handlePngbubbleRotateStart = (e, idx) => {
     e.preventDefault();
     e.stopPropagation();
+    thresholdRef.current = e.pointerType === 'touch' ? DRAG_THRESHOLD_TOUCH : DRAG_THRESHOLD;
     const item = pngbubbleItems[idx];
     const imgRect = imgRef.current?.getBoundingClientRect();
     if (!imgRect) return;
@@ -755,9 +757,16 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
     ));
   }, []);
 
-  // ── window 이벤트 (mousemove/mouseup/touch) ───────────────
+  // ── window 이벤트 (pointer 통합) ─────────────────────────
 
-  const handleMouseMove = useCallback((e) => {
+  const isDragging = useCallback(() =>
+    !!(dragRef.current || sfxDragRef.current || effectDragRef.current ||
+       productDragRef.current || pngbubbleDragRef.current || resizeRef.current ||
+       rotateRef.current || effectRotateRef.current || productRotateRef.current ||
+       pngbubbleRotateRef.current),
+  []);
+
+  const handlePointerMove = useCallback((e) => {
     if (dragRef.current)         applyDrag(e.clientX, e.clientY);
     else if (sfxDragRef.current) applySfxDrag(e.clientX, e.clientY);
     else if (effectDragRef.current) applyEffectDrag(e.clientX, e.clientY);
@@ -770,44 +779,43 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
     else if (pngbubbleRotateRef.current) applyPngbubbleRotate(e.clientX, e.clientY);
   }, [applyDrag, applySfxDrag, applyEffectDrag, applyProductDrag, applyPngbubbleDrag, applyResize, applyRotate, applyEffectRotate, applyProductRotate, applyPngbubbleRotate]);
 
-  const handleMouseUp = useCallback((e) => {
-    // 말풍선 드래그 클릭 판정
+  const handlePointerUp = useCallback((e) => {
+    const cx = e.clientX;
+    const cy = e.clientY;
+    const th = thresholdRef.current;
+
+    // 말풍선 탭 판정
     const ds = dragRef.current;
     if (ds) {
-      const dist = Math.hypot((e?.clientX ?? ds.startX) - ds.startX, (e?.clientY ?? ds.startY) - ds.startY);
-      if (dist < DRAG_THRESHOLD) setSelectedIdx(ds.idx);
+      if (Math.hypot(cx - ds.startX, cy - ds.startY) < th) setSelectedIdx(ds.idx);
     }
     dragRef.current = null;
 
-    // 효과음 드래그 클릭 판정
+    // 효과음 탭 판정
     const sd = sfxDragRef.current;
     if (sd) {
-      const dist = Math.hypot((e?.clientX ?? sd.startX) - sd.startX, (e?.clientY ?? sd.startY) - sd.startY);
-      if (dist < DRAG_THRESHOLD) setSelectedSfxIdx(sd.idx);
+      if (Math.hypot(cx - sd.startX, cy - sd.startY) < th) setSelectedSfxIdx(sd.idx);
     }
     sfxDragRef.current = null;
 
-    // 배경효과 드래그 클릭 판정
+    // 배경효과 탭 판정
     const ed = effectDragRef.current;
     if (ed) {
-      const dist = Math.hypot((e?.clientX ?? ed.startX) - ed.startX, (e?.clientY ?? ed.startY) - ed.startY);
-      if (dist < DRAG_THRESHOLD) setSelectedEffectIdx(ed.idx);
+      if (Math.hypot(cx - ed.startX, cy - ed.startY) < th) setSelectedEffectIdx(ed.idx);
     }
     effectDragRef.current = null;
 
-    // 제품 드래그 클릭 판정
+    // 제품 탭 판정
     const pd = productDragRef.current;
     if (pd) {
-      const dist = Math.hypot((e?.clientX ?? pd.startX) - pd.startX, (e?.clientY ?? pd.startY) - pd.startY);
-      if (dist < DRAG_THRESHOLD) setSelectedProductIdx(pd.idx);
+      if (Math.hypot(cx - pd.startX, cy - pd.startY) < th) setSelectedProductIdx(pd.idx);
     }
     productDragRef.current = null;
 
-    // PNG 말풍선 드래그 클릭 판정
+    // PNG 말풍선 탭 판정
     const pbd = pngbubbleDragRef.current;
     if (pbd) {
-      const dist = Math.hypot((e?.clientX ?? pbd.startX) - pbd.startX, (e?.clientY ?? pbd.startY) - pbd.startY);
-      if (dist < DRAG_THRESHOLD) setSelectedPngbubbleIdx(pbd.idx);
+      if (Math.hypot(cx - pbd.startX, cy - pbd.startY) < th) setSelectedPngbubbleIdx(pbd.idx);
     }
     pngbubbleDragRef.current = null;
 
@@ -818,72 +826,22 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
     pngbubbleRotateRef.current = null;
   }, [setSelectedIdx, setSelectedSfxIdx, setSelectedEffectIdx, setSelectedProductIdx, setSelectedPngbubbleIdx]);
 
-  const handleTouchMove = useCallback((e) => {
-    if (!e.touches?.length) return;
-    e.preventDefault();
-    const t = e.touches[0];
-    if (dragRef.current)            applyDrag(t.clientX, t.clientY);
-    else if (sfxDragRef.current)    applySfxDrag(t.clientX, t.clientY);
-    else if (effectDragRef.current) applyEffectDrag(t.clientX, t.clientY);
-    else if (productDragRef.current) applyProductDrag(t.clientX, t.clientY);
-    else if (pngbubbleDragRef.current) applyPngbubbleDrag(t.clientX, t.clientY);
-    else if (effectRotateRef.current) applyEffectRotate(t.clientX, t.clientY);
-    else if (productRotateRef.current) applyProductRotate(t.clientX, t.clientY);
-    else if (pngbubbleRotateRef.current) applyPngbubbleRotate(t.clientX, t.clientY);
-  }, [applyDrag, applySfxDrag, applyEffectDrag, applyProductDrag, applyPngbubbleDrag, applyEffectRotate, applyProductRotate, applyPngbubbleRotate]);
-
-  const handleTouchEnd = useCallback((e) => {
-    const t = e.changedTouches?.[0];
-
-    const ds = dragRef.current;
-    if (ds && t) {
-      if (Math.hypot(t.clientX - ds.startX, t.clientY - ds.startY) < DRAG_THRESHOLD) setSelectedIdx(ds.idx);
-    }
-    dragRef.current = null;
-
-    const sd = sfxDragRef.current;
-    if (sd && t) {
-      if (Math.hypot(t.clientX - sd.startX, t.clientY - sd.startY) < DRAG_THRESHOLD) setSelectedSfxIdx(sd.idx);
-    }
-    sfxDragRef.current = null;
-
-    const ed = effectDragRef.current;
-    if (ed && t) {
-      if (Math.hypot(t.clientX - ed.startX, t.clientY - ed.startY) < DRAG_THRESHOLD) setSelectedEffectIdx(ed.idx);
-    }
-    effectDragRef.current = null;
-
-    const pd2 = productDragRef.current;
-    if (pd2 && t) {
-      if (Math.hypot(t.clientX - pd2.startX, t.clientY - pd2.startY) < DRAG_THRESHOLD) setSelectedProductIdx(pd2.idx);
-    }
-    productDragRef.current = null;
-
-    const pbd2 = pngbubbleDragRef.current;
-    if (pbd2 && t) {
-      if (Math.hypot(t.clientX - pbd2.startX, t.clientY - pbd2.startY) < DRAG_THRESHOLD) setSelectedPngbubbleIdx(pbd2.idx);
-    }
-    pngbubbleDragRef.current = null;
-
-    resizeRef.current = null;
-    rotateRef.current = null;
-    effectRotateRef.current = null;
-    productRotateRef.current = null;
-    pngbubbleRotateRef.current = null;
-  }, [setSelectedIdx, setSelectedSfxIdx, setSelectedEffectIdx, setSelectedProductIdx, setSelectedPngbubbleIdx]);
+  // 컷 이미지 영역 전용 touchmove — 드래그 중일 때만 preventDefault
+  const handleContainerTouchMove = useCallback((e) => {
+    if (isDragging()) e.preventDefault();
+  }, [isDragging]);
 
   useEffect(() => {
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-    window.addEventListener('touchmove', handleTouchMove, { passive: false });
-    window.addEventListener('touchend', handleTouchEnd);
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    const container = containerRef.current;
+    if (container) container.addEventListener('touchmove', handleContainerTouchMove, { passive: false });
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-      window.removeEventListener('touchmove', handleTouchMove);
-      window.removeEventListener('touchend', handleTouchEnd);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      if (container) container.removeEventListener('touchmove', handleContainerTouchMove);
     };
-  }, [handleMouseMove, handleMouseUp, handleTouchMove, handleTouchEnd]);
+  }, [handlePointerMove, handlePointerUp, handleContainerTouchMove]);
 
   // ── 키보드 이전/다음 컷 이동 (편집 모드가 아닐 때만) ──
   useEffect(() => {
@@ -914,92 +872,98 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
   return (
     <div
       className="fixed inset-0 z-50 bg-black flex flex-col"
-      onClick={() => { setSelectedIdx(null); setSelectedSfxIdx(null); setSelectedEffectIdx(null); setSelectedProductIdx(null); setSelectedPngbubbleIdx(null); setOpenPalette(false); setShowEffectPicker(false); setShowProductPicker(false); setShowPngbubblePicker(false); }}
+      style={{ height: '100dvh' }}
+      onPointerDown={() => { setSelectedIdx(null); setSelectedSfxIdx(null); setSelectedEffectIdx(null); setSelectedProductIdx(null); setSelectedPngbubbleIdx(null); setOpenPalette(false); setShowEffectPicker(false); setShowProductPicker(false); setShowPngbubblePicker(false); }}
     >
       {/* ── 상단 바 ── */}
       <div
-        className="flex items-center justify-between px-4 py-2.5 bg-zinc-900/90 border-b border-zinc-800 backdrop-blur-sm shrink-0"
-        onClick={e => e.stopPropagation()}
+        className="flex items-center justify-between px-2 sm:px-4 py-2 sm:py-2.5 bg-zinc-900/90 border-b border-zinc-800 backdrop-blur-sm shrink-0 gap-1"
+        onPointerDown={e => e.stopPropagation()}
       >
-        <div className="flex items-center gap-2">
-          {/* 컷 번호 / 총 컷 수 */}
-          <span className="text-white font-bold text-sm">
-            컷 #{cut.cut_number}
+        {/* 좌: 컷 번호 */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="text-white font-bold text-xs sm:text-sm whitespace-nowrap">
+            #{cut.cut_number}
             {totalCuts > 0 && (
-              <span className="text-zinc-400 font-normal text-xs ml-1">({cutIndex}/{totalCuts})</span>
+              <span className="text-zinc-400 font-normal text-[10px] sm:text-xs ml-0.5">({cutIndex}/{totalCuts})</span>
             )}
           </span>
           {mode === 'view' && (
-            <span className="text-xs text-zinc-400 font-bold flex items-center gap-1">
-              <Eye size={12} /> 보기 모드
+            <span className="text-[10px] sm:text-xs text-zinc-400 font-bold flex items-center gap-0.5">
+              <Eye size={11} /> <span className="hidden sm:inline">보기 모드</span>
             </span>
           )}
           {mode === 'edit' && (
-            <span className="text-xs text-purple-400 font-bold flex items-center gap-1">
-              <Pencil size={12} /> 편집 모드
+            <span className="text-[10px] sm:text-xs text-purple-400 font-bold flex items-center gap-0.5">
+              <Pencil size={11} /> <span className="hidden sm:inline">편집 모드</span>
             </span>
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* 중: 도구 버튼 (모바일: 가로 스크롤) */}
+        {mode === 'edit' && (
+          <div className="flex-1 overflow-x-auto scrollbar-hide mx-1">
+            <div className="flex items-center gap-1.5 sm:gap-2 whitespace-nowrap">
+              {products.length > 0 && (
+                <button
+                  onClick={() => setShowProductPicker(p => !p)}
+                  className={`flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-full text-[11px] sm:text-xs font-bold transition-colors shadow-sm ${
+                    showProductPicker ? 'bg-amber-500 text-white' : 'bg-amber-600 hover:bg-amber-700 text-white'
+                  }`}
+                >
+                  <ImageIcon size={12} /> <span className="hidden sm:inline">제품 배치</span><span className="sm:hidden">제품</span>
+                </button>
+              )}
+              <button
+                onClick={() => setShowEffectPicker(p => !p)}
+                className={`flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-full text-[11px] sm:text-xs font-bold transition-colors shadow-sm ${
+                  showEffectPicker ? 'bg-cyan-500 text-white' : 'bg-cyan-600 hover:bg-cyan-700 text-white'
+                }`}
+              >
+                <Sparkles size={12} /> <span className="hidden sm:inline">배경효과</span><span className="sm:hidden">효과</span>
+              </button>
+              <button
+                onClick={() => setShowPngbubblePicker(p => !p)}
+                className={`flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-full text-[11px] sm:text-xs font-bold transition-colors shadow-sm ${
+                  showPngbubblePicker ? 'bg-violet-500 text-white' : 'bg-violet-600 hover:bg-violet-700 text-white'
+                }`}
+              >
+                <MessageCircle size={12} /> <span className="hidden sm:inline">특수 말풍선</span><span className="sm:hidden">말풍선</span>
+              </button>
+              <button
+                onClick={handleAddSfx}
+                className="flex items-center gap-1 px-2 sm:px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-full text-[11px] sm:text-xs font-bold transition-colors shadow-sm"
+              >
+                <Zap size={12} /> <span className="hidden sm:inline">효과음 추가</span><span className="sm:hidden">효과음</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 우: 편집/취소/저장/닫기 (항상 보임) */}
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           {mode === 'view' && cut.image_url && (
             <button
               onClick={enterEditMode}
-              className="flex items-center gap-1.5 px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-full text-sm font-bold transition-colors shadow-sm"
+              className="flex items-center gap-1 px-3 sm:px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-full text-xs sm:text-sm font-bold transition-colors shadow-sm"
             >
               <Pencil size={13} /> 편집
             </button>
           )}
           {mode === 'edit' && (
             <>
-              {/* 제품 배치 버튼 (광고 에피소드 — 제품 있을 때만) */}
-              {products.length > 0 && (
-                <button
-                  onClick={() => setShowProductPicker(p => !p)}
-                  className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold transition-colors shadow-sm ${
-                    showProductPicker ? 'bg-amber-500 text-white' : 'bg-amber-600 hover:bg-amber-700 text-white'
-                  }`}
-                >
-                  <ImageIcon size={12} /> 제품 배치
-                </button>
-              )}
-              {/* 배경효과 추가 버튼 */}
-              <button
-                onClick={() => setShowEffectPicker(p => !p)}
-                className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold transition-colors shadow-sm ${
-                  showEffectPicker ? 'bg-cyan-500 text-white' : 'bg-cyan-600 hover:bg-cyan-700 text-white'
-                }`}
-              >
-                <Sparkles size={12} /> 배경효과
-              </button>
-              {/* 특수 말풍선 추가 버튼 */}
-              <button
-                onClick={() => setShowPngbubblePicker(p => !p)}
-                className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold transition-colors shadow-sm ${
-                  showPngbubblePicker ? 'bg-violet-500 text-white' : 'bg-violet-600 hover:bg-violet-700 text-white'
-                }`}
-              >
-                <MessageCircle size={12} /> 특수 말풍선
-              </button>
-              {/* 효과음 추가 버튼 */}
-              <button
-                onClick={handleAddSfx}
-                className="flex items-center gap-1 px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-full text-xs font-bold transition-colors shadow-sm"
-              >
-                <Zap size={12} /> 효과음 추가
-              </button>
               <button
                 onClick={cancelEdit}
-                className="px-3 py-1.5 text-zinc-400 hover:text-white text-sm font-bold transition-colors"
+                className="px-2 sm:px-3 py-1.5 text-zinc-400 hover:text-white text-xs sm:text-sm font-bold transition-colors whitespace-nowrap"
               >
                 취소
               </button>
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="flex items-center gap-1.5 px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-full text-sm font-bold transition-colors shadow-sm disabled:opacity-50"
+                className="flex items-center gap-1 px-2.5 sm:px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-full text-xs sm:text-sm font-bold transition-colors shadow-sm disabled:opacity-50 whitespace-nowrap"
               >
-                <Save size={13} /> {saving ? '저장 중…' : '저장'}
+                <Save size={13} /> {saving ? '저장…' : '저장'}
               </button>
             </>
           )}
@@ -1016,7 +980,8 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
       <div
         ref={containerRef}
         className="flex-1 flex items-center justify-center overflow-hidden min-h-0 relative"
-        onClick={e => e.stopPropagation()}
+        style={{ touchAction: 'none' }}
+        onPointerDown={e => e.stopPropagation()}
       >
         <div className="relative" style={dispSize.w > 0 ? { width: dispSize.w, height: dispSize.h } : undefined}>
           <img
@@ -1049,15 +1014,15 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
               className="absolute inset-0"
               width={imgW} height={imgH}
               overflow="visible"
-              style={{ top: 0, left: 0 }}
-              onClick={e => e.stopPropagation()}
+              style={{ top: 0, left: 0, touchAction: 'none' }}
+              onPointerDown={e => e.stopPropagation()}
             >
-              {/* 배경 투명 rect: 빈 곳 클릭 → 선택 해제 */}
+              {/* 배경 투명 rect: 빈 곳 탭 → 선택 해제 (pointerdown 즉시) */}
               <rect
                 x={0} y={0} width={imgW} height={imgH}
                 fill="transparent"
                 style={{ pointerEvents: 'all', cursor: 'default' }}
-                onClick={e => {
+                onPointerDown={e => {
                   e.stopPropagation();
                   if (dragMoved.current) { dragMoved.current = false; return; }
                   setSelectedIdx(null);
@@ -1092,18 +1057,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                     <rect
                       x={-pW/2} y={-pH/2} width={pW} height={pH}
                       fill="transparent" style={{ cursor: 'grab', pointerEvents: 'all' }}
-                      onMouseDown={e => handleProductPointerDown(e, i)}
-                      onTouchStart={e => { e.preventDefault(); handleProductPointerDown(e, i); }}
-                      onClick={e => {
-                        e.stopPropagation();
-                        dragMoved.current = false;
-                        setSelectedProductIdx(i);
-                        setSelectedIdx(null);
-                        setSelectedSfxIdx(null);
-                        setSelectedEffectIdx(null);
-                        setShowEffectPicker(false);
-                        setShowProductPicker(false);
-                      }}
+                      onPointerDown={e => handleProductPointerDown(e, i)}
                     />
                     <text x={-pW/2+2} y={-pH/2-6}
                       fill={isSelected ? '#f59e0b' : 'rgba(245,158,11,0.45)'}
@@ -1116,9 +1070,9 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                       <g>
                         <line x1="0" y1={-pH/2-4} x2="0" y2={-pH/2-28}
                           stroke="#f59e0b" strokeWidth={1.5} style={{ pointerEvents: 'none' }} />
-                        <circle cx="0" cy={-pH/2-32} r={10} fill="#f59e0b" opacity={0.9}
+                        <circle cx="0" cy={-pH/2-32} r={14} fill="#f59e0b" opacity={0.9}
                           style={{ cursor: 'crosshair', pointerEvents: 'all' }}
-                          onMouseDown={e => handleProductRotateStart(e, i)} />
+                          onPointerDown={e => handleProductRotateStart(e, i)} />
                         <text x="0" y={-pH/2-28} textAnchor="middle" dominantBaseline="middle"
                           fill="white" fontSize={13} style={{ pointerEvents: 'none' }}>↻</text>
                       </g>
@@ -1152,16 +1106,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                     <rect
                       x={-effW/2} y={-effH/2} width={effW} height={effH}
                       fill="transparent" style={{ cursor: 'grab', pointerEvents: 'all' }}
-                      onMouseDown={e => handleEffectPointerDown(e, i)}
-                      onTouchStart={e => { e.preventDefault(); handleEffectPointerDown(e, i); }}
-                      onClick={e => {
-                        e.stopPropagation();
-                        dragMoved.current = false;
-                        setSelectedEffectIdx(i);
-                        setSelectedIdx(null);
-                        setSelectedSfxIdx(null);
-                        setShowEffectPicker(false);
-                      }}
+                      onPointerDown={e => handleEffectPointerDown(e, i)}
                     />
 
                     {/* 라벨 */}
@@ -1178,9 +1123,9 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                       <g>
                         <line x1="0" y1={-effH/2-4} x2="0" y2={-effH/2-28}
                           stroke="#06b6d4" strokeWidth={1.5} style={{ pointerEvents: 'none' }} />
-                        <circle cx="0" cy={-effH/2-32} r={10} fill="#06b6d4" opacity={0.9}
+                        <circle cx="0" cy={-effH/2-32} r={14} fill="#06b6d4" opacity={0.9}
                           style={{ cursor: 'crosshair', pointerEvents: 'all' }}
-                          onMouseDown={e => handleEffectRotateStart(e, i)} />
+                          onPointerDown={e => handleEffectRotateStart(e, i)} />
                         <text x="0" y={-effH/2-28} textAnchor="middle" dominantBaseline="middle"
                           fill="white" fontSize={13} style={{ pointerEvents: 'none' }}>↻</text>
                       </g>
@@ -1238,9 +1183,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                     <rect
                       x={px} y={py} width={pw} height={gh}
                       fill="transparent" style={{ cursor: 'grab', pointerEvents: 'all' }}
-                      onMouseDown={e => handleBubblePointerDown(e, i)}
-                      onTouchStart={e => { e.preventDefault(); handleBubblePointerDown(e, i); }}
-                      onClick={e => { e.stopPropagation(); dragMoved.current = false; setSelectedIdx(i); setSelectedSfxIdx(null); setSelectedEffectIdx(null); setOpenPalette(false); }}
+                      onPointerDown={e => handleBubblePointerDown(e, i)}
                     />
                     <text x={gx+4} y={gy-5} fill={isSelected ? '#a855f7' : 'rgba(255,255,255,0.5)'}
                       fontSize={9} fontWeight="bold"
@@ -1249,9 +1192,9 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                       {i + 1}
                     </text>
                     {isSelected && !isNarration && (
-                      <g onMouseDown={e => { e.preventDefault(); e.stopPropagation(); handleResizePointerDown(e, i); }}
+                      <g onPointerDown={e => { e.preventDefault(); e.stopPropagation(); handleResizePointerDown(e, i); }}
                         style={{ cursor: 'ew-resize', pointerEvents: 'all' }}>
-                        <circle cx={gx+gw+1} cy={gy+gh/2} r={9} fill="#7c3aed" opacity={0.9} />
+                        <circle cx={gx+gw+1} cy={gy+gh/2} r={14} fill="#7c3aed" opacity={0.9} />
                         <text x={gx+gw+1} y={gy+gh/2+4} textAnchor="middle" fill="white" fontSize={11} fontWeight="bold"
                           style={{ pointerEvents: 'none' }}>↔</text>
                       </g>
@@ -1301,16 +1244,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                     <rect
                       x={-hitW/2} y={-hitH/2} width={hitW} height={hitH}
                       fill="transparent" style={{ cursor: 'grab', pointerEvents: 'all' }}
-                      onMouseDown={e => handleSfxPointerDown(e, i)}
-                      onTouchStart={e => { e.preventDefault(); handleSfxPointerDown(e, i); }}
-                      onClick={e => {
-                        e.stopPropagation();
-                        dragMoved.current = false;
-                        setSelectedSfxIdx(i);
-                        setSelectedIdx(null);
-                        setSelectedEffectIdx(null);
-                        setOpenPalette(false);
-                      }}
+                      onPointerDown={e => handleSfxPointerDown(e, i)}
                     />
 
                     {/* 번호 라벨 */}
@@ -1327,9 +1261,9 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                       <g>
                         <line x1="0" y1={-hitH/2-4} x2="0" y2={-hitH/2-28}
                           stroke="#f97316" strokeWidth={1.5} style={{ pointerEvents: 'none' }} />
-                        <circle cx="0" cy={-hitH/2-32} r={10} fill="#f97316" opacity={0.9}
+                        <circle cx="0" cy={-hitH/2-32} r={14} fill="#f97316" opacity={0.9}
                           style={{ cursor: 'crosshair', pointerEvents: 'all' }}
-                          onMouseDown={e => handleRotateStart(e, i)} />
+                          onPointerDown={e => handleRotateStart(e, i)} />
                         <text x="0" y={-hitH/2-28} textAnchor="middle" dominantBaseline="middle"
                           fill="white" fontSize={13} style={{ pointerEvents: 'none' }}>↻</text>
                       </g>
@@ -1368,18 +1302,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                     <rect
                       x={-pbW/2} y={-pbH/2} width={pbW} height={pbH}
                       fill="transparent" style={{ cursor: 'grab', pointerEvents: 'all' }}
-                      onMouseDown={e => handlePngbubblePointerDown(e, i)}
-                      onTouchStart={e => { e.preventDefault(); handlePngbubblePointerDown(e, i); }}
-                      onClick={e => {
-                        e.stopPropagation();
-                        dragMoved.current = false;
-                        setSelectedPngbubbleIdx(i);
-                        setSelectedIdx(null);
-                        setSelectedSfxIdx(null);
-                        setSelectedEffectIdx(null);
-                        setSelectedProductIdx(null);
-                        setShowPngbubblePicker(false);
-                      }}
+                      onPointerDown={e => handlePngbubblePointerDown(e, i)}
                     />
                     <text x={-pbW/2+2} y={-pbH/2-6}
                       fill={isSelected ? '#8b5cf6' : 'rgba(139,92,246,0.45)'}
@@ -1392,9 +1315,9 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                       <g>
                         <line x1="0" y1={-pbH/2-4} x2="0" y2={-pbH/2-28}
                           stroke="#8b5cf6" strokeWidth={1.5} style={{ pointerEvents: 'none' }} />
-                        <circle cx="0" cy={-pbH/2-32} r={10} fill="#8b5cf6" opacity={0.9}
+                        <circle cx="0" cy={-pbH/2-32} r={14} fill="#8b5cf6" opacity={0.9}
                           style={{ cursor: 'crosshair', pointerEvents: 'all' }}
-                          onMouseDown={e => handlePngbubbleRotateStart(e, i)} />
+                          onPointerDown={e => handlePngbubbleRotateStart(e, i)} />
                         <text x="0" y={-pbH/2-28} textAnchor="middle" dominantBaseline="middle"
                           fill="white" fontSize={13} style={{ pointerEvents: 'none' }}>↻</text>
                       </g>
@@ -1431,7 +1354,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
       {/* ── 에러 ── */}
       {error && (
         <div className="shrink-0 px-4 py-2 bg-red-900/60 text-red-300 text-sm font-bold text-center"
-          onClick={e => e.stopPropagation()}>
+          onPointerDown={e => e.stopPropagation()}>
           {error}
         </div>
       )}
@@ -1439,8 +1362,9 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
       {/* ── 하단 컨트롤 패널 (편집 모드) ── */}
       {mode === 'edit' && (
         <div
-          className="shrink-0 bg-zinc-900 border-t border-zinc-800 max-h-[40vh] overflow-y-auto"
-          onClick={e => e.stopPropagation()}
+          className="shrink-0 bg-zinc-900 border-t border-zinc-800 overflow-y-auto"
+          style={{ maxHeight: '40dvh', touchAction: 'pan-y' }}
+          onPointerDown={e => e.stopPropagation()}
         >
           {/* 말풍선 선택 패널 */}
           {selectedBubble && (
@@ -1512,7 +1436,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                       {TAIL_DIRS.map(({ key, label, title }) => (
                         <button key={key} title={title}
                           onClick={() => updateLayout(selectedIdx, { tail_direction: key })}
-                          className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-bold transition-colors ${
+                          className={`w-11 h-11 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg text-sm font-bold transition-colors ${
                             (selectedBubble.bubble_layout?.tail_direction || 'down') === key
                               ? 'bg-purple-600 text-white' : 'bg-zinc-700 text-zinc-400 hover:bg-zinc-600'
                           }`}>{label}</button>
@@ -1522,7 +1446,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                         <button
                           title="꼬리 좌우 반전"
                           onClick={() => updateLayout(selectedIdx, { tail_flip: !selectedBubble.bubble_layout?.tail_flip })}
-                          className={`px-2.5 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-colors ${
+                          className={`px-2.5 h-11 sm:h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-colors ${
                             selectedBubble.bubble_layout?.tail_flip
                               ? 'bg-purple-600 text-white'
                               : 'bg-zinc-700 text-zinc-400 hover:bg-zinc-600'
@@ -1681,7 +1605,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                     {SFX_COLORS.map(({ color, label }) => (
                       <button key={color} title={label}
                         onClick={() => updateSfxLayout(selectedSfxIdx, { color })}
-                        className={`w-6 h-6 rounded-full border-2 transition-all ${
+                        className={`w-9 h-9 sm:w-6 sm:h-6 rounded-full border-2 transition-all ${
                           selectedSfxItem.sfx_layout?.color === color
                             ? 'border-orange-400 scale-110 ring-1 ring-orange-400'
                             : 'border-zinc-600 hover:border-zinc-400'

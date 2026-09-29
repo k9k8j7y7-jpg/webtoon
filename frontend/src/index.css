@@ -80,6 +80,18 @@ body {
   }
 }
 
+/* 슬라이더 터치 타깃 (모바일) */
+@media (pointer: coarse) {
+  input[type="range"]::-webkit-slider-thumb {
+    width: 28px;
+    height: 28px;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 28px;
+    height: 28px;
+  }
+}
+
 /* 스크롤바 숨김 유틸 */
 .scrollbar-hide {
   -ms-overflow-style: none;
