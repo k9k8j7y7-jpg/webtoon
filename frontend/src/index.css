@@ -12,6 +12,8 @@
 
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-primary: #FF5722;
   --color-primary-dark: #E64A19;
@@ -21,7 +23,16 @@
   --color-comic-orange: #FF5722;
   --color-comic-blue: #2563EB;
   --color-border: #dfe4dc;
-  
+
+  /* ── night 토큰 (LandingPage 값 복사) ── */
+  --color-night-bg: #0A0F1D;
+  --color-night-card: #111827;
+  --color-night-border: rgba(255, 255, 255, 0.10);
+
+  /* ── neon 그라데이션 양단 ── */
+  --color-neon-from: #a855f7;
+  --color-neon-to: #22d3ee;
+
   --font-sans: 'Pretendard', system-ui, -apple-system, sans-serif;
   --font-serif: 'Playfair Display', 'Iowan Old Style', 'Georgia', serif;
 }
@@ -32,21 +43,40 @@ body {
   color: var(--color-ink-black);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
-  background-image: 
+  background-image:
     linear-gradient(to right, rgba(0,0,0,0.03) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(0,0,0,0.03) 1px, transparent 1px);
   background-size: 40px 40px;
   background-attachment: fixed;
-  transition: background-color 0.2s, color 0.2s;
+  transition: background-color 0.3s, color 0.3s;
 }
 
-@media (prefers-color-scheme: dark) {
-  body {
-    background-color: var(--color-surface-dark);
-    color: #ffffff;
-    background-image:
-      linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px);
+/* class 기반 다크 — prefers-color-scheme 의존 제거 */
+.dark body,
+:is(.dark) body {
+  background-color: var(--color-night-bg);
+  color: #ffffff;
+  background-image:
+    linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px);
+}
+
+/* ── 공용 유틸 클래스 ── */
+@layer components {
+  .glass-card {
+    @apply bg-white border-2 border-border rounded-2xl backdrop-blur-sm;
+  }
+  .dark .glass-card {
+    @apply bg-white/5 border border-white/10 backdrop-blur-md;
+  }
+  .neon-btn {
+    @apply bg-gradient-to-r from-neon-from to-neon-to text-white font-bold
+           rounded-xl px-5 py-2.5 shadow-lg transition-all duration-200
+           hover:shadow-[0_0_20px_rgba(168,85,247,0.3)] hover:brightness-110
+           active:scale-95;
+  }
+  .neon-ring {
+    @apply ring-2 ring-neon-from/60 shadow-[0_0_12px_rgba(168,85,247,0.25)];
   }
 }
 

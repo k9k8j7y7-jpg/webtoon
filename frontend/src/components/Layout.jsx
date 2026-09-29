@@ -1,14 +1,16 @@
 import { Outlet, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { LogOut, Sparkles, Package, Bell, HelpCircle } from 'lucide-react';
+import { LogOut, Sparkles, Package, Bell, HelpCircle, Sun, Moon } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import api from '../api/client';
 import NoticeBar from './NoticeBar';
+import { useTheme } from '../contexts/ThemeContext';
 
 export default function Layout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [packets, setPackets] = useState(null);
+  const { theme, toggleTheme } = useTheme();
 
   const refreshPackets = useCallback(() => {
     if (user) {
@@ -46,6 +48,10 @@ export default function Layout() {
                 <span>{packets.balance}<span className="hidden md:inline"> 패킷</span></span>
               </Link>
             )}
+            {/* 다크/라이트 토글 */}
+            <button onClick={toggleTheme} className="p-1.5 text-gray-400 dark:text-zinc-400 hover:text-comic-orange rounded transition-colors shrink-0" title={theme === 'dark' ? '라이트 모드' : '다크 모드'}>
+              {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+            </button>
             {/* FAQ */}
             <Link to="/faq" className="p-1.5 text-gray-400 hover:text-comic-orange rounded transition-colors shrink-0" title="자주 묻는 질문">
               <HelpCircle size={18} />
