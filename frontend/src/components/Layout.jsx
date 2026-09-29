@@ -34,10 +34,10 @@ export default function Layout() {
   return (
     <div className="min-h-screen bg-transparent">
       <NoticeBar />
-      <header className="bg-white/75 dark:bg-zinc-900/75 backdrop-blur-md border-b border-border dark:border-zinc-800 sticky top-0 z-50 transition-colors duration-200">
+      <header className="bg-white/75 dark:bg-night-bg/80 backdrop-blur-md border-b border-border dark:border-night-border sticky top-0 z-50 transition-colors duration-200">
         <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2 text-xl font-bold font-serif text-ink-black dark:text-white no-underline hover:text-comic-orange transition-colors">
-            <Sparkles size={22} className="text-comic-blue" />
+          <Link to="/" className="flex items-center gap-2 text-xl font-bold font-serif text-ink-black dark:text-transparent dark:bg-clip-text dark:bg-gradient-to-r dark:from-purple-500 dark:to-cyan-400 no-underline hover:text-comic-orange transition-colors">
+            <Sparkles size={22} className="text-comic-blue dark:text-cyan-400" />
             EziToon
           </Link>
           <div className="flex items-center gap-2 md:gap-4">

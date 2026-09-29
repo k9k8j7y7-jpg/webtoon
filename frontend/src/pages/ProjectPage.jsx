@@ -163,7 +163,7 @@ export default function ProjectPage() {
     }
   };
 
-  if (!project) return <div className="text-center py-20 text-gray-400 dark:text-zinc-500 font-bold">로딩 중...</div>;
+  if (!project) return <div className="text-center py-20 text-gray-400 dark:text-gray-500 font-bold">로딩 중...</div>;
 
   const isEpisodeCompleted = (gs) => {
     if (!gs?.gates) return false;
@@ -192,7 +192,7 @@ export default function ProjectPage() {
           <button
             onClick={() => openModal()}
             disabled={creating}
-            className="flex items-center gap-1.5 px-4 py-2 bg-ink-black text-white dark:bg-white dark:text-ink-black rounded-full text-sm font-bold hover:bg-comic-blue dark:hover:bg-comic-orange hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50"
+            className="neon-btn flex items-center gap-1.5 !px-4 !py-2 !rounded-full text-sm disabled:opacity-50"
           >
             <Plus size={16} /> 단편
           </button>
@@ -214,7 +214,7 @@ export default function ProjectPage() {
       </div>
 
       {!hasContent ? (
-        <div className="bg-white dark:bg-surface-dark rounded-2xl border-2 border-border dark:border-zinc-800 overflow-hidden backdrop-blur-sm">
+        <div className="glass-card overflow-hidden">
           {/* 파이프라인 가이드 */}
           <div className="px-6 pt-6 pb-4">
             <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white mb-1 flex items-center gap-2">
@@ -223,7 +223,7 @@ export default function ProjectPage() {
             </h2>
             <p className="text-sm font-bold text-gray-500 dark:text-gray-400 mb-5">AI가 5단계를 거쳐 자동으로 웹툰을 만들어드립니다</p>
 
-            <div className="flex items-center justify-between bg-gradient-to-r from-comic-orange/5 to-comic-blue/5 dark:from-comic-orange/10 dark:to-comic-blue/10 rounded-2xl p-4 gap-1 border-2 border-border dark:border-zinc-800">
+            <div className="flex items-center justify-between bg-gradient-to-r from-comic-orange/5 to-comic-blue/5 dark:from-neon-from/10 dark:to-neon-to/10 rounded-2xl p-4 gap-1 border-2 border-border dark:border-white/10">
               {[
                 { icon: Lightbulb, label: '아이디어', color: 'text-amber-500' },
                 { icon: FileText, label: '기획·대본', color: 'text-comic-blue' },
@@ -233,7 +233,7 @@ export default function ProjectPage() {
               ].map((step, i) => (
                 <div key={i} className="flex items-center gap-1">
                   <div className="flex flex-col items-center gap-1.5">
-                    <div className={`w-10 h-10 rounded-full bg-white dark:bg-zinc-800 shadow-sm border-2 border-border dark:border-zinc-700 flex items-center justify-center ${step.color}`}>
+                    <div className={`w-10 h-10 rounded-full bg-white dark:bg-white/10 shadow-sm border-2 border-border dark:border-white/10 flex items-center justify-center ${step.color}`}>
                       <step.icon size={20} />
                     </div>
                     <span className="text-xs font-bold text-gray-700 dark:text-gray-300">{step.label}</span>
@@ -253,7 +253,7 @@ export default function ProjectPage() {
                   key={i}
                   onClick={() => openModal(chip)}
                   disabled={creating}
-                  className="w-full text-left px-4 py-3 rounded-2xl border-2 border-border dark:border-zinc-800 hover:border-comic-orange hover:bg-comic-orange/5 dark:hover:bg-comic-orange/10 transition-all text-sm font-bold text-gray-700 dark:text-gray-300 flex items-center justify-between group disabled:opacity-50"
+                  className="w-full text-left px-4 py-3 rounded-2xl border-2 border-border dark:border-white/10 hover:border-comic-orange dark:hover:border-neon-from/50 hover:bg-comic-orange/5 dark:hover:bg-white/5 transition-all text-sm font-bold text-gray-700 dark:text-gray-300 flex items-center justify-between group disabled:opacity-50"
                 >
                   <span>💡 {chip.text}</span>
                   <ChevronRight size={16} className="text-gray-300 dark:text-zinc-600 group-hover:text-comic-orange transition-colors" />
@@ -267,7 +267,7 @@ export default function ProjectPage() {
             <button
               onClick={() => openModal()}
               disabled={creating}
-              className="flex-1 py-3 bg-comic-orange text-white rounded-full font-bold hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
+              className="neon-btn flex-1 !py-3 !rounded-full disabled:opacity-50 flex items-center justify-center gap-2"
             >
               <Plus size={18} /> 단편 에피소드
             </button>
@@ -287,7 +287,7 @@ export default function ProjectPage() {
             <div
               key={`s-${s.id}`}
               onClick={() => navigate(`/projects/${projectId}/series/${s.id}`)}
-              className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl p-4 flex items-center justify-between hover:shadow-md hover:border-purple-400 hover:-translate-y-0.5 transition-all cursor-pointer backdrop-blur-sm group"
+              className="glass-card p-4 flex items-center justify-between hover:shadow-md hover:border-purple-400 dark:hover:border-purple-500/50 hover:-translate-y-0.5 transition-all cursor-pointer group"
             >
               <div className="min-w-0">
                 <div className="flex items-center gap-2 mb-0.5">
@@ -316,7 +316,7 @@ export default function ProjectPage() {
             <div
               key={ep.id}
               onClick={() => navigate(`/projects/${projectId}/episodes/${ep.id}/workflow`)}
-              className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl p-4 flex items-center justify-between hover:shadow-md hover:border-comic-orange hover:-translate-y-0.5 transition-all cursor-pointer backdrop-blur-sm group"
+              className="glass-card p-4 flex items-center justify-between hover:shadow-md hover:border-comic-orange dark:hover:border-comic-orange/50 hover:-translate-y-0.5 transition-all cursor-pointer group"
             >
               <div>
                 <div className="flex items-center gap-2 mb-0.5">
@@ -352,7 +352,7 @@ export default function ProjectPage() {
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowModal(false)}>
           <div
-            className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl"
+            className="glass-card p-6 w-full max-w-md mx-4 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-5">
@@ -438,14 +438,14 @@ export default function ProjectPage() {
             <div className="flex gap-3 mt-6">
               <button
                 onClick={() => setShowModal(false)}
-                className="flex-1 py-2.5 border-2 border-border dark:border-zinc-700 rounded-full font-bold text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-all"
+                className="flex-1 py-2.5 border-2 border-border dark:border-white/10 rounded-full font-bold text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5 transition-all"
               >
                 취소
               </button>
               <button
                 onClick={handleCreateEpisode}
                 disabled={!modalTitle.trim() || creating}
-                className="flex-1 py-2.5 bg-comic-orange text-white rounded-full font-bold hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50 disabled:hover:translate-y-0"
+                className="neon-btn flex-1 !py-2.5 !rounded-full disabled:opacity-50 disabled:hover:translate-y-0"
               >
                 {creating ? '생성 중...' : '생성하기'}
               </button>
@@ -458,7 +458,7 @@ export default function ProjectPage() {
       {showSeriesModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => !seriesCreating && setShowSeriesModal(false)}>
           <div
-            className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl max-h-[90vh] overflow-y-auto"
+            className="glass-card p-6 w-full max-w-md mx-4 shadow-xl max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-5">
@@ -577,7 +577,7 @@ export default function ProjectPage() {
               <button
                 onClick={() => setShowSeriesModal(false)}
                 disabled={seriesCreating}
-                className="flex-1 py-2.5 border-2 border-border dark:border-zinc-700 rounded-full font-bold text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-all disabled:opacity-50"
+                className="flex-1 py-2.5 border-2 border-border dark:border-white/10 rounded-full font-bold text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5 transition-all disabled:opacity-50"
               >
                 취소
               </button>
