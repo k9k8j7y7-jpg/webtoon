@@ -86,6 +86,13 @@ WEBTOON/
 
 **장소 문장 버그 수정 완료 (2026-09-28):** `build_cut_prompt`에 `loc_image_attached` 파라미터 추가. True(long/full+이미지 첨부)면 LOCATION_REFRAME, False(bust/close_up 또는 한도 초과)면 `"Setting (text description only, no location image attached): …"`. "behind her"→"behind the character(s)" 성별 중립화. prompt-preview도 동일 로직(ref_labels 미첨부 시 장소 라벨 제외). style_thumbs.py는 문자열 replace 해킹 → `loc_image_attached=False` 파라미터로 정리
 
+**모바일 다크 테마 완료 (2026-09-30):** 지시서 `docs/지시서-모바일다크테마.md` 4단계 완공
+- 기반: `darkMode: 'class'`, night/neon 토큰, `.glass-card`/`.neon-btn`/`.neon-ring` 유틸, `useTheme` 훅(localStorage+모바일 기본 다크), 헤더 ☀/🌙 토글
+- 1단계: 헤더 다크(bg-night-bg/80 backdrop-blur, 그라데이션 로고), 프로젝트/에피소드 카드 glass-card, "새 에피소드" neon-btn
+- 2단계: 스텝바 현재 게이트 neon-ring·잠긴 탭 대비 ↑, 게이트 카드 glass-card, 읽기 전용 배너 모바일 2줄 grid-cols-2, 게이트1~4 폼 다크 확인
+- 3단계: 게이트5 컷 카드 glass-card, 카드 버튼 5개 컴팩트(h-8, min-[400px] 라벨), N컷 생성 neon-btn, 내보내기 유리 스타일, 캐릭터 이름 줄바꿈
+- 게이트 로딩 실패 대응: `useGateLoad` 공용 훅(스켈레톤·자동 재시도 1회·에러 카드·cancelled), Gate1~5 적용, `catch {}` 침묵 제거
+
 **주요 기능 요약:**
 - 게이트 1~5: 기획→대본→자산(캐릭터·스타일·비율·제품)→**콘티&장소**(장소 패널+콘티 생성)→이미지(배치 5컷씩/부분 실패 UI)
 - 컷 비율: 에피소드별 5종 선택(1:1 정사각/9:16 세로/16:9 가로/3:4 세로/4:3 가로). Gate3 UI 5버튼, 첫 이미지 생성 후 잠금(프론트 비활성+백엔드 거부). 기존 에피소드 1:1 잠금, 신규 기본 9:16. gate_status JSON 저장(step24). Gemini image_config.aspect_ratio 실전달. 시트 1:1 고정, 장소 16:9 고정, 컷은 에피소드 비율. 가로 비율 프롬프트: 풀샷 앵커 "characters occupy 60-80% HEIGHT" 보강. 인스타 캐러셀 export: letterbox(비율 유지+흰 배경, center-crop 폐지)
@@ -177,6 +184,7 @@ WEBTOON/
 - [ ] 16:9 실생성 검증 (ep32 슛돌이 단편, v2 비율 5종 관련)
 - [x] B 스타일 썸네일 — 1~3단계 완료(15장 생성+Gate3 카드 UI, 2026-09-28). 4단계(마무리)는 모바일 레이아웃과 함께
 - [x] 장소 문장 버그 수정 (완료 2026-09-28, loc_image_attached 플래그+성별 중립+prompt-preview 일치+style_thumbs 정리)
+- [x] 모바일 다크 테마 1~4단계 (완료 2026-09-30, class 방식·night/neon 토큰·glass-card/neon-btn·헤더+목록+게이트1~5 전체·읽기 전용 배너 2줄·컷 버튼 한 줄·캐릭터 이름 줄바꿈·게이트 로딩 실패 대응 useGateLoad 훅)
 - [ ] 모바일 레이아웃 1차 (`docs/지시서-모바일레이아웃-1차.md`, 0단계 조사부터) → 2차(랜딩·게이트1~3·편집기)
 - [ ] C 이미지 모델 선택 (에피소드 단위 모델 잠금, openai_image.py 어댑터) — 형식/레이아웃 이후
 - [ ] 폴리싱 잔여: 뷰어 컷 클릭 확대 모달(게이트5 미리보기 스타일)
@@ -191,7 +199,9 @@ WEBTOON/
 - **텍스트 렌더 이원 모드:** 화면=`<foreignObject>` / export=SVG `<text>/<tspan>` (`renderMode='svg-text'`). 수정 시 두 모드 동시 수정 + `node scripts/bubble-shot.mjs` 비교 판정 통과 필수
 - **편집기 오버레이:** 편집기 오버레이 레이어는 루트에 pointer-events none, 실제 조작 요소에만 all. 레이어 추가 시 아래 레이어 선택 회귀 테스트 필수(일반 말풍선·효과음·효과·제품)
 - **편집기 입력:** Pointer 이벤트(`onPointerDown/pointermove/pointerup`)로 통일. 선택은 `pointerdown` 즉시. **`onClick` 핸들러 금지** — 터치에서 pointerdown→click 버블링으로 선택이 해제됨. 컷 영역 `touch-action: none`(300ms 탭 지연 제거)·하단 패널 `touch-action: pan-y`(스크롤 유지). `DRAG_THRESHOLD` = mouse 5px / touch 12px. 실기기 검증 필수
-- **모바일 레이아웃:** 모바일 기준 640px 미만(`sm:` 경계). 카드 그리드는 모바일 1열, 게이트 스텝바는 가로 스크롤(현재 게이트 자동 가운데). 게이트5 썸네일 틀은 에피소드 `aspect_ratio`(미설정 1:1). 모바일 확인은 `node frontend/scripts/mobile-check.mjs <JWT>` 375/412px 스크린샷(`frontend/scripts/mobile-check/`, gitignore)
+- **모바일 레이아웃:** 모바일 기준 640px 미만(`sm:` 경계). 카드 그리드는 모바일 1열, 게이트 스텝바는 가로 스크롤(현재 게이트 자동 가운데). 게이트5 썸네일 틀은 에피소드 `aspect_ratio`(미설정 1:1). 모바일 확인은 `node frontend/scripts/mobile-check.mjs <JWT>` 다크/라이트 × 375/412/1280 스크린샷(`frontend/scripts/mobile-check/`, gitignore)
+- **다크 테마:** class 방식(`darkMode: 'class'`), 모바일(640px 미만) 기본 다크 / PC 기본 라이트. 사용자 토글 `localStorage 'theme'`. 토큰 `night-bg`/`night-card`/`night-border`/`neon-from`/`neon-to`. 유틸 `.glass-card`(유리 카드)·`.neon-btn`(그라데이션 버튼)·`.neon-ring`(현재 게이트 강조). **새 컴포넌트는 `dark:` 클래스 필수.** 랜딩·뷰어는 항상 다크(변경 불필요)
+- **게이트 초기 로드:** `useGateLoad` 훅 필수(`frontend/src/hooks/useGateLoad.js`) — 스켈레톤·자동 재시도 1회(1.5초)·실패 시 "다시 시도" 카드·언마운트 안전(cancelled). **`catch {}` 로 에러 삼키기 금지** — 실패 시 빈 화면 고착 원인. 게이트 컴포넌트 상단에 `if (loading) return <GateSkeleton />;` + `if (loadError) return <GateLoadError ... />;` 가드
 - **Gemini:** API 키 `.env`의 `GEMINI_API_KEY`. 이미지 모델 `.env`의 `IMAGE_MODEL` (현재 `gemini-3.1-flash-image`), 텍스트 모델 `gemini-2.5-flash`
 - **서버 .env 안전:** 서버 .env는 로컬과 다르다(GEMINI_API_KEY·SECRET_KEY·TOSS 키·IMAGE_MODEL 등 운영 전용 값). **절대 파일 통째로 scp 덮어쓰지 말 것.** 키 추가/변경은 서버에서 해당 줄만 `sed`/`echo >>` 로. 변경 전 `cp .env .env.bak.$(date +%Y%m%d)` 백업, 변경 후 `GEMINI_API_KEY` 등 기존 키 길이 확인. OAuth 키는 콘솔에서만 조회 가능, 서버 .env 백업은 날짜별 유지
 - **DB 마이그레이션:** `stepN.sql` + `stepN_down.sql` 쌍. 리허설 up→verify→down→재-up + mysqldump 백업 + 사용자 승인 필수. DB 덤프 .sql 커밋 금지 (stepN은 예외). 마이그레이션 백업은 데이터 포함(no-data 금지)
