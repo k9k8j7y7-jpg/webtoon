@@ -896,12 +896,12 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {characters.map((c) => (
               <div key={c.id} className="border-2 border-border dark:border-zinc-700 rounded-xl p-3 bg-white/50 dark:bg-zinc-800/50">
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div className="min-w-0">
-                    <div className="font-bold text-sm text-ink-black dark:text-white truncate">{c.name}</div>
-                    <div className="text-xs font-bold text-gray-500 dark:text-gray-400 truncate">{c.ref_key}</div>
+                <div className="mb-2">
+                  <div className="mb-1.5">
+                    <div className="font-bold text-sm text-ink-black dark:text-white">{c.name}</div>
+                    <div className="text-xs font-bold text-gray-500 dark:text-gray-400">{c.ref_key}</div>
                   </div>
-                  <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap justify-end">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <button
                       onClick={() => togglePromote(c)}
                       title={c.user_id ? '내 라이브러리에서 해제' : '내 라이브러리에 등록하면 모든 프로젝트에서 사용할 수 있어요'}
