@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import api from '../../api/client';
+import useGateLoad from '../../hooks/useGateLoad';
+import { GateSkeleton, GateLoadError } from '../GateLoadFallback';
 import { Lightbulb, Check, RefreshCw, Pencil, Save, Plus, Trash2, Sparkles, UserPlus, ChevronDown, ChevronUp, Send } from 'lucide-react';
 
 // --- 3축 옵션 정의 ---
@@ -46,7 +48,6 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
   const [characters, setCharacters] = useState([]);
   const [charTouched, setCharTouched] = useState(false); // 등장인물 user_touched
   const [planning, setPlanning] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
   const [approving, setApproving] = useState(false);
@@ -74,27 +75,22 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
     }
   }, [gateStatus?.idea_brief]);
 
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        const { data } = await api.get(`/projects/${projectId}/episodes/${episodeId}/planning`);
-        if (data) {
-          setPlanning(data);
-          if (data.story_options) {
-            setGenre(data.story_options.genre || null);
-            setMood(data.story_options.mood || null);
-            setDevelopment(data.story_options.development || null);
-            // 이전에 저장된 값이면 touched
-            setGenreTouched(true);
-            setMoodTouched(true);
-            setDevTouched(true);
-          }
-        }
-      } catch {}
-      setLoading(false);
-    };
-    loadData();
-  }, [projectId, episodeId]);
+  const loadPlanning = async () => {
+    const { data } = await api.get(`/projects/${projectId}/episodes/${episodeId}/planning`);
+    if (data) {
+      setPlanning(data);
+      if (data.story_options) {
+        setGenre(data.story_options.genre || null);
+        setMood(data.story_options.mood || null);
+        setDevelopment(data.story_options.development || null);
+        setGenreTouched(true);
+        setMoodTouched(true);
+        setDevTouched(true);
+      }
+    }
+  };
+
+  const { loading, error: loadError, retry: retryLoad } = useGateLoad(loadPlanning);
 
   // idea_brief 없고 raw가 있으면 자동 생성 트리거
   useEffect(() => {
@@ -337,8 +333,6 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
     }
   };
 
-  if (loading) return <div className="text-center py-10 text-gray-400 dark:text-zinc-500 font-bold">기획 데이터 로딩 중...</div>;
-
   // 연작 파생 기획: Gate 1은 항상 읽기 전용
   const isSeriesDerived = derivedFromSeries && planning?.derived_from_series;
 
@@ -355,6 +349,9 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
   );
 
   // ── 읽기 전용 뷰 ──
+  if (loading) return <GateSkeleton lines={3} />;
+  if (loadError) return <GateLoadError message={loadError} onRetry={retryLoad} />;
+
   if (readOnly || isSeriesDerived) {
     const synParts = getSynopsisParts(planning);
     return (

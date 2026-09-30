@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import api, { pollJob } from '../../api/client';
 import JobProgress from '../JobProgress';
 import ErrorBoundary from '../ErrorBoundary';
+import useGateLoad from '../../hooks/useGateLoad';
+import { GateSkeleton, GateLoadError } from '../GateLoadFallback';
 import { Users, MapPin, Palette, Check, RefreshCw, X, ChevronDown, ChevronUp, AlertTriangle, Edit3, Plus, Trash2, Sparkles, Link, Unlink, Star, Library, Camera, Package, Upload, Info } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
@@ -143,29 +145,28 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
   };
 
   const loadAssets = async () => {
-    try {
-      const [charRes, locRes, styleRes, presetsRes] = await Promise.all([
-        api.get(`/projects/${projectId}/episodes/${episodeId}/characters`),
-        api.get(`/projects/${projectId}/episodes/${episodeId}/locations`),
-        api.get(`/projects/${projectId}/episodes/${episodeId}/style`).catch(() => ({ data: null })),
-        api.get('/styles/presets').catch(() => ({ data: { core: [], beta: [] } })),
-      ]);
+    const [charRes, locRes, styleRes, presetsRes] = await Promise.all([
+      api.get(`/projects/${projectId}/episodes/${episodeId}/characters`),
+      api.get(`/projects/${projectId}/episodes/${episodeId}/locations`),
+      api.get(`/projects/${projectId}/episodes/${episodeId}/style`).catch(() => ({ data: null })),
+      api.get('/styles/presets').catch(() => ({ data: { core: [], beta: [] } })),
+    ]);
 
-      const charDetails = await Promise.all(
-        charRes.data.map((c) => api.get(`/characters/${c.id}`).then((r) => r.data).catch(() => c))
-      );
-      const locDetails = await Promise.all(
-        locRes.data.map((l) => api.get(`/locations/${l.id}`).then((r) => r.data).catch(() => l))
-      );
+    const charDetails = await Promise.all(
+      charRes.data.map((c) => api.get(`/characters/${c.id}`).then((r) => r.data).catch(() => c))
+    );
+    const locDetails = await Promise.all(
+      locRes.data.map((l) => api.get(`/locations/${l.id}`).then((r) => r.data).catch(() => l))
+    );
 
-      setCharacters(charDetails);
-      setLocations(locDetails);
-      setStyles(styleRes.data);
-      setPresets(presetsRes.data);
-    } catch {}
+    setCharacters(charDetails);
+    setLocations(locDetails);
+    setStyles(styleRes.data);
+    setPresets(presetsRes.data);
+    if (isAd) await loadProducts();
   };
 
-  useEffect(() => { loadAssets(); if (isAd) loadProducts(); }, []);
+  const { loading: initialLoading, error: loadError, retry: retryLoad } = useGateLoad(loadAssets);
 
   const [skippedInfo, setSkippedInfo] = useState(null);
 
@@ -751,6 +752,9 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
       </button>
     );
   };
+
+  if (initialLoading) return <GateSkeleton lines={4} />;
+  if (loadError) return <GateLoadError message={loadError} onRetry={retryLoad} />;
 
   return (
     <div className="space-y-4">

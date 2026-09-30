@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import api from '../../api/client';
 import { LayoutGrid, Check, RefreshCw, AlertTriangle, MessageSquare, MapPin, Clapperboard, Pencil, X, SlidersHorizontal, Plus, Camera, ChevronDown, Sparkles, Trash2, Image as ImageIcon } from 'lucide-react';
 import ErrorBoundary from '../ErrorBoundary';
+import useGateLoad from '../../hooks/useGateLoad';
+import { GateSkeleton, GateLoadError } from '../GateLoadFallback';
 import { locationName, locationOptionLabel, characterName } from '../../utils/refNames';
 
 const imageUrl = (url) => {
@@ -46,43 +48,36 @@ export default function Gate4Storyboard({ projectId, episodeId, onRefresh, readO
   const isInvalidated = gateStatus?.gates?.['4_storyboard']?.status === 'invalidated';
 
   const loadCuts = async () => {
-    try {
-      const { data } = await api.get(`/projects/${projectId}/episodes/${episodeId}/cuts`);
-      setCuts(data);
-    } catch {}
+    const { data } = await api.get(`/projects/${projectId}/episodes/${episodeId}/cuts`);
+    setCuts(data);
   };
 
   const loadRecommendation = async () => {
     try {
       const { data } = await api.get(`/projects/${projectId}/episodes/${episodeId}/storyboard/recommend`);
       setRecommendation(data);
-    } catch {}
+    } catch {} // recommend는 없을 수 있음 — 무시 허용
   };
 
   const loadLocations = async () => {
-    try {
-      const { data } = await api.get(`/projects/${projectId}/episodes/${episodeId}/locations`);
-      setLocations(data);
-      // 원본 스냅샷 저장 (blur 비교용)
-      const origs = {};
-      data.forEach(l => { origs[l.ref_key] = { name: l.name || '', description: l.description || '', mood_notes: l.mood_notes || '' }; });
-      locOriginalsRef.current = origs;
-    } catch {}
+    const { data } = await api.get(`/projects/${projectId}/episodes/${episodeId}/locations`);
+    setLocations(data);
+    const origs = {};
+    data.forEach(l => { origs[l.ref_key] = { name: l.name || '', description: l.description || '', mood_notes: l.mood_notes || '' }; });
+    locOriginalsRef.current = origs;
   };
 
   const loadCharacters = async () => {
-    try {
-      const { data } = await api.get(`/projects/${projectId}/episodes/${episodeId}/characters`);
-      setEpisodeCharacters(data);
-    } catch {}
+    const { data } = await api.get(`/projects/${projectId}/episodes/${episodeId}/characters`);
+    setEpisodeCharacters(data);
   };
 
-  useEffect(() => {
-    loadCuts();
-    loadRecommendation();
-    loadLocations();
-    loadCharacters();
-  }, []);
+  const loadAllData = async () => {
+    await Promise.all([loadCuts(), loadLocations(), loadCharacters()]);
+    loadRecommendation(); // 추천은 실패해도 무관
+  };
+
+  const { loading: initialLoading, error: loadError, retry: retryLoad } = useGateLoad(loadAllData);
 
   // 장소 0개면 자동 AI 제안 (episodeId당 1회)
   const suggestTriedRef = useRef(null);
@@ -340,6 +335,9 @@ export default function Gate4Storyboard({ projectId, episodeId, onRefresh, readO
 
   const shotLabel = { long: '롱샷', full: '풀샷', bust: '바스트샷', close_up: '클로즈업' };
   const dialogueTypeLabel = { narration: '나레이션', speech: '대사', thought: '독백', sfx: '효과음' };
+
+  if (initialLoading) return <GateSkeleton lines={5} />;
+  if (loadError) return <GateLoadError message={loadError} onRetry={retryLoad} />;
 
   return (
     <div className="space-y-4">

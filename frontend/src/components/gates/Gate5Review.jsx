@@ -12,6 +12,8 @@ import { locationName, locationOptionLabel, characterName } from '../../utils/re
 import PngBubbleLayer from '../PngBubbleLayer';
 import ExportProgressModal from '../ExportProgressModal';
 import { exportAsPNGZip, exportAsVertical, exportAsInstagram, exportAsA4Single, exportAsA4Grid } from '../../utils/exportRenderer';
+import useGateLoad from '../../hooks/useGateLoad';
+import { GateSkeleton, GateLoadError } from '../GateLoadFallback';
 
 // ── 그리드 컷 카드: 이미지 + SVG 말풍선 오버레이 ──
 // 에피소드 비율 "9:16" → CSS aspect-ratio "9 / 16" (미설정 = 기존 에피소드 1:1)
@@ -187,7 +189,12 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
     } catch { /* 광고 아니면 404 — 무시 */ }
   };
 
-  useEffect(() => { loadCuts(); loadProducts(); }, []);
+  const loadAllData = async () => {
+    await loadCuts();
+    loadProducts(); // 광고 아니면 404 — 실패해도 무관
+  };
+
+  const { loading: initialLoading, error: loadError, retry: retryLoad } = useGateLoad(loadAllData);
 
   // 게이트4 승인 후 자동 이미지 생성
   const autoTriggered = useRef(false);
@@ -521,6 +528,9 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
   const getCutImageUrl = (cut) => {
     return cut.image_url;
   };
+
+  if (initialLoading) return <GateSkeleton lines={3} />;
+  if (loadError) return <GateLoadError message={loadError} onRetry={retryLoad} />;
 
   return (
     <div className="space-y-4">

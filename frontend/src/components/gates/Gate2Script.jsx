@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import api from '../../api/client';
+import useGateLoad from '../../hooks/useGateLoad';
+import { GateSkeleton, GateLoadError } from '../GateLoadFallback';
 import { FileText, Check, RefreshCw, AlertTriangle, X, Eye, Pencil, Plus, Trash2, Save } from 'lucide-react';
 
 const SHOT_LABELS = { long: '롱샷', full: '풀샷', bust: '버스트', close_up: '클로즈업' };
@@ -7,7 +9,6 @@ const DIALOGUE_TYPE_LABELS = { speech: '대사', thought: '독백', narration: '
 
 export default function Gate2Script({ projectId, episodeId, onRefresh, readOnly = false, gateStatus }) {
   const [script, setScript] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [approving, setApproving] = useState(false);
   const [error, setError] = useState('');
@@ -23,14 +24,12 @@ export default function Gate2Script({ projectId, episodeId, onRefresh, readOnly 
 
   const isInvalidated = gateStatus?.gates?.['2_script']?.status === 'invalidated';
 
-  useEffect(() => {
-    api.get(`/projects/${projectId}/episodes/${episodeId}/script`)
-      .then(({ data }) => {
-        if (data) setScript(data);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [projectId, episodeId]);
+  const loadScript = async () => {
+    const { data } = await api.get(`/projects/${projectId}/episodes/${episodeId}/script`);
+    if (data) setScript(data);
+  };
+
+  const { loading, error: loadError, retry: retryLoad } = useGateLoad(loadScript);
 
   const handleGenerate = async () => {
     setGenerating(true);
@@ -124,8 +123,6 @@ export default function Gate2Script({ projectId, episodeId, onRefresh, readOnly 
 
   // ── 렌더링 ──────────────────────────────────────────
 
-  if (loading) return <div className="text-center py-10 text-gray-400 dark:text-zinc-500 font-bold">대본 데이터 로딩 중...</div>;
-
   const renderScenes = (editEnabled = false) => (
     <div className="space-y-3">
       {script.scenes.map((scene, sceneIdx) => (
@@ -179,6 +176,9 @@ export default function Gate2Script({ projectId, episodeId, onRefresh, readOnly 
       )}
     </div>
   );
+
+  if (loading) return <GateSkeleton lines={4} />;
+  if (loadError) return <GateLoadError message={loadError} onRetry={retryLoad} />;
 
   return (
     <div className="space-y-4">
