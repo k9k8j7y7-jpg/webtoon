@@ -9,7 +9,7 @@ export default function PrivacyPage() {
           <ArrowLeft size={16} /> 돌아가기
         </Link>
         <h1 className="text-3xl font-bold font-serif text-ink-black dark:text-white mb-8">개인정보처리방침</h1>
-        <div className="prose prose-sm dark:prose-invert max-w-none space-y-6 text-gray-700 dark:text-gray-300">
+        <div className="prose prose-sm dark:prose-invert max-w-none space-y-6 text-gray-700 dark:text-gray-300 leading-relaxed">
 
           <p>EziToon(이지툰, 이하 &quot;서비스&quot;)은 「개인정보 보호법」 등 관련 법령을 준수하며, 이용자의 개인정보를 아래와 같이 처리합니다.</p>
 

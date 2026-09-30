@@ -238,7 +238,7 @@ export default function PacketsPage() {
       )}
 
       {/* 잔량 카드 */}
-      <div className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl p-6 flex items-center gap-4">
+      <div className="glass-card p-6 flex items-center gap-4">
         <div className="w-14 h-14 bg-comic-orange/10 dark:bg-comic-orange/20 rounded-2xl flex items-center justify-center">
           <Package size={28} className="text-comic-orange" />
         </div>
@@ -251,8 +251,8 @@ export default function PacketsPage() {
       </div>
 
       {/* 충전 섹션 */}
-      <div className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl overflow-hidden">
-        <div className="px-6 py-4 border-b border-border dark:border-zinc-800 flex items-center gap-2">
+      <div className="glass-card overflow-hidden">
+        <div className="px-6 py-4 border-b border-border dark:border-white/10 flex items-center gap-2">
           <CreditCard size={18} className="text-comic-blue" />
           <h2 className="text-base font-bold text-ink-black dark:text-white">패킷 충전</h2>
         </div>
@@ -267,7 +267,7 @@ export default function PacketsPage() {
               className={`relative border-2 rounded-xl p-4 text-center transition-colors disabled:opacity-50 ${
                 selectedProduct?.code === p.code
                   ? 'border-comic-blue bg-comic-blue/5 dark:bg-comic-blue/10'
-                  : 'border-border dark:border-zinc-700 hover:border-comic-blue dark:hover:border-comic-blue'
+                  : 'border-border dark:border-white/10 hover:border-comic-blue dark:hover:border-comic-blue'
               }`}
             >
               <div className="text-2xl font-black text-ink-black dark:text-white">{p.packets}</div>
@@ -303,7 +303,7 @@ export default function PacketsPage() {
               <button
                 disabled={!widgetReady || paying}
                 onClick={doPayment}
-                className="w-full py-3 rounded-xl font-black text-white bg-comic-blue hover:bg-comic-blue/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="neon-btn w-full !py-3 !rounded-xl font-black disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {paying ? (
                   <><RefreshCw size={14} className="animate-spin inline mr-1" /> 처리 중...</>
@@ -322,7 +322,7 @@ export default function PacketsPage() {
 
       {/* 구매 내역 */}
       {orders.length > 0 && (
-        <div className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl overflow-hidden">
+        <div className="glass-card overflow-hidden">
           <div className="px-6 py-4 border-b border-border dark:border-zinc-800 flex items-center gap-2">
             <ShoppingCart size={18} className="text-comic-orange" />
             <h2 className="text-base font-bold text-ink-black dark:text-white">구매 내역</h2>
@@ -355,7 +355,7 @@ export default function PacketsPage() {
       )}
 
       {/* 사용 내역 */}
-      <div className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl overflow-hidden">
+      <div className="glass-card overflow-hidden">
         <div className="px-6 py-4 border-b border-border dark:border-zinc-800">
           <h2 className="text-base font-bold text-ink-black dark:text-white">사용 내역</h2>
         </div>

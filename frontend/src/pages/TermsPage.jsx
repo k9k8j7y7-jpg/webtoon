@@ -9,7 +9,7 @@ export default function TermsPage() {
           <ArrowLeft size={16} /> 돌아가기
         </Link>
         <h1 className="text-3xl font-bold font-serif text-ink-black dark:text-white mb-8">이용약관</h1>
-        <div className="prose prose-sm dark:prose-invert max-w-none space-y-6 text-gray-700 dark:text-gray-300">
+        <div className="prose prose-sm dark:prose-invert max-w-none space-y-6 text-gray-700 dark:text-gray-300 leading-relaxed">
 
           <h2 className="text-lg font-bold text-ink-black dark:text-white">제1조 (목적)</h2>
           <p>본 약관은 EziToon(이지툰, 이하 &quot;서비스&quot;)이 제공하는 AI 웹툰 생성 서비스의 이용과 관련하여 서비스와 회원 간의 권리, 의무 및 책임 사항을 규정함을 목적으로 합니다.</p>

@@ -90,7 +90,7 @@ const providers = [
 export default function LoginPage() {
   return (
     <div className="min-h-screen bg-transparent flex items-center justify-center p-4">
-      <div className="bg-white/80 dark:bg-surface-dark/80 backdrop-blur-sm border-2 border-border dark:border-zinc-800 rounded-2xl shadow-md p-8 w-full max-w-md">
+      <div className="glass-card !bg-white/80 dark:!bg-night-card/80 p-8 w-full max-w-md shadow-md">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-comic-orange/10 rounded-2xl mb-4">
             <Sparkles size={32} className="text-comic-orange" />
@@ -112,7 +112,7 @@ export default function LoginPage() {
           ))}
         </div>
 
-        <div className="mt-6 pt-6 border-t-2 border-border dark:border-zinc-800">
+        <div className="mt-6 pt-6 border-t-2 border-border dark:border-white/10">
           <p className="text-xs text-gray-400 dark:text-zinc-500 text-center">
             로그인 시 <Link to="/terms" className="underline hover:text-comic-orange">이용약관</Link> 및 <Link to="/privacy" className="underline hover:text-comic-orange">개인정보처리방침</Link>에 동의합니다 · <Link to="/faq" className="underline hover:text-comic-orange">FAQ</Link>
           </p>

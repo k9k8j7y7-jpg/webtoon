@@ -139,30 +139,30 @@ export default function ViewerPage() {
 
       {/* 좋아요 & 조회수 영역 */}
       <div className="max-w-2xl mx-auto py-12 flex flex-col items-center border-t border-white/5">
-        <div className="flex items-center gap-6 mb-4">
+        <div className="flex items-center gap-4 sm:gap-6">
           <span className="flex items-center gap-2 text-gray-400">
-            <span className="text-xl">👁</span>
-            <span className="font-semibold text-lg">{data.view_count || 0}</span>
+            <span className="text-lg sm:text-xl">👁</span>
+            <span className="font-semibold text-base sm:text-lg">{data.view_count || 0}</span>
           </span>
-          <button 
+          <button
             onClick={toggleLike}
-            className={`flex items-center gap-2 px-6 py-3 rounded-full border transition-all duration-300 transform hover:scale-105 ${
-              likeInfo.liked 
-                ? 'bg-red-500/20 border-red-500/50 text-red-400 shadow-[0_0_20px_rgba(239,68,68,0.2)]' 
+            className={`flex items-center gap-2 h-10 sm:h-auto px-5 sm:px-6 py-2 sm:py-3 rounded-full border transition-all duration-300 transform hover:scale-105 ${
+              likeInfo.liked
+                ? 'bg-red-500/20 border-red-500/50 text-red-400 shadow-[0_0_20px_rgba(239,68,68,0.2)]'
                 : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:border-white/20 hover:text-white'
             }`}
           >
-            <span className="text-xl">{likeInfo.liked ? '❤️' : '🤍'}</span>
-            <span className="font-semibold text-lg">{likeInfo.like_count || 0}</span>
+            <span className="text-lg sm:text-xl">{likeInfo.liked ? '❤️' : '🤍'}</span>
+            <span className="font-semibold text-base sm:text-lg">{likeInfo.like_count || 0}</span>
           </button>
         </div>
       </div>
 
       {/* CTA 푸터 */}
-      <footer className="py-16 text-center border-t border-white/10">
+      <footer className="py-12 sm:py-16 text-center border-t border-white/10">
         <p className="text-gray-400 mb-6">나만의 웹툰을 만들어보세요</p>
         <Link to="/login"
-          className="inline-block px-8 py-4 bg-gradient-to-r from-purple-600 to-cyan-500 rounded-full text-white font-semibold text-lg hover:opacity-90 transition-opacity hover:scale-105 transform transition-transform">
+          className="neon-btn inline-flex items-center justify-center !px-8 !py-3 sm:!py-4 !rounded-full text-lg">
           나도 만들어보기
         </Link>
         <p className="text-gray-600 text-sm mt-4">카카오 · 구글 · 네이버로 3초 가입</p>

@@ -28,16 +28,16 @@ const FAQ_ITEMS = [
 function FaqItem({ item }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="border-2 border-border dark:border-zinc-800 rounded-xl overflow-hidden">
+    <div className="glass-card overflow-hidden !rounded-xl">
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between px-5 py-4 text-left bg-white dark:bg-surface-dark hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors"
+        className="w-full flex items-center justify-between px-5 py-4 text-left bg-transparent hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
       >
         <span className="font-bold text-sm text-ink-black dark:text-white">{item.q}</span>
         <ChevronDown size={18} className={`text-gray-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="px-5 py-4 border-t-2 border-border dark:border-zinc-800 bg-gray-50/50 dark:bg-zinc-900/50">
+        <div className="px-5 py-4 border-t border-border dark:border-white/10 bg-gray-50/50 dark:bg-white/5">
           <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{item.a}</p>
         </div>
       )}
