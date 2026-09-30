@@ -761,7 +761,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
         </div>
       )}
       {/* 스타일 (최상단) */}
-      <div className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl p-6 backdrop-blur-sm">
+      <div className="glass-card p-6">
         <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2 mb-4">
           <Palette size={20} className="text-pink-500" /> 스타일 선택
         </h2>
@@ -814,7 +814,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
       </div>
 
       {/* 컷 비율 */}
-      <div className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl p-6 backdrop-blur-sm">
+      <div className="glass-card p-6">
         <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2 mb-4">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="text-blue-500"><rect x="2" y="2" width="16" height="16" rx="2" stroke="currentColor" strokeWidth="1.5"/><rect x="6" y="4" width="8" height="12" rx="1" stroke="currentColor" strokeWidth="1.2" strokeDasharray="2 1"/></svg>
           컷 비율
@@ -867,7 +867,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
         </div>
       )}
       {job && phase === 'characters' && <JobProgress job={job} label="캐릭터 시트 생성" />}
-      <div className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl p-6 backdrop-blur-sm">
+      <div className="glass-card p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2">
             <Users size={20} className="text-purple-500" /> 캐릭터 시트
@@ -1171,7 +1171,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
       </div>
 
       {/* 장소 — 간소화: 새 에피소드는 안내만, 기존 에피소드는 읽기 전용 요약 */}
-      <div className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl p-6 backdrop-blur-sm">
+      <div className="glass-card p-6">
         <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2 mb-3">
           <MapPin size={20} className="text-emerald-500" /> 장소
         </h2>
@@ -1204,7 +1204,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
       {/* 제품 자산 (광고 에피소드) */}
       {isAd && (
         <ErrorBoundary label="제품 자산">
-        <div className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl p-6 backdrop-blur-sm">
+        <div className="glass-card p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2">
               <Package size={20} className="text-amber-500" /> 제품 자산

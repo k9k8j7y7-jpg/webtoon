@@ -438,7 +438,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
         )}
 
         {/* 기획 결과 읽기 전용 */}
-        <div className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl p-6 backdrop-blur-sm">
+        <div className="glass-card p-6">
           <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2 mb-4">
             <Lightbulb size={20} className="text-amber-500" />
             게이트 1 — 기획
@@ -490,7 +490,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
     <div className="space-y-4">
 
       {/* 아이디어 정리 카드 */}
-      <div className="bg-white dark:bg-surface-dark border-2 border-comic-orange/30 dark:border-comic-orange/20 rounded-2xl p-5 backdrop-blur-sm">
+      <div className="glass-card !border-comic-orange/30 dark:!border-comic-orange/20 p-5">
         <h2 className="text-base font-bold font-serif text-ink-black dark:text-white flex items-center gap-2 mb-3">
           <Sparkles size={18} className="text-comic-orange" />
           아이디어 정리
@@ -661,7 +661,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
       </div>
 
       {/* 기존 게이트1 설정 (장르/분위기/전개/등장인물/기획 생성) */}
-      <div className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl p-6 backdrop-blur-sm">
+      <div className="glass-card p-6">
         <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2 mb-4">
           <Lightbulb size={20} className="text-amber-500" />
           게이트 1 — 기획
@@ -844,7 +844,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
       {planning && (() => {
         const synParts = getSynopsisParts(planning);
         return (
-        <div className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl p-6 backdrop-blur-sm space-y-4">
+        <div className="glass-card p-6 space-y-4">
           <div className="flex items-start justify-between gap-2">
             {editing ? (
               <input

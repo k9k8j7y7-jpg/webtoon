@@ -9,7 +9,7 @@ const statusIcon = (status) => {
     case 'approved': return <Check size={14} className="text-white" />;
     case 'draft': return <Pencil size={12} className="text-white" />;
     case 'invalidated': return <AlertTriangle size={12} className="text-white" />;
-    default: return <Lock size={12} className="text-gray-400 dark:text-zinc-500" />;
+    default: return <Lock size={12} className="text-gray-400 dark:text-gray-400" />;
   }
 };
 
@@ -51,8 +51,8 @@ export default function GateProgress({ gateStatus, onGateClick, viewingGate }) {
               ref={isActive ? activeRef : null}
               onClick={() => onGateClick?.(i + 1)}
               className={`shrink-0 flex items-center gap-1 md:gap-1.5 px-2 md:px-3 py-1 md:py-1.5 rounded-full text-[11px] md:text-xs font-bold whitespace-nowrap transition-all
-                ${isActive ? 'ring-2 ring-comic-orange ring-offset-1 dark:ring-offset-surface-dark' : ''}
-                ${status === 'locked' ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:opacity-80'}
+                ${isActive ? 'neon-ring ring-offset-1 dark:ring-offset-night-bg' : ''}
+                ${status === 'locked' ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer hover:opacity-80'}
                 ${statusColor(status)} ${status === 'locked' ? 'text-gray-500 dark:text-gray-400' : 'text-white'}`}
               disabled={status === 'locked'}
             >

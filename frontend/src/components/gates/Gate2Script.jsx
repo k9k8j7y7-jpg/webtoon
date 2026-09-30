@@ -129,7 +129,7 @@ export default function Gate2Script({ projectId, episodeId, onRefresh, readOnly 
   const renderScenes = (editEnabled = false) => (
     <div className="space-y-3">
       {script.scenes.map((scene, sceneIdx) => (
-        <div key={scene.scene_id} className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl p-5 backdrop-blur-sm">
+        <div key={scene.scene_id} className="glass-card p-5">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-bold font-serif text-ink-black dark:text-white">씬 {scene.scene_no}: {scene.summary}</h3>
             <span className="text-xs font-bold bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-300 px-2 py-1 rounded">{scene.location}</span>
@@ -182,7 +182,7 @@ export default function Gate2Script({ projectId, episodeId, onRefresh, readOnly 
 
   return (
     <div className="space-y-4">
-      <div className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl p-6 backdrop-blur-sm">
+      <div className="glass-card p-6">
         <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2 mb-4">
           <FileText size={20} className="text-comic-blue" />
           게이트 2 — 대본
@@ -270,7 +270,7 @@ export default function Gate2Script({ projectId, episodeId, onRefresh, readOnly 
           onClick={() => !saving && setEditingCut(null)}
         >
           <div
-            className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl w-full max-w-lg mx-4 max-h-[85vh] flex flex-col shadow-xl"
+            className="bg-white dark:bg-night-card border-2 border-border dark:border-white/10 rounded-2xl w-full max-w-lg mx-4 max-h-[85vh] flex flex-col shadow-xl"
             onClick={e => e.stopPropagation()}
           >
             {/* 헤더 */}
@@ -407,7 +407,7 @@ export default function Gate2Script({ projectId, episodeId, onRefresh, readOnly 
       {showPrevModal && prevScript && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowPrevModal(false)}>
           <div
-            className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl w-full max-w-2xl mx-4 max-h-[80vh] flex flex-col shadow-xl"
+            className="bg-white dark:bg-night-card border-2 border-border dark:border-white/10 rounded-2xl w-full max-w-2xl mx-4 max-h-[80vh] flex flex-col shadow-xl"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between p-5 border-b-2 border-border dark:border-zinc-800">

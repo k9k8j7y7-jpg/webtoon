@@ -144,28 +144,30 @@ export default function WorkflowPage() {
       </div>
 
       {isViewingPrevious && (
-        <div className="mb-4 flex items-center justify-between bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-200 dark:border-amber-800 rounded-2xl px-5 py-3">
-          <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300 text-sm font-bold">
+        <div className="mb-4 bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-200 dark:border-amber-800 rounded-2xl px-4 sm:px-5 py-3">
+          {/* PC: 한 줄 flex / 모바일: 2줄 스택 */}
+          <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300 text-sm font-bold mb-2 sm:mb-0 sm:float-left">
             <Eye size={16} />
             게이트 {viewingGate} — {gateLabels[viewingGate]} (읽기 전용)
           </div>
-          <div className="flex gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:float-right sm:gap-2">
             {/* 연작 파생 Gate 1은 수정 불가 */}
             {!(viewingGate === 1 && gateStatus?.series_id) && (
               <button
                 onClick={handleRevertClick}
-                className="flex items-center gap-1.5 px-4 py-1.5 bg-red-500 text-white rounded-full text-xs font-bold hover:-translate-y-0.5 transition-all"
+                className="flex items-center justify-center gap-1.5 px-3 sm:px-4 py-1.5 bg-red-500 text-white rounded-full text-xs font-bold hover:-translate-y-0.5 transition-all"
               >
-                <RotateCcw size={12} /> {gateLabels[viewingGate]} 수정하기
+                <RotateCcw size={12} /> 수정하기
               </button>
             )}
             <button
               onClick={() => setViewingGate(null)}
-              className="flex items-center gap-1.5 px-4 py-1.5 bg-amber-500 text-white rounded-full text-xs font-bold hover:-translate-y-0.5 transition-all"
+              className="flex items-center justify-center gap-1.5 px-3 sm:px-4 py-1.5 bg-amber-500 text-white rounded-full text-xs font-bold hover:-translate-y-0.5 transition-all"
             >
-              현재 단계로 돌아가기
+              현재 단계로
             </button>
           </div>
+          <div className="clear-both" />
         </div>
       )}
 
@@ -186,7 +188,7 @@ export default function WorkflowPage() {
       {revertModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setRevertModal(null)}>
           <div
-            className="bg-white dark:bg-surface-dark border-2 border-red-200 dark:border-red-800 rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl"
+            className="bg-white dark:bg-night-card border-2 border-red-200 dark:border-red-800 rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-2 mb-4">

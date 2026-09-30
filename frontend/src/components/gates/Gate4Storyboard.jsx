@@ -345,7 +345,7 @@ export default function Gate4Storyboard({ projectId, episodeId, onRefresh, readO
     <div className="space-y-4">
       {/* ── 장소 패널 ── */}
       <ErrorBoundary label="장소 패널">
-      <div className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl p-6 backdrop-blur-sm">
+      <div className="glass-card p-6">
         <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2 mb-2">
           <MapPin size={20} className="text-emerald-500" /> 장소
         </h2>
@@ -507,7 +507,7 @@ export default function Gate4Storyboard({ projectId, episodeId, onRefresh, readO
       </ErrorBoundary>
 
       {/* ── 콘티 패널 ── */}
-      <div className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl p-6 backdrop-blur-sm">
+      <div className="glass-card p-6">
         <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2 mb-4">
           <LayoutGrid size={20} className="text-comic-orange" /> 게이트 4 — 콘티
         </h2>
@@ -694,7 +694,7 @@ export default function Gate4Storyboard({ projectId, episodeId, onRefresh, readO
       {editingCut && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setEditingCut(null)}>
           <div
-            className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-2xl w-full max-w-lg mx-4 max-h-[85vh] flex flex-col shadow-xl"
+            className="bg-white dark:bg-night-card border-2 border-border dark:border-white/10 rounded-2xl w-full max-w-lg mx-4 max-h-[85vh] flex flex-col shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between p-5 border-b-2 border-border dark:border-zinc-800">
