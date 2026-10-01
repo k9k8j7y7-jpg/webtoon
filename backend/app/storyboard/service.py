@@ -74,14 +74,34 @@ READJUST_INSTRUCTION = """너는 웹툰 콘티 편집자야.
 }"""
 
 
-async def readjust_storyboard(script_data: dict, target_count: int) -> dict:
+FORMAT_SHOT_GUIDES = {
+    "grid_2x2": (
+        "\n\n[페이지 형식 지침] 이 웹툰은 2×2 정사각 페이지 형식이다. "
+        "4컷마다 한 페이지가 된다. 가능하면 총 컷 수를 4의 배수로 맞춰라"
+        "(마지막 페이지 빈 칸 허용). 샷 구성은 close_up과 bust 위주로, "
+        "한 컷에 인물 1명 중심으로 구성하라."
+    ),
+    "strip_3": (
+        "\n\n[페이지 형식 지침] 이 웹툰은 가로 3단 페이지 형식이다. "
+        "3컷마다 한 페이지가 된다. 가능하면 총 컷 수를 3의 배수로 맞춰라. "
+        "샷 구성은 가로 구도(full/long)를 선호하고, "
+        "인물이 좌우로 배치되는 장면을 활용하라."
+    ),
+}
+
+
+async def readjust_storyboard(
+    script_data: dict, target_count: int, page_format: str | None = None,
+) -> dict:
     """대본을 목표 컷 수에 맞게 AI로 재분할한다."""
+    format_guide = FORMAT_SHOT_GUIDES.get(page_format or "", "")
+
     prompt = f"""아래 대본을 **총 {target_count}컷**으로 재분할해줘.
 
 현재 대본:
 {json.dumps(script_data.get("scenes", []), ensure_ascii=False, indent=2)}
 
-목표: 총 {target_count}컷. 이야기의 흐름과 결말을 유지하면서 컷 수를 조정해줘."""
+목표: 총 {target_count}컷. 이야기의 흐름과 결말을 유지하면서 컷 수를 조정해줘.{format_guide}"""
 
     raw = await generate_text(
         prompt=prompt,

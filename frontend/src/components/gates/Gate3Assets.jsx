@@ -4,7 +4,8 @@ import JobProgress from '../JobProgress';
 import ErrorBoundary from '../ErrorBoundary';
 import useGateLoad from '../../hooks/useGateLoad';
 import { GateSkeleton, GateLoadError } from '../GateLoadFallback';
-import { Users, MapPin, Palette, Check, RefreshCw, X, ChevronDown, ChevronUp, AlertTriangle, Edit3, Plus, Trash2, Sparkles, Link, Unlink, Star, Library, Camera, Package, Upload, Info } from 'lucide-react';
+import { Users, MapPin, Palette, Check, RefreshCw, X, ChevronDown, ChevronUp, AlertTriangle, Edit3, Plus, Trash2, Sparkles, Link, Unlink, Star, Library, Camera, Package, Upload, Info, Lock } from 'lucide-react';
+import { PAGE_FORMATS, FORMAT_KEYS } from '../../utils/pageFormats';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
 
@@ -44,6 +45,26 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
       setError(err.response?.data?.detail || err.message);
     } finally {
       setArSaving(false);
+    }
+  };
+
+  // 페이지 형식
+  const pageFormat = gateStatus?.page_format || 'vertical';
+  const pageFormatLocked = gateStatus?.page_format_locked ?? true;
+  const [pfSaving, setPfSaving] = useState(false);
+  const currentFmt = PAGE_FORMATS[pageFormat] || PAGE_FORMATS.vertical;
+  const formatForcesRatio = !!currentFmt.cell_ratio; // 2x2·3단은 비율 강제
+
+  const setPageFormat = async (fmt) => {
+    if (pageFormatLocked || pfSaving) return;
+    setPfSaving(true);
+    try {
+      await api.post(`/projects/${projectId}/episodes/${episodeId}/page-format`, { page_format: fmt });
+      await onRefresh();
+    } catch (err) {
+      setError(err.response?.data?.detail || err.message);
+    } finally {
+      setPfSaving(false);
     }
   };
 
@@ -817,11 +838,85 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
         )}
       </div>
 
+      {/* 페이지 형식 */}
+      <div className="glass-card p-6">
+        <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2 mb-4">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="text-indigo-500"><rect x="2" y="2" width="16" height="16" rx="2" stroke="currentColor" strokeWidth="1.5"/><line x1="10" y1="2" x2="10" y2="18" stroke="currentColor" strokeWidth="1.2"/><line x1="2" y1="10" x2="18" y2="10" stroke="currentColor" strokeWidth="1.2"/></svg>
+          형식
+        </h2>
+        <div className="flex gap-3 flex-wrap">
+          {FORMAT_KEYS.map((key) => {
+            const fmt = PAGE_FORMATS[key];
+            const selected = pageFormat === key;
+            const disabled = pageFormatLocked || pfSaving;
+            return (
+              <button
+                key={key}
+                onClick={() => setPageFormat(key)}
+                disabled={disabled}
+                className={`flex flex-col items-center gap-2 px-4 py-3 rounded-xl text-sm font-bold border-2 transition-all min-w-[100px]
+                  ${selected
+                    ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                    : 'bg-white dark:bg-zinc-800 border-border dark:border-zinc-700 text-gray-500 dark:text-gray-400'}
+                  ${disabled ? 'opacity-60 cursor-not-allowed' : 'hover:border-indigo-400 dark:hover:border-indigo-500 hover:-translate-y-0.5 cursor-pointer'}`}
+              >
+                {/* CSS 격자 미니 아이콘 */}
+                <div className="w-10 h-10 flex items-center justify-center">
+                  {key === 'vertical' && (
+                    <div className="w-6 h-9 border-2 border-current rounded-sm flex flex-col gap-[2px] p-[2px]">
+                      <div className="flex-1 bg-current/20 rounded-[1px]" />
+                      <div className="flex-1 bg-current/20 rounded-[1px]" />
+                      <div className="flex-1 bg-current/20 rounded-[1px]" />
+                    </div>
+                  )}
+                  {key === 'grid_2x2' && (
+                    <div className="w-9 h-9 border-2 border-current rounded-sm grid grid-cols-2 grid-rows-2 gap-[2px] p-[2px]">
+                      <div className="bg-current/20 rounded-[1px]" />
+                      <div className="bg-current/20 rounded-[1px]" />
+                      <div className="bg-current/20 rounded-[1px]" />
+                      <div className="bg-current/20 rounded-[1px]" />
+                    </div>
+                  )}
+                  {key === 'strip_3' && (
+                    <div className="w-8 h-9 border-2 border-current rounded-sm flex flex-col gap-[2px] p-[2px]">
+                      <div className="flex-1 bg-current/20 rounded-[1px]" />
+                      <div className="flex-1 bg-current/20 rounded-[1px]" />
+                      <div className="flex-1 bg-current/20 rounded-[1px]" />
+                    </div>
+                  )}
+                </div>
+                <span className="text-xs leading-tight text-center">{fmt.label}</span>
+                {fmt.cell_ratio && (
+                  <span className="text-[10px] text-gray-400 dark:text-gray-500 -mt-1">컷 {fmt.cell_ratio}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        {!pageFormatLocked && (
+          <p className="text-xs font-bold text-amber-600 dark:text-amber-400 mt-3 flex items-center gap-1">
+            <AlertTriangle size={12} />
+            형식은 첫 이미지 생성 후 변경할 수 없습니다
+          </p>
+        )}
+        {pageFormatLocked && (
+          <p className="text-xs font-bold text-gray-500 dark:text-gray-400 mt-3 flex items-center gap-1">
+            <Lock size={12} />
+            {currentFmt.label} 잠금됨
+          </p>
+        )}
+      </div>
+
       {/* 컷 비율 */}
       <div className="glass-card p-6">
         <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2 mb-4">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="text-blue-500"><rect x="2" y="2" width="16" height="16" rx="2" stroke="currentColor" strokeWidth="1.5"/><rect x="6" y="4" width="8" height="12" rx="1" stroke="currentColor" strokeWidth="1.2" strokeDasharray="2 1"/></svg>
           컷 비율
+          {formatForcesRatio && (
+            <span className="text-xs font-bold text-indigo-500 dark:text-indigo-400 ml-1">
+              ({currentFmt.label} → {currentFmt.cell_ratio} 고정)
+            </span>
+          )}
         </h2>
         <div className="flex gap-3 flex-wrap">
           {[
@@ -834,19 +929,25 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
             <button
               key={value}
               onClick={() => setAspectRatio(value)}
-              disabled={aspectRatioLocked || arSaving}
+              disabled={aspectRatioLocked || arSaving || formatForcesRatio}
               className={`flex flex-col items-center gap-2 px-4 py-3 rounded-xl text-sm font-bold border-2 transition-all min-w-[80px]
                 ${aspectRatio === value
                   ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 text-blue-600 dark:text-blue-400'
                   : 'bg-white dark:bg-zinc-800 border-border dark:border-zinc-700 text-gray-500 dark:text-gray-400'}
-                ${aspectRatioLocked ? 'opacity-60 cursor-not-allowed' : 'hover:border-blue-400 dark:hover:border-blue-500 hover:-translate-y-0.5 cursor-pointer'}`}
+                ${(aspectRatioLocked || formatForcesRatio) ? 'opacity-60 cursor-not-allowed' : 'hover:border-blue-400 dark:hover:border-blue-500 hover:-translate-y-0.5 cursor-pointer'}`}
             >
               <div className={`${w} ${h} border-2 rounded-md border-current`} />
               <span className="text-xs">{label}</span>
             </button>
           ))}
         </div>
-        {!aspectRatioLocked && (
+        {formatForcesRatio && !aspectRatioLocked && (
+          <p className="text-xs font-bold text-indigo-500 dark:text-indigo-400 mt-3 flex items-center gap-1">
+            <Info size={12} />
+            {currentFmt.label} 형식이 비율을 {currentFmt.cell_ratio}(으)로 고정합니다
+          </p>
+        )}
+        {!aspectRatioLocked && !formatForcesRatio && (
           <p className="text-xs font-bold text-amber-600 dark:text-amber-400 mt-3 flex items-center gap-1">
             <AlertTriangle size={12} />
             비율은 첫 이미지 생성 후 변경할 수 없습니다

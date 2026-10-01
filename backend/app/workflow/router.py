@@ -11,7 +11,13 @@ from app.projects.models import Project, Episode
 from app.characters.models import Character, EpisodeCharacter
 from app.locations.models import Location
 from app.storyboard.models import Cut
-from app.workflow.gate import approve_gate, get_gate_number, get_aspect_ratio, is_aspect_ratio_locked, GATE_KEYS
+from app.workflow.gate import (
+    approve_gate, get_gate_number,
+    get_aspect_ratio, is_aspect_ratio_locked,
+    get_page_format, is_page_format_locked,
+    GATE_KEYS,
+)
+from app.workflow.page_formats import PAGE_FORMATS, FORMAT_KEYS
 from app.jobs import get_job
 
 router = APIRouter(tags=["workflow"])
@@ -93,6 +99,15 @@ async def set_aspect_ratio(
     if is_aspect_ratio_locked(gs):
         raise HTTPException(status_code=400, detail="비율이 잠금되어 변경할 수 없습니다 (이미지 생성 후 고정)")
 
+    # 형식이 비율을 강제하는 경우, 다른 비율로 변경 불가
+    pf = get_page_format(gs)
+    fmt = PAGE_FORMATS.get(pf)
+    if fmt and fmt["cell_ratio"] and body.aspect_ratio != fmt["cell_ratio"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"형식 '{fmt['label']}'은 비율 '{fmt['cell_ratio']}'만 허용합니다",
+        )
+
     new_gs = {**gs}
     new_gs["aspect_ratio"] = body.aspect_ratio
     new_gs["aspect_ratio_locked"] = False
@@ -104,6 +119,50 @@ async def set_aspect_ratio(
     return {
         "aspect_ratio": body.aspect_ratio,
         "aspect_ratio_locked": False,
+        "gate_status": episode.gate_status,
+    }
+
+
+class PageFormatRequest(BaseModel):
+    page_format: str  # "vertical" | "grid_2x2" | "strip_3"
+
+
+@router.post("/projects/{project_id}/episodes/{episode_id}/page-format")
+async def set_page_format(
+    project_id: int,
+    episode_id: int,
+    body: PageFormatRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """에피소드 페이지 형식 설정. 형식이 비율을 강제하면 aspect_ratio도 자동 변경."""
+    if body.page_format not in FORMAT_KEYS:
+        raise HTTPException(status_code=400, detail=f"page_format must be one of {FORMAT_KEYS}")
+
+    episode = _get_episode_for_user(db, project_id, episode_id, current_user.id)
+
+    gs = episode.gate_status
+    if is_page_format_locked(gs):
+        raise HTTPException(status_code=400, detail="형식이 잠금되어 변경할 수 없습니다 (이미지 생성 후 고정)")
+
+    fmt = PAGE_FORMATS[body.page_format]
+    new_gs = {**gs}
+    new_gs["page_format"] = body.page_format
+    new_gs["page_format_locked"] = False
+
+    # 형식이 비율을 강제하면 aspect_ratio도 함께 설정
+    if fmt["cell_ratio"]:
+        new_gs["aspect_ratio"] = fmt["cell_ratio"]
+
+    episode.gate_status = new_gs
+
+    db.commit()
+    db.refresh(episode)
+
+    return {
+        "page_format": body.page_format,
+        "page_format_locked": False,
+        "aspect_ratio": new_gs["aspect_ratio"],
         "gate_status": episode.gate_status,
     }
 

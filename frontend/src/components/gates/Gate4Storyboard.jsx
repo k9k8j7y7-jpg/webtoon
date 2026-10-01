@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import api from '../../api/client';
-import { LayoutGrid, Check, RefreshCw, AlertTriangle, MessageSquare, MapPin, Clapperboard, Pencil, X, SlidersHorizontal, Plus, Camera, ChevronDown, Sparkles, Trash2, Image as ImageIcon } from 'lucide-react';
+import { LayoutGrid, Check, RefreshCw, AlertTriangle, MessageSquare, MapPin, Clapperboard, Pencil, X, SlidersHorizontal, Plus, Camera, ChevronDown, Sparkles, Trash2, Image as ImageIcon, Info } from 'lucide-react';
 import ErrorBoundary from '../ErrorBoundary';
 import useGateLoad from '../../hooks/useGateLoad';
 import { GateSkeleton, GateLoadError } from '../GateLoadFallback';
 import { locationName, locationOptionLabel, characterName } from '../../utils/refNames';
+import { PAGE_FORMATS } from '../../utils/pageFormats';
 
 const imageUrl = (url) => {
   if (!url) return '';
@@ -510,6 +511,21 @@ export default function Gate4Storyboard({ projectId, episodeId, onRefresh, readO
           <LayoutGrid size={20} className="text-comic-orange" /> 게이트 4 — 콘티
         </h2>
 
+        {/* 형식 안내 (세로 웹툰이 아닐 때만) */}
+        {(() => {
+          const pf = gateStatus?.page_format || 'vertical';
+          const fmt = PAGE_FORMATS[pf];
+          if (!fmt || !fmt.per_page) return null;
+          return (
+            <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl">
+              <Info size={14} className="text-indigo-500 flex-shrink-0" />
+              <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400">
+                {fmt.label} 형식 — {fmt.per_page}컷마다 한 페이지
+              </span>
+            </div>
+          );
+        })()}
+
         {/* 무효화 경고 */}
         {isInvalidated && !readOnly && (
           <div className="mb-4 p-4 bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-200 dark:border-amber-800 rounded-xl">
@@ -588,6 +604,19 @@ export default function Gate4Storyboard({ projectId, episodeId, onRefresh, readO
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-mono font-bold text-white bg-ink-black dark:bg-zinc-600 px-2 py-0.5 rounded-full">#{cut.cut_number}</span>
+                    {(() => {
+                      const pf = gateStatus?.page_format || 'vertical';
+                      const fmt = PAGE_FORMATS[pf];
+                      if (!fmt || !fmt.per_page) return null;
+                      const pageNum = Math.ceil(cut.cut_number / fmt.per_page);
+                      const slotIdx = ((cut.cut_number - 1) % fmt.per_page) + 1;
+                      const slotChars = ['①','②','③','④','⑤','⑥'];
+                      return (
+                        <span className="text-[10px] font-bold text-indigo-500 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded-full">
+                          P{pageNum}-{slotChars[slotIdx - 1] || slotIdx}
+                        </span>
+                      );
+                    })()}
                     <span className="text-xs font-bold text-comic-blue dark:text-blue-400">
                       {shotLabel[cut.shot] || cut.shot}
                     </span>

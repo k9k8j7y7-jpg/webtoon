@@ -14,6 +14,8 @@ def create_initial_gate_status(
         "is_ad": is_ad,
         "aspect_ratio": "9:16",
         "aspect_ratio_locked": False,
+        "page_format": "vertical",
+        "page_format_locked": False,
         "gates": {
             "1_planning": {"status": "draft", "approved_at": None},
             "2_script": {"status": "locked", "approved_at": None},
@@ -118,7 +120,27 @@ def is_aspect_ratio_locked(gate_status: dict) -> bool:
 
 
 def lock_aspect_ratio(gate_status: dict) -> dict:
-    """aspect_ratio를 잠금 처리한 새 gate_status를 반환한다."""
+    """aspect_ratio + page_format을 동시에 잠금 처리한 새 gate_status를 반환한다."""
     gs = {**gate_status}
     gs["aspect_ratio_locked"] = True
+    gs["page_format_locked"] = True
+    return gs
+
+
+# ── 페이지 형식 ──
+
+def get_page_format(gate_status: dict) -> str:
+    """에피소드의 page_format을 반환한다. 미설정 시 'vertical' (기존 에피소드 호환)."""
+    return gate_status.get("page_format", "vertical")
+
+
+def is_page_format_locked(gate_status: dict) -> bool:
+    """page_format 잠금 여부. 미설정 시 기존 에피소드로 간주해 True."""
+    return gate_status.get("page_format_locked", True)
+
+
+def lock_page_format(gate_status: dict) -> dict:
+    """page_format을 잠금 처리한 새 gate_status를 반환한다."""
+    gs = {**gate_status}
+    gs["page_format_locked"] = True
     return gs

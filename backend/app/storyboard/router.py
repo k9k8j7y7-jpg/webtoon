@@ -14,7 +14,7 @@ from app.projects.models import Project, Episode, Series
 from app.storyboard.models import Cut
 from app.characters.models import Character, EpisodeCharacter
 from app.storyboard.service import create_cuts_from_script, recommend_cut_count, readjust_storyboard
-from app.workflow.gate import approve_gate, get_gate_number
+from app.workflow.gate import approve_gate, get_gate_number, get_page_format
 from app.composition.service import compose_cut
 from app.adapters.gemini import generate_text, parse_ai_json, AI_TOKENS_MEDIUM
 
@@ -108,6 +108,9 @@ async def create_storyboard(
     db.query(Cut).filter(Cut.episode_id == episode_id).delete()
     db.flush()
 
+    # 페이지 형식 (콘티 재분할 시 형식별 가이드 주입)
+    page_format = get_page_format(episode.gate_status)
+
     # 광고 에피소드: 제품명 수집 (콘티 생성 시 컷별 제품 등장 판단용)
     from app.products.models import Product as ProductModel
     product_names = [
@@ -116,7 +119,7 @@ async def create_storyboard(
 
     # 목표 컷 수가 있고, 현재와 다르면 AI 재분할
     if target:
-        readjusted = await readjust_storyboard(script_data, target)
+        readjusted = await readjust_storyboard(script_data, target, page_format=page_format)
         adjusted_script = {"scenes": readjusted.get("scenes", [])}
         cuts = create_cuts_from_script(episode_id, adjusted_script, db, product_names=product_names)
     else:

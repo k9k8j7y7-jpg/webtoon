@@ -22,7 +22,8 @@ from app.storage import upload_image, LOCAL_STORAGE_DIR
 from app.jobs import get_job, update_job, Job
 from app.billing.service import charge_generation  # legacy — 비활성화 (3단계)
 from app.packets.service import charge_packets, refund_packets
-from app.workflow.gate import get_aspect_ratio, is_aspect_ratio_locked, lock_aspect_ratio
+from app.workflow.gate import get_aspect_ratio, is_aspect_ratio_locked, lock_aspect_ratio, get_page_format
+from app.workflow.page_formats import PAGE_FORMATS
 
 logger = logging.getLogger(__name__)
 
@@ -315,6 +316,15 @@ async def generate_cut_image(
 
     # 4.5. 에피소드 비율 (컷 생성은 에피소드 비율 사용, 시트는 1:1 고정)
     ep_aspect_ratio = get_aspect_ratio(episode.gate_status)
+
+    # 4.6. 형식↔비율 정합성 검증
+    page_format = get_page_format(episode.gate_status)
+    fmt_def = PAGE_FORMATS.get(page_format)
+    if fmt_def and fmt_def["cell_ratio"] and ep_aspect_ratio != fmt_def["cell_ratio"]:
+        raise ValueError(
+            f"형식 '{page_format}'은 비율 '{fmt_def['cell_ratio']}'만 허용합니다 "
+            f"(현재 비율: {ep_aspect_ratio})"
+        )
 
     # 5. 프롬프트 조립 (Prompt Engine)
     prompt = build_cut_prompt(
