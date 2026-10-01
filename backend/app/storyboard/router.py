@@ -104,6 +104,30 @@ async def create_storyboard(
                 detail=f"장소를 먼저 정리해 주세요. 누락: {', '.join(sorted(missing))}",
             )
 
+    # 캐릭터 누락 체크: 대본이 참조하는 character_id 중 에피소드 캐릭터에 없는 것
+    from app.characters.models import Character as CharModel, EpisodeCharacter as ECModel
+    script_char_ids = set()
+    for scene in script_data.get("scenes", []):
+        for cut_data in scene.get("cuts", []):
+            for ch in cut_data.get("characters", []):
+                cid = ch.get("character_id")
+                if cid:
+                    script_char_ids.add(cid)
+    if script_char_ids:
+        existing_char_refs = {
+            c.ref_key for c in
+            db.query(CharModel.ref_key)
+            .join(ECModel, ECModel.character_id == CharModel.id)
+            .filter(ECModel.episode_id == episode_id, CharModel.ref_key.in_(script_char_ids))
+            .all()
+        }
+        missing_chars = script_char_ids - existing_char_refs
+        if missing_chars:
+            raise HTTPException(
+                status_code=400,
+                detail=f"캐릭터를 먼저 연결해 주세요: {', '.join(sorted(missing_chars))}",
+            )
+
     # 기존 컷 삭제 (재생성 시)
     db.query(Cut).filter(Cut.episode_id == episode_id).delete()
     db.flush()

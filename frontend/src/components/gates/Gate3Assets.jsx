@@ -247,6 +247,18 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
     try {
       const hadAssets = characters.length > 0 || locations.length > 0;
       const wasChanged = styles?.preset_key && styles.preset_key !== presetKey;
+
+      // 스타일 변경 시 연결된 캐릭터 중 다른 스타일이 있으면 경고
+      if (wasChanged && characters.length > 0) {
+        const mismatchChars = characters.filter(c => c.style && c.style !== presetKey);
+        if (mismatchChars.length > 0) {
+          const names = mismatchChars.map(c => c.name).join(', ');
+          if (!window.confirm(`${names}(은)는 다른 스타일로 만들어진 캐릭터입니다. 스타일을 바꾸면 그림체가 섞일 수 있어요.\n\n스타일을 변경하시겠습니까? (해당 캐릭터를 연결 해제하고 새로 만드는 것을 권장합니다)`)) {
+            return;
+          }
+        }
+      }
+
       const { data } = await api.put(`/projects/${projectId}/episodes/${episodeId}/style`, { preset_key: presetKey });
       setStyles(data);
       if (hadAssets && wasChanged) {
@@ -642,20 +654,37 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
   };
 
   // ── P3: 피커 열기 ──
+  const [mappingState, setMappingState] = useState(null); // { characterId, candidates, characterName }
+  const [mappingChoice, setMappingChoice] = useState('');
+
   const openPicker = async () => {
+    if (!hasStyle) {
+      setError('스타일을 먼저 선택해주세요');
+      // 스타일 섹션으로 스크롤
+      const el = document.getElementById('style-section');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
     setShowPicker(true);
     setPickerLoading(true);
     setPickerTab('project');
     setPickerError('');
+    setMappingState(null);
     try {
       const [projRes, libRes] = await Promise.all([
         api.get(`/projects/${projectId}/characters`),
         api.get(`/users/me/characters`).catch(() => ({ data: [] })),
       ]);
-      // 현재 에피소드에 이미 연결된 캐릭터 ID 집합
+      const currentStyle = styles?.preset_key;
       const linkedIds = new Set(characters.map(c => c.id));
-      setProjectChars(projRes.data.filter(c => !linkedIds.has(c.id)));
-      setLibraryChars(libRes.data.filter(c => !linkedIds.has(c.id) && c.project_id !== projectId));
+      // 같은 스타일만 필터 (스타일 미기록은 포함)
+      const styleFilter = (c) => !c.style || !currentStyle || c.style === currentStyle;
+      setProjectChars(projRes.data.filter(c => !linkedIds.has(c.id) && styleFilter(c)));
+      setLibraryChars(libRes.data.filter(c => !linkedIds.has(c.id) && c.project_id !== projectId && styleFilter(c)));
+      // 다른 스타일 캐릭터 수 (빈 상태 안내용)
+      const otherStyleCount = projRes.data.filter(c => !linkedIds.has(c.id) && c.style && currentStyle && c.style !== currentStyle).length
+        + libRes.data.filter(c => !linkedIds.has(c.id) && c.project_id !== projectId && c.style && currentStyle && c.style !== currentStyle).length;
+      setPickerError(otherStyleCount > 0 ? `__other_style_count__${otherStyleCount}` : '');
     } catch (err) {
       setError(err.response?.data?.detail || err.message);
     } finally {
@@ -663,12 +692,24 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
     }
   };
 
-  const linkCharacter = async (characterId) => {
+  const linkCharacter = async (characterId, overrideRefKey) => {
     setPickerError('');
     try {
-      await api.post(`/projects/${projectId}/episodes/${episodeId}/characters/link`, { character_id: characterId });
+      const payload = { character_id: characterId };
+      if (overrideRefKey) payload.override_ref_key = overrideRefKey;
+      const { data } = await api.post(`/projects/${projectId}/episodes/${episodeId}/characters/link`, payload);
+      if (data.needs_mapping) {
+        // 후보 2개 이상 → 매핑 드롭다운 표시
+        setMappingState({
+          characterId: data.character_id,
+          candidates: data.candidates,
+          characterName: data.character_name,
+        });
+        setMappingChoice(data.candidates[0] || '');
+        return;
+      }
       setShowPicker(false);
-      setPickerError('');
+      setMappingState(null);
       setCacheBuster(Date.now());
       await loadAssets();
     } catch (err) {
@@ -676,6 +717,11 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
       const msg = typeof detail === 'string' ? detail : detail?.message || err.message;
       setPickerError(msg);
     }
+  };
+
+  const confirmMapping = async () => {
+    if (!mappingState || !mappingChoice) return;
+    await linkCharacter(mappingState.characterId, mappingChoice);
   };
 
   const unlinkCharacter = async (characterId) => {
@@ -786,7 +832,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
         </div>
       )}
       {/* 스타일 (최상단) */}
-      <div className="glass-card p-6">
+      <div id="style-section" className="glass-card p-6">
         <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2 mb-4">
           <Palette size={20} className="text-pink-500" /> 스타일 선택
         </h2>
@@ -1461,67 +1507,103 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
 
       {/* P3: 캐릭터 피커 모달 */}
       {showPicker && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowPicker(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => { setShowPicker(false); setMappingState(null); }}>
           <div className="bg-white dark:bg-zinc-900 rounded-2xl border-2 border-border dark:border-zinc-700 shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
             {/* 헤더 */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-border dark:border-zinc-700">
               <h3 className="font-bold font-serif text-ink-black dark:text-white flex items-center gap-2">
                 <Library size={18} className="text-purple-500" /> 캐릭터 불러오기
               </h3>
-              <button onClick={() => setShowPicker(false)} className="p-1 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg">
+              <button onClick={() => { setShowPicker(false); setMappingState(null); }} className="p-1 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg">
                 <X size={18} className="text-gray-500" />
               </button>
             </div>
 
+            {/* ref_key 매핑 드롭다운 */}
+            {mappingState && (
+              <div className="mx-4 mt-3 p-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl">
+                <p className="text-sm font-bold text-purple-700 dark:text-purple-300 mb-2">
+                  "{mappingState.characterName}"을 대본의 어느 인물로 쓸까요?
+                </p>
+                <select
+                  value={mappingChoice}
+                  onChange={(e) => setMappingChoice(e.target.value)}
+                  className="w-full px-3 py-2 border border-purple-300 dark:border-purple-700 rounded-lg bg-white dark:bg-zinc-800 text-sm font-bold text-ink-black dark:text-white mb-3"
+                >
+                  {mappingState.candidates.map(k => (
+                    <option key={k} value={k}>{k}</option>
+                  ))}
+                </select>
+                <div className="flex gap-2">
+                  <button onClick={() => setMappingState(null)} className="px-3 py-1.5 text-xs font-bold text-gray-500 dark:text-gray-400 border border-border dark:border-zinc-700 rounded-lg">취소</button>
+                  <button onClick={confirmMapping} className="px-3 py-1.5 text-xs font-bold text-white bg-purple-600 rounded-lg hover:bg-purple-700">확인</button>
+                </div>
+              </div>
+            )}
+
             {/* 탭 */}
-            <div className="flex border-b border-border dark:border-zinc-700">
-              <button
-                onClick={() => setPickerTab('project')}
-                className={`flex-1 py-2.5 text-xs font-bold transition-colors ${pickerTab === 'project' ? 'text-purple-600 dark:text-purple-400 border-b-2 border-purple-600 dark:border-purple-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'}`}
-              >
-                이 프로젝트 ({projectChars.length})
-              </button>
-              <button
-                onClick={() => setPickerTab('library')}
-                className={`flex-1 py-2.5 text-xs font-bold transition-colors ${pickerTab === 'library' ? 'text-yellow-600 dark:text-yellow-400 border-b-2 border-yellow-600 dark:border-yellow-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'}`}
-              >
-                <span className="inline-flex items-center gap-1"><Star size={12} /> 내 캐릭터 ({libraryChars.length})</span>
-              </button>
-            </div>
+            {!mappingState && (() => {
+              const styleName = styles?.preset_key
+                ? [...(presets.core || []), ...(presets.beta || [])].find(p => p.key === styles.preset_key)?.label || styles.preset_key
+                : '';
+              return (
+              <div className="flex border-b border-border dark:border-zinc-700">
+                <button
+                  onClick={() => setPickerTab('project')}
+                  className={`flex-1 py-2.5 text-xs font-bold transition-colors ${pickerTab === 'project' ? 'text-purple-600 dark:text-purple-400 border-b-2 border-purple-600 dark:border-purple-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'}`}
+                >
+                  이 프로젝트{styleName ? ` · ${styleName}` : ''} ({projectChars.length})
+                </button>
+                <button
+                  onClick={() => setPickerTab('library')}
+                  className={`flex-1 py-2.5 text-xs font-bold transition-colors ${pickerTab === 'library' ? 'text-yellow-600 dark:text-yellow-400 border-b-2 border-yellow-600 dark:border-yellow-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'}`}
+                >
+                  <span className="inline-flex items-center gap-1"><Star size={12} /> 내 캐릭터 ({libraryChars.length})</span>
+                </button>
+              </div>
+              );
+            })()}
 
             {/* 에러 메시지 */}
-            {pickerError && (
+            {pickerError && !pickerError.startsWith('__other_style_count__') && (
               <div className="mx-4 mt-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-xs font-bold">
                 {pickerError}
               </div>
             )}
 
             {/* 목록 */}
+            {!mappingState && (
             <div className="flex-1 overflow-y-auto p-4">
               {pickerLoading ? (
                 <p className="text-center text-sm text-gray-400 dark:text-gray-500 py-8">불러오는 중...</p>
               ) : (
                 <>
                   {pickerTab === 'project' && projectChars.length === 0 && (
-                    <p className="text-center text-sm text-gray-400 dark:text-gray-500 py-8">이 프로젝트에 불러올 수 있는 캐릭터가 없습니다.</p>
+                    <div className="text-center py-8">
+                      <p className="text-sm text-gray-400 dark:text-gray-500">
+                        {styles?.preset_key || ''} 캐릭터가 아직 없어요
+                      </p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                        새로 만들거나 다른 스타일을 선택하세요
+                        {pickerError?.startsWith('__other_style_count__') && (
+                          <span className="text-purple-500 dark:text-purple-400"> (다른 스타일 캐릭터 {pickerError.replace('__other_style_count__', '')}개)</span>
+                        )}
+                      </p>
+                    </div>
                   )}
                   {pickerTab === 'library' && libraryChars.length === 0 && (
-                    <p className="text-center text-sm text-gray-400 dark:text-gray-500 py-8">내 라이브러리에 캐릭터가 없습니다.<br /><span className="text-xs">캐릭터 카드의 ⭐ 버튼으로 등록할 수 있어요.</span></p>
+                    <div className="text-center py-8">
+                      <p className="text-sm text-gray-400 dark:text-gray-500">내 라이브러리에 캐릭터가 없습니다.</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">캐릭터 카드의 ⭐ 버튼으로 등록할 수 있어요.</p>
+                    </div>
                   )}
                   <div className="grid grid-cols-2 gap-3">
-                    {(pickerTab === 'project' ? projectChars : libraryChars).map(c => {
-                      const currentStyle = styles?.preset_key;
-                      const styleMismatch = c.style && currentStyle && c.style !== currentStyle;
-                      const styleLabel = c.style
-                        ? [...(presets.core || []), ...(presets.beta || [])].find(p => p.key === c.style)?.label || c.style
-                        : null;
-                      return (
+                    {(pickerTab === 'project' ? projectChars : libraryChars).map(c => (
                       <div
                         key={c.id}
-                        className={`relative flex flex-col items-center gap-2 p-3 border-2 rounded-xl bg-white/50 dark:bg-zinc-800/50 hover:-translate-y-0.5 transition-all cursor-pointer ${styleMismatch ? 'border-amber-400 dark:border-amber-500 hover:border-amber-500' : 'border-border dark:border-zinc-700 hover:border-purple-400 dark:hover:border-purple-500'}`}
+                        className="relative flex flex-col items-center gap-2 p-3 border-2 rounded-xl bg-white/50 dark:bg-zinc-800/50 hover:-translate-y-0.5 transition-all cursor-pointer border-border dark:border-zinc-700 hover:border-purple-400 dark:hover:border-purple-500"
                         onClick={() => linkCharacter(c.id)}
                       >
-                        {/* 삭제 버튼: 프로젝트 탭 + episode_count 0일 때만 */}
                         {pickerTab === 'project' && c.episode_count === 0 && (
                           <button
                             onClick={(e) => {
@@ -1547,24 +1629,15 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
                         )}
                         <div className="text-center w-full">
                           <div className="font-bold text-sm text-ink-black dark:text-white truncate">{c.name || c.ref_key}</div>
-                          <span className={`inline-block text-[10px] px-1.5 py-0.5 rounded-full mt-0.5 font-bold ${!styleLabel ? 'bg-gray-100 dark:bg-zinc-700 text-gray-400 dark:text-gray-500' : styleMismatch ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400'}`}>
-                            <Palette size={8} className="inline -mt-0.5 mr-0.5" />{styleLabel || '스타일 미기록'}
-                          </span>
-                          {styleMismatch && (
-                            <div className="text-[10px] text-amber-600 dark:text-amber-400 mt-0.5 flex items-center justify-center gap-0.5">
-                              <AlertTriangle size={10} /> 그림체가 섞일 수 있어요
-                            </div>
-                          )}
                           <div className="text-[10px] text-gray-400 dark:text-gray-500">{c.episode_count}개 에피소드에서 사용 중</div>
-                          {c.created_at && <div className="text-[10px] text-gray-300 dark:text-gray-600">{c.created_at.slice(0, 10)}</div>}
                         </div>
                       </div>
-                      );
-                    })}
+                    ))}
                   </div>
                 </>
               )}
             </div>
+            )}
           </div>
         </div>
       )}

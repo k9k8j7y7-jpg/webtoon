@@ -94,6 +94,54 @@ async def suggest_characters(idea: str) -> list[dict]:
     return result.get("characters", [])
 
 
+def _name_to_ref_key(name: str) -> str:
+    """한글 이름 → 영문 snake_case ref_key (간이 변환)."""
+    import re
+    # 간단한 로마자 변환: 한글이면 그대로 영문화할 수 없으므로
+    # 비 ASCII 문자는 유니코드 코드 포인트 기반 해시
+    ascii_name = ""
+    for ch in name:
+        if ch.isascii() and ch.isalnum():
+            ascii_name += ch.lower()
+        elif ch == " " or ch == "_":
+            ascii_name += "_"
+        else:
+            # 한글 → 간이 코드
+            ascii_name += f"c{ord(ch) % 1000}"
+    return re.sub(r"_+", "_", ascii_name).strip("_") or f"char_{abs(hash(name)) % 10000}"
+
+
+def _merge_brief_characters(result: dict, brief_chars: list[dict]) -> None:
+    """idea_brief.characters 중 AI 결과에 빠진 인물을 강제 추가한다.
+
+    이름 기준 매칭 (대소문자·공백 무시). 빠진 인물에는 ref_key 자동 생성.
+    """
+    ai_chars = result.get("characters", [])
+
+    # 이름 정규화 맵
+    def norm(n):
+        return (n or "").strip().lower().replace(" ", "")
+
+    ai_names = {norm(c.get("name", "")) for c in ai_chars}
+
+    for bc in brief_chars:
+        bname = norm(bc.get("name", ""))
+        if not bname or bname in ai_names:
+            continue
+        # AI가 누락한 인물 → 추가
+        new_char = {
+            "ref_key": _name_to_ref_key(bc.get("name", "")),
+            "name": bc.get("name", ""),
+            "gender": bc.get("gender", "기타"),
+            "age": bc.get("age", ""),
+            "description": bc.get("description", ""),
+        }
+        ai_chars.append(new_char)
+        ai_names.add(bname)
+
+    result["characters"] = ai_chars
+
+
 async def generate_planning(
     idea: str,
     options_prompt: str | None = None,
@@ -142,7 +190,7 @@ async def generate_planning(
                 prompt += f"\n제품: {p['name']}"
             if p.get("features"):
                 prompt += f" — {p['features']}"
-        prompt += "\n\n중요: 위 기획서의 인물·사건·결말을 그대로 따를 것. 기획서에 없는 새 인물을 추가하지 말 것(단역 제외)."
+        prompt += "\n\n중요: 위 기획서의 인물·사건·결말을 그대로 따를 것. 기획서에 없는 새 인물을 추가하지 말 것(단역 제외). 기획서 등장인물 전원을 characters에 반드시 포함하라(동물 포함). 인물을 빼지 마라."
 
     if options_prompt:
         prompt += options_prompt
@@ -169,6 +217,10 @@ async def generate_planning(
     )
 
     result = _parse_json(raw)
+
+    # idea_brief.characters 후처리 머지: AI가 누락한 인물을 강제 추가
+    if idea_brief and idea_brief.get("characters"):
+        _merge_brief_characters(result, idea_brief["characters"])
 
     # synopsis가 dict(4단)이면 그대로, 문자열이면 기존 호환
     syn = result.get("synopsis")

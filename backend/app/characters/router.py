@@ -418,6 +418,29 @@ async def list_project_characters(
 
 class LinkCharacterRequest(BaseModel):
     character_id: int
+    override_ref_key: str | None = None  # 대본 ref_key 매핑용
+
+
+def _get_unmatched_script_ref_keys(episode, episode_id, db) -> list[str]:
+    """대본에서 참조하는 character_id 중 에피소드 캐릭터에 없는 것들을 반환."""
+    script_data = (episode.script or {}).get("script", {})
+    script_char_ids = set()
+    for scene in script_data.get("scenes", []):
+        for cut in scene.get("cuts", []):
+            for ch in cut.get("characters", []):
+                cid = ch.get("character_id")
+                if cid:
+                    script_char_ids.add(cid)
+    if not script_char_ids:
+        return []
+    linked_refs = {
+        c.ref_key for c in
+        db.query(Character.ref_key)
+        .join(EpisodeCharacter, EpisodeCharacter.character_id == Character.id)
+        .filter(EpisodeCharacter.episode_id == episode_id)
+        .all()
+    }
+    return sorted(script_char_ids - linked_refs)
 
 
 @router.post("/projects/{project_id}/episodes/{episode_id}/characters/link")
@@ -428,8 +451,12 @@ async def link_character(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """기존 캐릭터를 에피소드에 연결 (생성/복제 없음)."""
-    _get_episode_for_user(db, project_id, episode_id, current_user.id)
+    """기존 캐릭터를 에피소드에 연결.
+
+    override_ref_key가 있으면 에피소드 범위에서 캐릭터의 ref_key를 덮어쓴다
+    (원본 라이브러리 캐릭터는 불변 — 에피소드 전용 복제본 생성).
+    """
+    episode = _get_episode_for_user(db, project_id, episode_id, current_user.id)
 
     character = db.query(Character).filter(Character.id == body.character_id).first()
     if not character:
@@ -438,6 +465,15 @@ async def link_character(
     # 같은 프로젝트 또는 user_id 승격 캐릭터만 허용
     if character.project_id != project_id and character.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="이 캐릭터에 접근할 수 없습니다")
+
+    # 스타일 불일치 차단
+    from app.styles.models import Style
+    ep_style = db.query(Style).filter(Style.episode_id == episode_id).first()
+    if ep_style and character.style and character.style != ep_style.preset_key:
+        raise HTTPException(
+            status_code=400,
+            detail=f"스타일이 다릅니다 (에피소드: {ep_style.preset_key}, 캐릭터: {character.style}). 같은 스타일의 캐릭터만 불러올 수 있습니다.",
+        )
 
     # 중복 연결 검사 (멱등)
     existing = (
@@ -448,24 +484,97 @@ async def link_character(
     if existing:
         return {"linked": True, "character_id": body.character_id, "already_linked": True}
 
-    # ref_key 중복 검사: 대상 에피소드에 연결된 전체 캐릭터의 ref_key 대조
-    conflicting = (
-        db.query(Character.ref_key)
-        .join(EpisodeCharacter, EpisodeCharacter.character_id == Character.id)
-        .filter(EpisodeCharacter.episode_id == episode_id, Character.ref_key == character.ref_key)
-        .first()
-    )
-    if conflicting:
-        raise HTTPException(
-            status_code=409,
-            detail=f"이 에피소드에 이미 같은 ref_key '{character.ref_key}'를 가진 캐릭터가 있습니다",
-        )
+    # ref_key 결정: override_ref_key 또는 자동 매핑
+    effective_ref_key = body.override_ref_key
+    if not effective_ref_key:
+        # 대본에서 미매핑 ref_key 계산
+        unmatched = _get_unmatched_script_ref_keys(episode, episode_id, db)
+        if len(unmatched) == 1:
+            effective_ref_key = unmatched[0]
+        elif len(unmatched) > 1:
+            # 후보 목록 반환 — 프론트에서 선택 후 재요청
+            return {
+                "linked": False,
+                "needs_mapping": True,
+                "candidates": unmatched,
+                "character_id": body.character_id,
+                "character_name": character.name,
+                "character_ref_key": character.ref_key,
+            }
 
-    ec = EpisodeCharacter(episode_id=episode_id, character_id=body.character_id)
+    # ref_key 덮어쓰기가 필요하면 에피소드 전용 복제본 생성
+    actual_char_id = body.character_id
+    if effective_ref_key and effective_ref_key != character.ref_key:
+        # ref_key 중복 검사 (덮어쓸 키 기준)
+        conflicting = (
+            db.query(Character.ref_key)
+            .join(EpisodeCharacter, EpisodeCharacter.character_id == Character.id)
+            .filter(EpisodeCharacter.episode_id == episode_id, Character.ref_key == effective_ref_key)
+            .first()
+        )
+        if conflicting:
+            raise HTTPException(
+                status_code=409,
+                detail=f"이 에피소드에 이미 ref_key '{effective_ref_key}'를 가진 캐릭터가 있습니다",
+            )
+        # 복제본 생성 (ref_key만 변경, 이미지는 원본 공유)
+        from app.characters.models import CharacterImage
+        clone = Character(
+            episode_id=episode_id,
+            project_id=character.project_id,
+            ref_key=effective_ref_key,
+            name=character.name,
+            description=character.description,
+            appearance_en=character.appearance_en,
+            gender=character.gender,
+            age_group=character.age_group,
+            hair_style=character.hair_style,
+            hair_color=character.hair_color,
+            body_type=character.body_type,
+            mood=character.mood,
+            detail_notes=character.detail_notes,
+            style=character.style,
+            status=character.status,
+        )
+        db.add(clone)
+        db.flush()  # clone.id 확보
+
+        # 이미지 복제 (URL 공유)
+        orig_images = db.query(CharacterImage).filter(CharacterImage.character_id == character.id).all()
+        for img in orig_images:
+            db.add(CharacterImage(
+                character_id=clone.id,
+                type=img.type,
+                label=img.label,
+                image_url=img.image_url,
+                seed=img.seed,
+            ))
+
+        actual_char_id = clone.id
+    else:
+        # 원본 ref_key 중복 검사
+        conflicting = (
+            db.query(Character.ref_key)
+            .join(EpisodeCharacter, EpisodeCharacter.character_id == Character.id)
+            .filter(EpisodeCharacter.episode_id == episode_id, Character.ref_key == character.ref_key)
+            .first()
+        )
+        if conflicting:
+            raise HTTPException(
+                status_code=409,
+                detail=f"이 에피소드에 이미 같은 ref_key '{character.ref_key}'를 가진 캐릭터가 있습니다",
+            )
+
+    ec = EpisodeCharacter(episode_id=episode_id, character_id=actual_char_id)
     db.add(ec)
     db.commit()
 
-    return {"linked": True, "character_id": body.character_id, "already_linked": False}
+    return {
+        "linked": True,
+        "character_id": actual_char_id,
+        "already_linked": False,
+        "ref_key_mapped": effective_ref_key or character.ref_key,
+    }
 
 
 # ── P3: 연결 해제 ──────────────────────────────────────────────
