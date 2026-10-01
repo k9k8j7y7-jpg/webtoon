@@ -6,11 +6,13 @@ import SfxLayer from '../components/SfxLayer';
 import EffectLayer from '../components/EffectLayer';
 import ProductLayer from '../components/ProductLayer';
 import PngBubbleLayer from '../components/PngBubbleLayer';
+import { PAGE_FORMATS } from '../utils/pageFormats';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
 
 // 화면 뷰어 컷 사이 세로 간격 (내보내기 [세로] 간격과는 별개)
 const CUT_GAP_PX = 48;
+const PAGE_GAP_PX = 48;
 
 function resolveUrl(path) {
   if (!path) return '';
@@ -130,12 +132,75 @@ export default function ViewerPage() {
         </div>
       </header>
 
-      {/* 컷 세로 스크롤 */}
-      <main className="max-w-2xl mx-auto flex flex-col pb-12" style={{ gap: CUT_GAP_PX }}>
-        {data.cuts.map((cut, i) => (
-          <CutViewer key={i} cut={cut} products={data.products} />
-        ))}
-      </main>
+      {/* 컷 표시 — 형식에 따라 세로 스크롤 또는 페이지 단위 */}
+      {(() => {
+        const pf = data.page_format || 'vertical';
+        const fmt = PAGE_FORMATS[pf];
+
+        // vertical (또는 미지정): 기존 세로 스크롤
+        if (!fmt || !fmt.per_page) {
+          return (
+            <main className="max-w-2xl mx-auto flex flex-col pb-12" style={{ gap: CUT_GAP_PX }}>
+              {data.cuts.map((cut, i) => (
+                <CutViewer key={i} cut={cut} products={data.products} />
+              ))}
+            </main>
+          );
+        }
+
+        // 2x2 · 3단: 페이지 단위 CSS Grid (만화 칸 스타일)
+        const { cols, rows, per_page, frame: fr } = fmt;
+        const [rw, rh] = (fmt.cell_ratio || '1:1').split(':').map(Number);
+        const gapPct = ((fr?.gap_ratio || 0.025) * 100).toFixed(1);
+        const marginPct = ((fr?.margin_ratio || 0.03) * 100).toFixed(1);
+        const borderPx = Math.max(2, Math.round((fr?.border_px || 3) * 0.8));
+        const strokeColor = fr?.stroke || '#000000';
+        const imageCuts = data.cuts.filter(c => c.image_url);
+        const pageCount = Math.ceil(imageCuts.length / per_page);
+
+        return (
+          <main className="max-w-2xl mx-auto flex flex-col pb-12" style={{ gap: PAGE_GAP_PX }}>
+            {Array.from({ length: pageCount }, (_, p) => {
+              const pageCuts = imageCuts.slice(p * per_page, (p + 1) * per_page);
+              return (
+                <div
+                  key={p}
+                  className="grid"
+                  style={{
+                    gridTemplateColumns: `repeat(${cols}, 1fr)`,
+                    gridTemplateRows: `repeat(${rows}, 1fr)`,
+                    gap: `${gapPct}%`,
+                    padding: `${marginPct}%`,
+                    backgroundColor: fr?.bg || '#ffffff',
+                    border: `${borderPx}px solid ${strokeColor}`,
+                  }}
+                >
+                  {Array.from({ length: per_page }, (_, slot) => {
+                    const cut = pageCuts[slot];
+                    if (!cut) {
+                      return (
+                        <div
+                          key={slot}
+                          style={{ aspectRatio: `${rw} / ${rh}`, border: `${borderPx}px solid ${strokeColor}`, backgroundColor: '#fafafa' }}
+                        />
+                      );
+                    }
+                    return (
+                      <div
+                        key={slot}
+                        className="relative overflow-hidden"
+                        style={{ aspectRatio: `${rw} / ${rh}`, border: `${borderPx}px solid ${strokeColor}` }}
+                      >
+                        <CutViewer cut={cut} products={data.products} />
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </main>
+        );
+      })()}
 
       {/* 좋아요 & 조회수 영역 */}
       <div className="max-w-2xl mx-auto py-12 flex flex-col items-center border-t border-white/5">

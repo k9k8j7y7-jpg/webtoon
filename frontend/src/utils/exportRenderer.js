@@ -575,6 +575,96 @@ export async function exportAsA4Grid(
   return zip.generateAsync({ type: 'blob', compression: 'STORE' });
 }
 
+// ── 페이지 합성 (형식별 그리드) ──
+
+/**
+ * composePageGrid — 컷 Canvas 배열을 형식 정의에 따라 페이지 Canvas로 합성.
+ * @param {HTMLCanvasElement[]} cutCanvases - renderCutToCanvas로 만든 캔버스 배열
+ * @param {object} format - PAGE_FORMATS의 형식 정의 (cols, rows, per_page, gap, border)
+ * @param {number} pageWidth - 출력 페이지 가로 px (기본 1080)
+ * @returns {HTMLCanvasElement[]} - 합성된 페이지 캔버스 배열
+ */
+export function composePageGrid(cutCanvases, format, pageWidth = 1080) {
+  if (!format || !format.per_page) {
+    return cutCanvases;
+  }
+
+  const { cols, rows, per_page, frame } = format;
+  const fr = frame || { border_px: 3, gap_ratio: 0.025, margin_ratio: 0.03, bg: '#ffffff', stroke: '#000000' };
+
+  const margin = Math.round(pageWidth * fr.margin_ratio);
+  const gap = Math.round(pageWidth * fr.gap_ratio);
+  const borderW = fr.border_px;
+
+  const innerW = pageWidth - margin * 2;
+  const totalGapX = gap * (cols - 1);
+  const cellW = Math.floor((innerW - totalGapX) / cols);
+  const [rw, rh] = (format.cell_ratio || '1:1').split(':').map(Number);
+  const cellH = Math.round(cellW * (rh / rw));
+  const totalGapY = gap * (rows - 1);
+  const innerH = rows * cellH + totalGapY;
+  const pageHeight = innerH + margin * 2;
+
+  const pages = [];
+  const pageCount = Math.ceil(cutCanvases.length / per_page);
+
+  for (let p = 0; p < pageCount; p++) {
+    const canvas = document.createElement('canvas');
+    canvas.width = pageWidth;
+    canvas.height = pageHeight;
+    const ctx = canvas.getContext('2d');
+
+    // 페이지 배경
+    ctx.fillStyle = fr.bg;
+    ctx.fillRect(0, 0, pageWidth, pageHeight);
+
+    // 페이지 외곽 테두리
+    if (borderW > 0) {
+      ctx.strokeStyle = fr.stroke;
+      ctx.lineWidth = borderW;
+      const half = borderW / 2;
+      ctx.strokeRect(half, half, pageWidth - borderW, pageHeight - borderW);
+    }
+
+    const start = p * per_page;
+    const end = Math.min(start + per_page, cutCanvases.length);
+
+    for (let idx = start; idx < end; idx++) {
+      const pos = idx - start;
+      const col = pos % cols;
+      const row = Math.floor(pos / cols);
+
+      const cellX = margin + col * (cellW + gap);
+      const cellY = margin + row * (cellH + gap);
+
+      const src = cutCanvases[idx];
+      if (!src) continue;
+
+      // 셀 안에 비율 유지 fit
+      const scale = Math.min(cellW / src.width, cellH / src.height);
+      const imgW = Math.round(src.width * scale);
+      const imgH = Math.round(src.height * scale);
+      const ox = cellX + Math.floor((cellW - imgW) / 2);
+      const oy = cellY + Math.floor((cellH - imgH) / 2);
+
+      ctx.drawImage(src, ox, oy, imgW, imgH);
+
+      // 칸 테두리 (검정, 직각)
+      if (borderW > 0) {
+        ctx.strokeStyle = fr.stroke;
+        ctx.lineWidth = borderW;
+        const half = borderW / 2;
+        ctx.strokeRect(cellX + half, cellY + half, cellW - borderW, cellH - borderW);
+      }
+    }
+
+    pages.push(canvas);
+  }
+
+  return pages;
+}
+
+
 // ══════════════════════════════════════════════════════════════
 // ═══ 레거시: Canvas 2D 직접 그리기 코드 (비활성화)          ═══
 // ═══ SVG 직렬화 방식 검증 완료 후 제거 예정                ═══

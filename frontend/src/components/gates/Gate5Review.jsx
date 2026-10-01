@@ -3,7 +3,7 @@ import api, { pollJob } from '../../api/client';
 import JobProgress from '../JobProgress';
 import BubbleOverlay, { BubbleMiniIcon, STYLE_ORDER, STYLE_LABELS } from '../BubbleOverlay';
 import { resolveBubbleStyle } from '../../utils/bubbleMapping';
-import { Image, RefreshCw, RotateCcw, Download, Check, AlertTriangle, MessageSquare, Save, X, ZoomIn, ChevronLeft, ChevronRight, Pencil, SlidersHorizontal, ExternalLink } from 'lucide-react';
+import { Image, RefreshCw, RotateCcw, Download, Check, AlertTriangle, MessageSquare, Save, X, ZoomIn, ChevronLeft, ChevronRight, Pencil, SlidersHorizontal, ExternalLink, LayoutGrid } from 'lucide-react';
 import CutEditor from '../CutEditor';
 import SfxLayer from '../SfxLayer';
 import EffectLayer from '../EffectLayer';
@@ -14,6 +14,7 @@ import ExportProgressModal from '../ExportProgressModal';
 import { exportAsPNGZip, exportAsVertical, exportAsInstagram, exportAsA4Single, exportAsA4Grid } from '../../utils/exportRenderer';
 import useGateLoad from '../../hooks/useGateLoad';
 import { GateSkeleton, GateLoadError } from '../GateLoadFallback';
+import { PAGE_FORMATS } from '../../utils/pageFormats';
 
 // ── 그리드 컷 카드: 이미지 + SVG 말풍선 오버레이 ──
 // 에피소드 비율 "9:16" → CSS aspect-ratio "9 / 16" (미설정 = 기존 에피소드 1:1)
@@ -168,6 +169,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
   const [previewIndex, setPreviewIndex] = useState(null); // 라이트박스 미리보기 인덱스
   const [editCutIndex, setEditCutIndex] = useState(null); // CutEditor 편집 인덱스
   const [products, setProducts] = useState([]); // 광고 제품 목록
+  const [pagePreview, setPagePreview] = useState(false); // 페이지 미리보기 토글
 
   const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
 
@@ -552,6 +554,24 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                 <Image size={12} /> {pendingCuts.length}컷 생성 ({pendingCuts.length}패킷)
               </button>
             )}
+            {/* 페이지 미리보기 토글 (vertical이 아닐 때만) */}
+            {hasImages && (() => {
+              const pf = gateStatus?.page_format || 'vertical';
+              const fmt = PAGE_FORMATS[pf];
+              if (!fmt || !fmt.per_page) return null;
+              return (
+                <button
+                  onClick={() => setPagePreview(!pagePreview)}
+                  className={`flex items-center gap-1 h-10 sm:h-auto px-3 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-colors shadow-sm ${
+                    pagePreview
+                      ? 'bg-indigo-500 text-white hover:bg-indigo-600'
+                      : 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-700 hover:bg-indigo-100 dark:hover:bg-indigo-900/50'
+                  }`}
+                >
+                  <LayoutGrid size={12} /> 페이지 미리보기
+                </button>
+              );
+            })()}
             {hasImages && (
               <div className="grid grid-cols-4 gap-2 sm:flex sm:gap-1">
                 <button
@@ -642,10 +662,86 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
           </div>
         )}
 
+        {/* 페이지 미리보기 패널 */}
+        {pagePreview && (() => {
+          const pf = gateStatus?.page_format || 'vertical';
+          const fmt = PAGE_FORMATS[pf];
+          if (!fmt || !fmt.per_page) return null;
+          const { cols, rows, per_page, frame: fr } = fmt;
+          const [rw, rh] = (fmt.cell_ratio || '1:1').split(':').map(Number);
+          const gapPct = ((fr?.gap_ratio || 0.025) * 100).toFixed(1);
+          const marginPct = ((fr?.margin_ratio || 0.03) * 100).toFixed(1);
+          const borderPx = Math.max(1, Math.round((fr?.border_px || 3) * 0.6));
+          const strokeColor = fr?.stroke || '#000000';
+          const imageCuts = cuts.filter(c => getCutImageUrl(c));
+          const pageCount = Math.ceil(imageCuts.length / per_page);
+          if (pageCount === 0) return null;
+
+          return (
+            <div className="mb-4 space-y-6">
+              {Array.from({ length: pageCount }, (_, p) => {
+                const pageCuts = imageCuts.slice(p * per_page, (p + 1) * per_page);
+                return (
+                  <div key={p}>
+                    <p className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-2">페이지 {p + 1}</p>
+                    <div
+                      className="grid bg-white"
+                      style={{
+                        gridTemplateColumns: `repeat(${cols}, 1fr)`,
+                        gridTemplateRows: `repeat(${rows}, 1fr)`,
+                        gap: `${gapPct}%`,
+                        padding: `${marginPct}%`,
+                        border: `${borderPx}px solid ${strokeColor}`,
+                      }}
+                    >
+                      {Array.from({ length: per_page }, (_, slot) => {
+                        const cut = pageCuts[slot];
+                        if (!cut) {
+                          return (
+                            <div
+                              key={slot}
+                              className="bg-gray-50"
+                              style={{ aspectRatio: `${rw} / ${rh}`, border: `${borderPx}px solid ${strokeColor}` }}
+                            />
+                          );
+                        }
+                        const cutIdx = cuts.indexOf(cut);
+                        return (
+                          <div
+                            key={slot}
+                            className="relative overflow-hidden cursor-pointer hover:ring-2 hover:ring-indigo-400 transition-all"
+                            style={{ aspectRatio: `${rw} / ${rh}`, border: `${borderPx}px solid ${strokeColor}` }}
+                            onClick={() => {
+                              setPagePreview(false);
+                              setTimeout(() => {
+                                const el = document.getElementById(`cut-card-${cut.cut_id}`);
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                              }, 100);
+                            }}
+                          >
+                            <CutImageWithBubbles
+                              cut={cut}
+                              imageUrl={imageUrl(getCutImageUrl(cut))}
+                              onZoom={() => setPreviewIndex(cutIdx)}
+                              products={products}
+                              aspectRatio={gateStatus?.aspect_ratio}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {cuts.map((cut) => (
             <div
               key={cut.cut_id}
+              id={`cut-card-${cut.cut_id}`}
               className={`border-2 rounded-2xl overflow-hidden group transition ${
                 cut.status === 'invalidated' ? 'border-amber-300 dark:border-amber-600' : 'border-border dark:border-zinc-700'
               }`}

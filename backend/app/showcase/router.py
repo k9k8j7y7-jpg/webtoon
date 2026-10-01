@@ -121,11 +121,13 @@ def get_viewer_data(
     # 제품 목록 (광고 에피소드용 — 뷰어에서 product_items 렌더에 필요)
     ep_products = db.query(Product).filter(Product.episode_id == episode.id).all()
 
+    from app.workflow.gate import get_page_format
     return {
         "title": episode.title or project.title,
         "episode_no": episode.episode_no,
         "view_count": episode.view_count,
         "like_count": episode.like_count,
+        "page_format": get_page_format(episode.gate_status or {}),
         "products": [
             {"id": p.id, "name": p.name, "photo_url": p.photo_url}
             for p in ep_products if p.photo_url
