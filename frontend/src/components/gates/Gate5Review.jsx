@@ -550,13 +550,20 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
           </h2>
           <div className="flex flex-col gap-2 sm:flex-row">
             {pendingCuts.length > 0 && (
-              <button
-                onClick={handleGenerateAll}
-                disabled={!!job}
-                className="neon-btn flex items-center justify-center gap-1 w-full sm:w-auto !rounded-full !px-4 !py-2 text-xs whitespace-nowrap disabled:opacity-50"
-              >
-                <Image size={12} /> {pendingCuts.length}컷 생성 ({pendingCuts.length}패킷)
-              </button>
+              <div className="flex flex-col items-start gap-1">
+                <button
+                  onClick={handleGenerateAll}
+                  disabled={!!job}
+                  className="neon-btn flex items-center justify-center gap-1 w-full sm:w-auto !rounded-full !px-4 !py-2 text-xs whitespace-nowrap disabled:opacity-50"
+                >
+                  <Image size={12} /> {pendingCuts.length}컷 생성 ({pendingCuts.length}패킷)
+                </button>
+                {gateStatus?.has_photo_real_char && (
+                  <span className="text-[10px] font-bold text-blue-500 dark:text-blue-400">
+                    실사 캐릭터 포함 — 컷당 약 30~40초
+                  </span>
+                )}
+              </div>
             )}
             {/* 페이지 미리보기 토글 (vertical이 아닐 때만) */}
             {hasImages && (() => {

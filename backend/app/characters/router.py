@@ -116,6 +116,8 @@ async def get_character(
         "description": character.description,
         "appearance_en": character.appearance_en,
         "reference_photos": character.reference_photos,
+        "is_photo_real": character.is_photo_real,
+        "consent_given": character.consent_given,
         "gender": character.gender,
         "age_group": character.age_group,
         "hair_style": character.hair_style,
@@ -167,6 +169,7 @@ async def list_characters(
             "ref_key": c.ref_key,
             "name": c.name,
             "status": c.status,
+            "is_photo_real": c.is_photo_real,
             "image_count": len(c.images),
         }
         for c in characters
@@ -248,6 +251,13 @@ async def regenerate_character(
     if not character:
         raise HTTPException(status_code=404, detail="Character not found")
 
+    # 실사 캐릭터는 시트 재생성 불가
+    if character.is_photo_real:
+        raise HTTPException(
+            status_code=400,
+            detail="실사 캐릭터는 시트를 생성하지 않습니다. [사진 교체]를 사용하세요.",
+        )
+
     use_photo = (body.use_photo_reference if body else False) and bool(character.reference_photos)
 
     # 패킷 사전 확인: 캐릭터 시트 재생성 = 2패킷
@@ -289,16 +299,23 @@ async def upload_character_photos(
     character_id: int,
     files: list[UploadFile] = File(...),
     is_animal: bool = Query(default=False),
+    is_photo_real: bool = Query(default=False),
+    consent_given: bool = Query(default=False),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """캐릭터 실사진 1~3장 업로드 + 비전 외형 추출.
 
+    is_photo_real=true + consent_given=true일 때 실사 캐릭터로 설정.
     Returns: 업로드 URL 배열 + 추출된 구조화 필드 JSON.
     """
     character = db.query(Character).filter(Character.id == character_id).first()
     if not character:
         raise HTTPException(status_code=404, detail="Character not found")
+
+    # 실사 캐릭터 동의 검증
+    if is_photo_real and not consent_given:
+        raise HTTPException(status_code=400, detail="초상권 동의가 필요합니다")
 
     if len(files) > 3:
         raise HTTPException(status_code=400, detail="최대 3장까지 가능합니다")
@@ -328,22 +345,94 @@ async def upload_character_photos(
         )
         urls.append(url)
 
-    # DB에 URL 배열 저장
+    # DB에 URL 배열 + 실사 플래그 저장
     character.reference_photos = urls
+    if is_photo_real:
+        character.is_photo_real = True
+        character.consent_given = True
     db.commit()
 
     # 비전 외형 추출
     extracted = await extract_appearance_from_photos(photo_bytes_list, is_animal=is_animal)
 
-    # 동물: appearance_en을 바로 DB에 저장 (PUT 시 build_appearance_en 재호출 불필요)
+    # 동물: appearance_en을 바로 DB에 저장
     if is_animal and extracted.get("appearance_en"):
+        character.appearance_en = extracted["appearance_en"]
+        db.commit()
+
+    # 실사 캐릭터: appearance_en 저장 (얼굴·체형 기술)
+    if is_photo_real and extracted.get("appearance_en"):
         character.appearance_en = extracted["appearance_en"]
         db.commit()
 
     return {
         "id": character.id,
         "reference_photos": urls,
+        "is_photo_real": character.is_photo_real,
+        "consent_given": character.consent_given,
         "extracted": extracted,
+    }
+
+
+@router.post("/characters/{character_id}/photos/replace")
+async def replace_character_photos(
+    character_id: int,
+    files: list[UploadFile] = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """실사 캐릭터 사진 교체 (기존 사진 대체)."""
+    character = db.query(Character).filter(Character.id == character_id).first()
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+    if not character.is_photo_real:
+        raise HTTPException(status_code=400, detail="실사 캐릭터만 사진 교체가 가능합니다")
+
+    if len(files) > 3:
+        raise HTTPException(status_code=400, detail="최대 3장까지 가능합니다")
+
+    from app.image_util import validate_and_process
+
+    urls: list[str] = []
+    photo_bytes_list: list[bytes] = []
+    for i, file in enumerate(files):
+        raw = await file.read()
+        try:
+            processed, mime = validate_and_process(
+                raw,
+                original_content_type=file.content_type or "",
+                original_filename=file.filename or "",
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=f"파일 {i+1}: {e}")
+        photo_bytes_list.append(processed)
+
+        url = upload_image(
+            image_bytes=processed,
+            path_prefix=f"characters/{character_id}/photos",
+            filename=f"ref_{i}.jpg",
+            mime_type=mime,
+        )
+        urls.append(url)
+
+    character.reference_photos = urls
+    db.commit()
+
+    # 외형 재추출
+    extracted = await extract_appearance_from_photos(photo_bytes_list)
+    if extracted.get("appearance_en"):
+        character.appearance_en = extracted["appearance_en"]
+        db.commit()
+
+    # 관련 컷 무효화
+    inv = invalidate_asset(character.episode_id, "character", character.ref_key, db)
+    db.commit()
+
+    return {
+        "id": character.id,
+        "reference_photos": urls,
+        "appearance_en": character.appearance_en,
+        "cuts_invalidated": inv["cuts_invalidated"],
     }
 
 
@@ -406,6 +495,7 @@ async def list_project_characters(
             "style": c.style,
             "status": c.status,
             "user_id": c.user_id,
+            "is_photo_real": c.is_photo_real,
             "front_image_url": front_url,
             "episode_count": ep_count,
             "created_at": c.created_at.isoformat() if c.created_at else None,
@@ -466,14 +556,15 @@ async def link_character(
     if character.project_id != project_id and character.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="이 캐릭터에 접근할 수 없습니다")
 
-    # 스타일 불일치 차단
-    from app.styles.models import Style
-    ep_style = db.query(Style).filter(Style.episode_id == episode_id).first()
-    if ep_style and character.style and character.style != ep_style.preset_key:
-        raise HTTPException(
-            status_code=400,
-            detail=f"스타일이 다릅니다 (에피소드: {ep_style.preset_key}, 캐릭터: {character.style}). 같은 스타일의 캐릭터만 불러올 수 있습니다.",
-        )
+    # 스타일 불일치 차단 (실사 캐릭터는 스타일 무관 — 스킵)
+    if not character.is_photo_real:
+        from app.styles.models import Style
+        ep_style = db.query(Style).filter(Style.episode_id == episode_id).first()
+        if ep_style and character.style and character.style != ep_style.preset_key:
+            raise HTTPException(
+                status_code=400,
+                detail=f"스타일이 다릅니다 (에피소드: {ep_style.preset_key}, 캐릭터: {character.style}). 같은 스타일의 캐릭터만 불러올 수 있습니다.",
+            )
 
     # 중복 연결 검사 (멱등)
     existing = (
@@ -526,6 +617,9 @@ async def link_character(
             name=character.name,
             description=character.description,
             appearance_en=character.appearance_en,
+            reference_photos=character.reference_photos,
+            is_photo_real=character.is_photo_real,
+            consent_given=character.consent_given,
             gender=character.gender,
             age_group=character.age_group,
             hair_style=character.hair_style,
@@ -751,6 +845,7 @@ async def list_my_library_characters(
             "style": c.style,
             "project_id": c.project_id,
             "status": c.status,
+            "is_photo_real": c.is_photo_real,
             "front_image_url": front_url,
             "episode_count": ep_count,
             "created_at": c.created_at.isoformat() if c.created_at else None,

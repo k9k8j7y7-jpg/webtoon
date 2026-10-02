@@ -206,6 +206,15 @@ async def get_episode_status(
     episode = _get_episode_for_user(db, project_id, episode_id, current_user.id)
     result = dict(episode.gate_status)
     result["series_id"] = episode.series_id
+    # 실사 캐릭터 포함 여부 (프론트 안내 표시용)
+    from app.characters.models import Character, EpisodeCharacter
+    has_pr = db.query(Character).join(
+        EpisodeCharacter, EpisodeCharacter.character_id == Character.id
+    ).filter(
+        EpisodeCharacter.episode_id == episode_id,
+        Character.is_photo_real == True,
+    ).first() is not None
+    result["has_photo_real_char"] = has_pr
     return result
 
 

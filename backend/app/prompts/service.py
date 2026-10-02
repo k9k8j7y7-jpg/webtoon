@@ -67,6 +67,7 @@ def build_cut_prompt(
     loc_image_attached: bool = False,
     aspect_ratio: str = "9:16",
     product_desc: str = "",
+    has_photo_real_char: bool = False,
 ) -> str:
     """컷 명세로부터 이미지 생성 프롬프트를 조립한다.
 
@@ -104,6 +105,28 @@ def build_cut_prompt(
             f"NEVER alter the character's facial identity or appearance. "
             f"{mapping_str}"
         )
+
+    # ── 1.5. 실사 캐릭터 전용 강화 지시 ──
+    if has_photo_real_char:
+        photo_real_ids = [
+            cid for cid in char_ids_with_ref
+            if isinstance(character_descs.get(cid), dict) and character_descs[cid].get("is_photo_real")
+        ]
+        webtoon_ids = [cid for cid in char_ids_with_ref if cid not in photo_real_ids]
+
+        if photo_real_ids:
+            parts.append(
+                f"REAL PERSON(S) in reference photo(s) ({', '.join(photo_real_ids)}): "
+                f"keep EXACT face, body shape, age, skin tone, hairstyle — "
+                f"photorealistic as in the photo. Only outfit may follow the scene description. "
+                f"NEVER alter facial identity, body proportions, or age"
+            )
+        if webtoon_ids:
+            parts.append(
+                f"Illustrated character(s) ({', '.join(webtoon_ids)}): "
+                f"match the reference sheet's proportions and eye size exactly, "
+                f"no chibi exaggeration, no SD (super-deformed) style"
+            )
 
     # ── 2. 캐릭터별 외형 명세 + 표정·포즈 ──
     for char in characters:
@@ -166,7 +189,13 @@ def build_cut_prompt(
         )
 
     # ── 4. 스타일 (얼굴 정체성을 덮지 않는 선에서) ──
-    parts.append(f"{style_prompt}. Apply this art style to coloring and rendering only, preserve character facial identity from references")
+    if has_photo_real_char:
+        parts.append(
+            f"{style_prompt}. Apply this art style to backgrounds and illustrated characters ONLY. "
+            f"Real person(s) must remain photorealistic — do NOT apply illustration style to their face or body"
+        )
+    else:
+        parts.append(f"{style_prompt}. Apply this art style to coloring and rendering only, preserve character facial identity from references")
 
     # ── 5. 샷 타입·강조 ──
     shot = cut_spec.get("shot", "full")

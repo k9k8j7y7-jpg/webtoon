@@ -17,6 +17,7 @@ from app.locations.models import Location, LocationImage
 from app.styles.models import Style, STYLE_PRESETS
 from app.projects.models import Episode, ProjectMemory
 from app.adapters.gemini_image import get_image_adapter
+from app.adapters.openai_image import get_openai_image_adapter
 from app.prompts.service import build_cut_prompt
 from app.storage import upload_image, LOCAL_STORAGE_DIR
 from app.jobs import get_job, update_job, Job
@@ -106,6 +107,16 @@ def _downscale_image(image_bytes: bytes, max_long_side: int = 768) -> bytes:
     return buf.getvalue()
 
 
+def _episode_has_photo_real_char(episode_id: int, db: Session) -> bool:
+    """에피소드에 is_photo_real=True 캐릭터가 하나라도 있는지 판정."""
+    return db.query(Character).join(
+        EpisodeCharacter, EpisodeCharacter.character_id == Character.id
+    ).filter(
+        EpisodeCharacter.episode_id == episode_id,
+        Character.is_photo_real == True,
+    ).first() is not None
+
+
 def _get_character_references(
     episode_id: int,
     character_ids: list[str],
@@ -144,30 +155,43 @@ def _get_character_references(
         char_descs[char_id] = {
             "name": character.name,
             "appearance_en": character.appearance_en or "",
+            "is_photo_real": getattr(character, "is_photo_real", False),
         }
 
-        # front 이미지
-        front_img = (
-            db.query(CharacterImage)
-            .filter(CharacterImage.character_id == character.id, CharacterImage.type == "front")
-            .first()
-        )
-        if front_img:
-            img_bytes = _load_image_bytes(front_img.image_url)
-            if img_bytes:
-                front_images.append((char_id, img_bytes, character.name or char_id))
+        if getattr(character, "is_photo_real", False) and character.reference_photos:
+            # 실사 캐릭터: reference_photos (정면 먼저, 최대 3장)
+            for i, photo_url in enumerate(character.reference_photos[:3]):
+                img_bytes = _load_image_bytes(photo_url)
+                if img_bytes:
+                    label_suffix = "front view" if i == 0 else f"view {i + 1}"
+                    front_images.append((char_id, img_bytes, character.name or char_id))
+                    # 추가 사진은 front_images에 넣되 라벨로 구분
+                    if i > 0:
+                        # front_images는 (char_id, bytes, name) 튜플 — 라벨은 아래에서 분기
+                        pass
+        else:
+            # 웹툰 캐릭터: front 이미지
+            front_img = (
+                db.query(CharacterImage)
+                .filter(CharacterImage.character_id == character.id, CharacterImage.type == "front")
+                .first()
+            )
+            if front_img:
+                img_bytes = _load_image_bytes(front_img.image_url)
+                if img_bytes:
+                    front_images.append((char_id, img_bytes, character.name or char_id))
 
-        # expressions 격자 시트
-        expr_img = (
-            db.query(CharacterImage)
-            .filter(CharacterImage.character_id == character.id, CharacterImage.type == "expressions")
-            .first()
-        )
-        if expr_img:
-            img_bytes = _load_image_bytes(expr_img.image_url)
-            if img_bytes:
-                panel = _map_emotion_to_panel(cut_emotions.get(char_id, "neutral"))
-                expr_images.append((char_id, img_bytes, character.name or char_id, panel))
+            # expressions 격자 시트
+            expr_img = (
+                db.query(CharacterImage)
+                .filter(CharacterImage.character_id == character.id, CharacterImage.type == "expressions")
+                .first()
+            )
+            if expr_img:
+                img_bytes = _load_image_bytes(expr_img.image_url)
+                if img_bytes:
+                    panel = _map_emotion_to_panel(cut_emotions.get(char_id, "neutral"))
+                    expr_images.append((char_id, img_bytes, character.name or char_id, panel))
 
     # 우선순위: front 전부 → expressions 순으로 MAX_REF_IMAGES 이내
     ref_images: list[bytes] = []
@@ -175,7 +199,14 @@ def _get_character_references(
 
     for char_id, img_bytes, name in front_images:
         ref_images.append(img_bytes)
-        ref_labels.append(f"Character '{char_id}' ({name}) - front reference sheet")
+        is_pr = char_descs.get(char_id, {}).get("is_photo_real", False) if isinstance(char_descs.get(char_id), dict) else False
+        if is_pr:
+            ref_labels.append(
+                f"Character '{char_id}' ({name}) - REAL PERSON photograph. "
+                f"Preserve exact face, body shape, age, skin tone, and hairstyle"
+            )
+        else:
+            ref_labels.append(f"Character '{char_id}' ({name}) - front reference sheet")
 
     # 장소 1장 자리 예약 (호출부에서 추가) → 남은 슬롯 계산
     remaining = MAX_REF_IMAGES - len(ref_images) - 1  # 장소용 1슬롯 예약
@@ -250,7 +281,9 @@ async def generate_cut_image(
     db: Session,
 ) -> dict:
     """단일 컷의 이미지를 생성한다. 레퍼런스 주입 포함."""
-    adapter = get_image_adapter()
+    # 실사 캐릭터 포함 에피소드 → GPT 어댑터
+    use_gpt = _episode_has_photo_real_char(episode_id, db)
+    adapter = get_openai_image_adapter() if use_gpt else get_image_adapter()
     spec = cut.spec
 
     # 1. 캐릭터 레퍼런스 로드 (이미지 + 라벨 — front + expressions)
@@ -337,6 +370,7 @@ async def generate_cut_image(
         loc_image_attached=loc_image_attached,
         aspect_ratio=ep_aspect_ratio,
         product_desc=product_desc,
+        has_photo_real_char=use_gpt,
     )
 
     # 6. 이미지 생성 (레퍼런스 주입 + 앵커링!)
@@ -417,7 +451,7 @@ async def generate_cut_image(
         user_id=user_id,
         kind="cut",
         model=result.model,
-        model_tier="flash",
+        model_tier="gpt" if use_gpt else "flash",
         cost_usd=0.02,  # 실측 전 추정값
         credits_charged=0,  # legacy 크레딧 비활성화
         packets_charged=1,

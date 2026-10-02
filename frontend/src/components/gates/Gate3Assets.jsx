@@ -321,8 +321,10 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
       const formData = new FormData();
       for (const file of files) formData.append('files', file);
       const isAnimal = editingChar?.is_animal ?? false;
+      const isPhotoReal = editingChar?.is_photo_real ?? false;
+      const consentGiven = editingChar?.consent_given ?? false;
       const { data } = await api.post(
-        `/characters/${charId}/photos?is_animal=${isAnimal}`,
+        `/characters/${charId}/photos?is_animal=${isAnimal}&is_photo_real=${isPhotoReal}&consent_given=${consentGiven}`,
         formData,
         { headers: { 'Content-Type': 'multipart/form-data' } },
       );
@@ -677,8 +679,8 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
       ]);
       const currentStyle = styles?.preset_key;
       const linkedIds = new Set(characters.map(c => c.id));
-      // 같은 스타일만 필터 (스타일 미기록은 포함)
-      const styleFilter = (c) => !c.style || !currentStyle || c.style === currentStyle;
+      // 같은 스타일만 필터 (스타일 미기록은 포함, 실사 캐릭터는 항상 포함)
+      const styleFilter = (c) => c.is_photo_real || !c.style || !currentStyle || c.style === currentStyle;
       setProjectChars(projRes.data.filter(c => !linkedIds.has(c.id) && styleFilter(c)));
       setLibraryChars(libRes.data.filter(c => !linkedIds.has(c.id) && c.project_id !== projectId && styleFilter(c)));
       // 다른 스타일 캐릭터 수 (빈 상태 안내용)
@@ -1073,6 +1075,11 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
                     >
                       <Unlink size={12} />
                     </button>
+                    {c.is_photo_real && (
+                      <div className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                        실사
+                      </div>
+                    )}
                     <div className={`text-xs font-bold px-2 py-0.5 rounded-full ${c.status === 'approved' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-500'}`}>
                       {c.status}
                     </div>
@@ -1164,6 +1171,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
                     )}
 
                     {/* C: 동물 캐릭터 체크박스 */}
+                    {!editingChar.is_photo_real && (
                     <label className="flex items-center gap-2 text-[10px] text-gray-600 dark:text-gray-300 cursor-pointer">
                       <input
                         type="checkbox"
@@ -1174,9 +1182,41 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
                       <span className="font-bold">동물 캐릭터</span>
                       <span className="font-normal text-gray-400 dark:text-gray-500">(사진 분석 시 동물용 프롬프트 사용)</span>
                     </label>
+                    )}
+
+                    {/* D: 실사 캐릭터 토글 */}
+                    <label className="flex items-center gap-2 text-[10px] text-gray-600 dark:text-gray-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={editingChar.is_photo_real || false}
+                        onChange={e => updateCharField('is_photo_real', e.target.checked)}
+                        className="rounded border-gray-300 dark:border-zinc-600"
+                      />
+                      <span className="font-bold text-blue-600 dark:text-blue-400">실사 캐릭터</span>
+                      <span className="font-normal text-gray-400 dark:text-gray-500">(사진 속 인물이 웹툰에 등장)</span>
+                    </label>
+                    {editingChar.is_photo_real && (
+                      <div className="space-y-2 pl-5">
+                        <label className="flex items-center gap-2 text-[10px] text-gray-600 dark:text-gray-300 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={editingChar.consent_given || false}
+                            onChange={e => updateCharField('consent_given', e.target.checked)}
+                            className="rounded border-blue-300 dark:border-blue-600"
+                          />
+                          <span className="font-bold">본인이거나 초상권 사용에 동의한 사람의 사진입니다</span>
+                        </label>
+                        {!editingChar.consent_given && (
+                          <p className="text-[10px] text-red-500 dark:text-red-400 font-bold">동의 없이는 저장할 수 없습니다</p>
+                        )}
+                        <p className="text-[10px] text-blue-500 dark:text-blue-400">
+                          사진 1~3장을 업로드하세요 (정면 필수·전신 권장). 시트 생성 없이 사진이 곧 참조입니다.
+                        </p>
+                      </div>
+                    )}
 
                     {/* 사람 캐릭터: 구조화 필드 */}
-                    {!editingChar.is_animal && (
+                    {!editingChar.is_animal && !editingChar.is_photo_real && (
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400">성별</label>
@@ -1279,14 +1319,40 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
                     </div>
                     <p className="text-[9px] text-purple-500 dark:text-purple-400">이름은 이 캐릭터가 연결된 모든 에피소드에 반영됩니다</p>
                     <div className="flex gap-2">
-                      <button onClick={saveCharConditions} disabled={savingChar}
+                      <button onClick={saveCharConditions} disabled={savingChar || (editingChar.is_photo_real && !editingChar.consent_given)}
                         className="flex-1 px-3 py-1.5 text-xs font-bold bg-purple-600 text-white rounded-full hover:bg-purple-700 transition-colors disabled:opacity-50">
                         {savingChar ? '저장 중...' : '저장'}
                       </button>
-                      <button onClick={() => saveAndRegenerate(c.id)} disabled={savingChar || !!job}
-                        className="flex-1 px-3 py-1.5 text-xs font-bold bg-comic-orange text-white rounded-full hover:bg-orange-600 transition-colors disabled:opacity-50">
-                        조건 저장 + 재생성 (2패킷)
-                      </button>
+                      {editingChar.is_photo_real ? (
+                        <label className="flex-1 flex items-center justify-center px-3 py-1.5 text-xs font-bold bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors cursor-pointer disabled:opacity-50">
+                          사진 교체
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            multiple
+                            className="hidden"
+                            onChange={async (e) => {
+                              const files = Array.from(e.target.files || []).slice(0, 3);
+                              if (!files.length) return;
+                              try {
+                                const fd = new FormData();
+                                for (const f of files) fd.append('files', f);
+                                const { data } = await api.post(`/characters/${c.id}/photos/replace`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+                                setEditingChar(prev => ({ ...prev, reference_photos: data.reference_photos || [] }));
+                                setCacheBuster(Date.now());
+                              } catch (err) {
+                                setCharPhotoError(err.response?.data?.detail || err.message);
+                              }
+                              e.target.value = '';
+                            }}
+                          />
+                        </label>
+                      ) : (
+                        <button onClick={() => saveAndRegenerate(c.id)} disabled={savingChar || !!job}
+                          className="flex-1 px-3 py-1.5 text-xs font-bold bg-comic-orange text-white rounded-full hover:bg-orange-600 transition-colors disabled:opacity-50">
+                          조건 저장 + 재생성 (2패킷)
+                        </button>
+                      )}
                       <button onClick={() => setEditingChar(null)}
                         className="px-3 py-1.5 text-xs font-bold text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
                         취소
@@ -1628,7 +1694,12 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
                           </div>
                         )}
                         <div className="text-center w-full">
-                          <div className="font-bold text-sm text-ink-black dark:text-white truncate">{c.name || c.ref_key}</div>
+                          <div className="font-bold text-sm text-ink-black dark:text-white truncate">
+                            {c.name || c.ref_key}
+                            {c.is_photo_real && (
+                              <span className="ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">실사</span>
+                            )}
+                          </div>
                           <div className="text-[10px] text-gray-400 dark:text-gray-500">{c.episode_count}개 에피소드에서 사용 중</div>
                         </div>
                       </div>

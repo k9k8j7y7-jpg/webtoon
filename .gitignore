@@ -17,3 +17,4 @@ project_t_before_*.sql
 scripts/gpt_test_out/
 .env.bak*
 frontend/scripts/mobile-check/
+scratch/
