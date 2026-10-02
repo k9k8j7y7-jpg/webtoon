@@ -4,6 +4,7 @@ API-Spec 3장, PRD 3.1 참조.
 """
 
 import json
+import re
 from datetime import datetime, timezone
 
 from app.adapters.gemini import generate_text, AI_TOKENS_SHORT
@@ -41,6 +42,8 @@ SYSTEM_INSTRUCTION = """너는 웹툰 스토리 기획 전문가야.
 - 동물의 description에는 품종/종을 적을 것 (아이디어에 명시되어 있으면 그대로)
 - 동물의 나이는 해당 동물 기준의 자연스러운 나이로
 - 사람의 description에는 외형·역할을 한 줄로
+- 동물 캐릭터(강아지·고양이·토끼 등)의 gender는 반드시 "기타"
+- 사용자가 입력한 인물 description 원문은 앞부분에 그대로 유지하고, 보충 내용만 뒤에 이어 붙일 것 (원문 덮어쓰기 금지)
 - synopsis는 반드시 4단 dict 형식(ki/seung/jeon/gyeol)으로 출력"""
 
 SUGGEST_CHARACTERS_INSTRUCTION = """너는 웹툰 캐릭터 기획 전문가야.
@@ -63,6 +66,7 @@ SUGGEST_CHARACTERS_INSTRUCTION = """너는 웹툰 캐릭터 기획 전문가야.
 - 동물의 description에는 품종/종을 적을 것 (아이디어에 명시되어 있으면 그대로, 예: "포메라니안")
 - 동물의 나이는 해당 동물 기준의 자연스러운 나이로
 - 사람의 description에는 외형·역할을 한 줄로 (예: "도도의 보호자, 40대 아빠")
+- 동물 캐릭터(강아지·고양이·토끼 등)의 gender는 반드시 "기타"
 - 3~5명의 캐릭터를 제안해줘. 사람 이름은 한국 이름으로 해줘."""
 
 
@@ -91,12 +95,31 @@ async def suggest_characters(idea: str) -> list[dict]:
     )
 
     result = _parse_json(raw)
-    return result.get("characters", [])
+    chars = result.get("characters", [])
+    # 동물 캐릭터 gender 후처리
+    for c in chars:
+        if _is_animal_character(c):
+            c["gender"] = "기타"
+    return chars
+
+
+_ANIMAL_KEYWORDS = (
+    "강아지", "개", "고양이", "포메", "반려견", "반려묘", "새", "햄스터",
+    "토끼", "거북이", "앵무새", "잉꼬", "치와와", "푸들", "말티즈",
+    "시바", "웰시코기", "코기", "래브라도", "골든리트리버", "비숑",
+    "시츄", "페르시안", "러시안블루", "스코티시폴드", "강아지들",
+    "dog", "cat", "puppy", "kitten", "pet", "animal",
+)
+
+
+def _is_animal_character(char: dict) -> bool:
+    """캐릭터 이름·설명에 동물 키워드가 있으면 True."""
+    text = f"{char.get('name', '')} {char.get('description', '')}".lower()
+    return any(kw in text for kw in _ANIMAL_KEYWORDS)
 
 
 def _name_to_ref_key(name: str) -> str:
     """한글 이름 → 영문 snake_case ref_key (간이 변환)."""
-    import re
     # 간단한 로마자 변환: 한글이면 그대로 영문화할 수 없으므로
     # 비 ASCII 문자는 유니코드 코드 포인트 기반 해시
     ascii_name = ""
@@ -111,33 +134,103 @@ def _name_to_ref_key(name: str) -> str:
     return re.sub(r"_+", "_", ascii_name).strip("_") or f"char_{abs(hash(name)) % 10000}"
 
 
-def _merge_brief_characters(result: dict, brief_chars: list[dict]) -> None:
-    """idea_brief.characters 중 AI 결과에 빠진 인물을 강제 추가한다.
+def _dedupe_description(user_desc: str, ai_desc: str) -> str:
+    """사용자 원문 + AI 보충을 합치되, 중복 문장 제거·마침표 정리."""
+    if not ai_desc or ai_desc == user_desc:
+        return user_desc
+    if ai_desc.startswith(user_desc):
+        return ai_desc  # AI가 이미 원문으로 시작
+    # AI 보충에서 원문과 겹치는 문장 제거
+    user_sentences = {s.strip().rstrip(".") for s in user_desc.split(".") if s.strip()}
+    ai_parts = []
+    for s in ai_desc.split("."):
+        s = s.strip()
+        if not s:
+            continue
+        if s.rstrip(".") in user_sentences:
+            continue  # 원문에 이미 있는 문장 제외
+        ai_parts.append(s)
+    if not ai_parts:
+        return user_desc
+    combined = user_desc.rstrip(". ") + ". " + ". ".join(ai_parts)
+    # 마침표 중복 정리
+    combined = re.sub(r"\.{2,}", ".", combined)
+    combined = re.sub(r"\.\s*\.", ".", combined)
+    return combined.strip()
 
-    이름 기준 매칭 (대소문자·공백 무시). 빠진 인물에는 ref_key 자동 생성.
+
+def _merge_brief_characters(
+    result: dict,
+    brief_chars: list[dict],
+    card_chars: list[dict] | None = None,
+) -> None:
+    """AI 결과에 사용자 값(카드·기획서)을 강제 적용한다.
+
+    card_chars(게이트1 카드)가 있으면 최우선 원본. 없으면 brief_chars가 원본.
+    규칙:
+    - gender/name/age: 카드 값이 있으면 무조건 그대로(동물 자동 "기타"는 카드 값이 비었을 때만)
+    - description: 카드 원문을 맨 앞에 유지, AI 보충은 뒤에 (중복 문장 제외)
+    - AI가 누락한 인물: 강제 추가 (ref_key 자동 생성)
     """
     ai_chars = result.get("characters", [])
 
-    # 이름 정규화 맵
     def norm(n):
         return (n or "").strip().lower().replace(" ", "")
 
-    ai_names = {norm(c.get("name", "")) for c in ai_chars}
+    ai_name_map = {norm(c.get("name", "")): c for c in ai_chars}
 
-    for bc in brief_chars:
-        bname = norm(bc.get("name", ""))
-        if not bname or bname in ai_names:
+    # 카드 값이 있으면 카드 기준, 없으면 brief 기준
+    # 카드와 brief 둘 다 있으면 카드가 우선 (카드 이름으로 매칭)
+    primary_chars = card_chars if card_chars else brief_chars
+
+    for pc in primary_chars:
+        pname = norm(pc.get("name", ""))
+        if not pname:
             continue
-        # AI가 누락한 인물 → 추가
-        new_char = {
-            "ref_key": _name_to_ref_key(bc.get("name", "")),
-            "name": bc.get("name", ""),
-            "gender": bc.get("gender", "기타"),
-            "age": bc.get("age", ""),
-            "description": bc.get("description", ""),
-        }
-        ai_chars.append(new_char)
-        ai_names.add(bname)
+
+        user_desc = (pc.get("description") or "").strip()
+        user_gender = (pc.get("gender") or "").strip()
+        user_age = str(pc.get("age") or "").strip()
+
+        if pname in ai_name_map:
+            # ── AI가 포함한 인물 → 카드 값 강제 적용 ──
+            ac = ai_name_map[pname]
+            ai_desc = (ac.get("description") or "").strip()
+
+            # description: 카드 원문 맨 앞 + AI 보충(중복 제거)
+            if user_desc:
+                ac["description"] = _dedupe_description(user_desc, ai_desc)
+
+            # gender: 카드 값 무조건 우선. 비었을 때만 AI 값 유지 + 동물 자동 "기타"
+            if user_gender:
+                ac["gender"] = user_gender
+            else:
+                # 카드에서 gender 미설정 → AI 값 유지하되 동물이면 "기타"
+                if _is_animal_character(pc) or _is_animal_character(ac):
+                    ac["gender"] = "기타"
+
+            # age: 카드 값 우선
+            if user_age:
+                ac["age"] = user_age
+
+            # name: 카드 값 우선
+            if pc.get("name"):
+                ac["name"] = pc["name"]
+        else:
+            # ── AI가 누락한 인물 → 추가 ──
+            gender = user_gender or "기타"
+            # 동물인데 gender 미설정이면 "기타"
+            if not user_gender and _is_animal_character(pc):
+                gender = "기타"
+            new_char = {
+                "ref_key": _name_to_ref_key(pc.get("name", "")),
+                "name": pc.get("name", ""),
+                "gender": gender,
+                "age": pc.get("age", ""),
+                "description": user_desc,
+            }
+            ai_chars.append(new_char)
+            ai_name_map[pname] = new_char
 
     result["characters"] = ai_chars
 
@@ -205,7 +298,7 @@ async def generate_planning(
             if c.get("age"):
                 parts.append(f"나이: {c['age']}세")
             prompt += f"\n- {', '.join(parts)}"
-        prompt += "\n\n위 등장인물을 반드시 포함해서 기획안을 만들어줘. 등장인물의 ref_key는 네가 생성하고, description은 사용자가 입력한 추가설명을 반영해서 보강해줘."
+        prompt += "\n\n위 등장인물을 반드시 포함해서 기획안을 만들어줘. 등장인물의 ref_key는 네가 생성하고, description은 사용자가 입력한 추가설명 원문을 앞부분에 그대로 유지한 채 보충 내용만 뒤에 이어 붙여줘(원문 덮어쓰기 금지). 동물 캐릭터의 gender는 반드시 '기타'로."
     else:
         prompt += "\n\n위 아이디어로 웹툰 기획안을 만들어줘."
 
@@ -218,9 +311,21 @@ async def generate_planning(
 
     result = _parse_json(raw)
 
-    # idea_brief.characters 후처리 머지: AI가 누락한 인물을 강제 추가
-    if idea_brief and idea_brief.get("characters"):
-        _merge_brief_characters(result, idea_brief["characters"])
+    # 후처리 머지: 카드 값(characters) 우선, 기획서(idea_brief) 보조
+    brief_chars = (idea_brief or {}).get("characters", [])
+    if characters or brief_chars:
+        _merge_brief_characters(result, brief_chars, card_chars=characters)
+
+    # 동물 캐릭터 gender 후처리 — 카드/기획서에 없는 AI 전용 인물만 대상
+    merged_names = set()
+    if characters:
+        merged_names |= {(c.get("name") or "").strip().lower() for c in characters}
+    if brief_chars:
+        merged_names |= {(c.get("name") or "").strip().lower() for c in brief_chars}
+    for c in result.get("characters", []):
+        cname = (c.get("name") or "").strip().lower()
+        if cname not in merged_names and _is_animal_character(c):
+            c["gender"] = "기타"
 
     # synopsis가 dict(4단)이면 그대로, 문자열이면 기존 호환
     syn = result.get("synopsis")
@@ -272,7 +377,7 @@ IDEA_BRIEF_INSTRUCTION = f"""너는 웹툰 기획 어시스턴트야.
 
 규칙:
 - characters는 2~5명. 동물이면 종·색·특징을 description에 포함
-- characters의 gender는 "남", "여", "기타" 중 하나. 동물도 성별 추정(불명이면 "기타")
+- characters의 gender는 "남", "여", "기타" 중 하나. 동물 캐릭터(강아지·고양이·토끼 등)는 반드시 "기타"
 - characters의 age는 숫자 문자열. 동물이면 해당 동물 기준 나이 추정, 불명이면 빈 문자열
 - story는 단편 완결 구조 — 예고식 결말 금지, 기승전결 각 1~3문장
 - suggested의 genre는 반드시 {_GENRE_KEYS} 중 하나
@@ -351,6 +456,10 @@ async def generate_idea_brief(
     result.setdefault("story", {"ki": "", "seung": "", "jeon": "", "gyeol": ""})
     result.setdefault("tone", "")
     result.setdefault("suggested", {})
+    # 동물 캐릭터 gender 후처리
+    for c in result.get("characters", []):
+        if _is_animal_character(c):
+            c["gender"] = "기타"
     result["generated_at"] = datetime.now(timezone.utc).isoformat()
 
     return result
@@ -377,6 +486,10 @@ async def revise_idea_brief(existing_brief: dict, hint: str) -> dict:
     result.setdefault("story", {"ki": "", "seung": "", "jeon": "", "gyeol": ""})
     result.setdefault("tone", "")
     result.setdefault("suggested", existing_brief.get("suggested", {}))
+    # 동물 캐릭터 gender 후처리
+    for c in result.get("characters", []):
+        if _is_animal_character(c):
+            c["gender"] = "기타"
     result["generated_at"] = datetime.now(timezone.utc).isoformat()
 
     return result
