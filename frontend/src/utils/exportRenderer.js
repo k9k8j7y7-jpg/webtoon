@@ -313,13 +313,48 @@ async function processAllCuts(
   return results;
 }
 
+// ── 페이지 형식 헬퍼 ──
+
+const CUT_GAP_PX = 48;
+
+/**
+ * 컷 blobs → renderCutToCanvas 캔버스 배열 (composePageGrid 입력용)
+ */
+async function blobsToCanvases(blobs) {
+  const canvases = [];
+  for (const blob of blobs) {
+    if (!blob) { canvases.push(null); continue; }
+    const url = URL.createObjectURL(blob);
+    const img = await loadImage(url, false);
+    URL.revokeObjectURL(url);
+    const c = document.createElement('canvas');
+    c.width = img.naturalWidth;
+    c.height = img.naturalHeight;
+    c.getContext('2d').drawImage(img, 0, 0);
+    canvases.push(c);
+  }
+  return canvases;
+}
+
+/**
+ * 페이지 캔버스 배열 → blob 배열 (메모리 해제 포함)
+ */
+async function pageCanvasesToBlobs(pages) {
+  const result = [];
+  for (const pc of pages) {
+    result.push(await canvasToBlob(pc));
+    pc.width = 0; pc.height = 0;
+  }
+  return result;
+}
+
 // ── PNG ZIP Export ──
 
 export async function exportAsPNGZip(
   cuts,
   characters,
   getImageUrl,
-  { onProgress, signal, products } = {},
+  { onProgress, signal, products, pageFormat } = {},
 ) {
   const blobs = await processAllCuts(
     cuts,
@@ -337,6 +372,18 @@ export async function exportAsPNGZip(
     zip.file(name, blob);
   });
 
+  // 페이지 형식이 있으면 pages/ 폴더에 페이지 합성 이미지도 추가
+  if (pageFormat && pageFormat.per_page) {
+    const canvases = await blobsToCanvases(blobs);
+    const pages = composePageGrid(canvases.filter(Boolean), pageFormat);
+    const pageBlobs = await pageCanvasesToBlobs(pages);
+    pageBlobs.forEach((pb, i) => {
+      zip.file(`pages/page_${String(i + 1).padStart(2, '0')}.png`, pb);
+    });
+    // 컷 캔버스 메모리 해제
+    canvases.forEach(c => { if (c) { c.width = 0; c.height = 0; } });
+  }
+
   return zip.generateAsync({ type: 'blob', compression: 'STORE' });
 }
 
@@ -346,7 +393,7 @@ export async function exportAsVertical(
   cuts,
   characters,
   getImageUrl,
-  { onProgress, signal, products } = {},
+  { onProgress, signal, products, pageFormat } = {},
 ) {
   const blobs = await processAllCuts(
     cuts,
@@ -357,6 +404,37 @@ export async function exportAsVertical(
     products,
   );
 
+  // 페이지 형식이 있으면 → 페이지 합성 후 세로 이어붙이기 (간격 CUT_GAP_PX)
+  if (pageFormat && pageFormat.per_page) {
+    const canvases = await blobsToCanvases(blobs);
+    const pages = composePageGrid(canvases.filter(Boolean), pageFormat);
+    canvases.forEach(c => { if (c) { c.width = 0; c.height = 0; } });
+
+    const targetW = Math.max(...pages.map(p => p.width));
+    const totalH = pages.reduce((sum, p) => sum + p.height, 0) + CUT_GAP_PX * (pages.length - 1);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = targetW;
+    canvas.height = totalH;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, targetW, totalH);
+
+    let y = 0;
+    for (let i = 0; i < pages.length; i++) {
+      const pg = pages[i];
+      const x = Math.floor((targetW - pg.width) / 2);
+      ctx.drawImage(pg, x, y);
+      y += pg.height + CUT_GAP_PX;
+      pg.width = 0; pg.height = 0;
+    }
+
+    const result = await canvasToBlob(canvas);
+    canvas.width = 0; canvas.height = 0;
+    return result;
+  }
+
+  // vertical 형식 — 현행 그대로 (컷 이어붙이기)
   const imgs = await Promise.all(
     blobs.map((b) =>
       b ? loadImage(URL.createObjectURL(b), false) : Promise.resolve(null),
@@ -397,7 +475,7 @@ export async function exportAsInstagram(
   cuts,
   characters,
   getImageUrl,
-  { onProgress, signal, products } = {},
+  { onProgress, signal, products, pageFormat } = {},
 ) {
   const blobs = await processAllCuts(
     cuts,
@@ -408,6 +486,29 @@ export async function exportAsInstagram(
     products,
   );
 
+  // 페이지 형식이 있으면 → 페이지 1장씩 인스타 크기로
+  if (pageFormat && pageFormat.per_page) {
+    const canvases = await blobsToCanvases(blobs);
+    // 인스타 크기로 composePageGrid — 2x2는 1080×1080, 3단은 1080×(비율에 따름)
+    const pages = composePageGrid(canvases.filter(Boolean), pageFormat, INSTA_SIZE);
+    canvases.forEach(c => { if (c) { c.width = 0; c.height = 0; } });
+
+    if (pages.length === 1) {
+      const result = await canvasToBlob(pages[0]);
+      pages[0].width = 0; pages[0].height = 0;
+      return result;
+    }
+
+    const zip = new JSZip();
+    for (let i = 0; i < pages.length; i++) {
+      const pb = await canvasToBlob(pages[i]);
+      zip.file(`instagram_page_${String(i + 1).padStart(2, '0')}.png`, pb);
+      pages[i].width = 0; pages[i].height = 0;
+    }
+    return zip.generateAsync({ type: 'blob', compression: 'STORE' });
+  }
+
+  // vertical 형식 — 현행 그대로 (컷 1장씩 letterbox)
   const zip = new JSZip();
   for (let i = 0; i < blobs.length; i++) {
     const blob = blobs[i];
@@ -499,12 +600,12 @@ export async function exportAsA4Single(
   return result;
 }
 
-// 모드 2 — 그리드 (4×3, 페이지 분할)
+// 모드 2 — 그리드 (4×3, 페이지 분할) 또는 페이지 형식 → A4
 export async function exportAsA4Grid(
   cuts,
   characters,
   getImageUrl,
-  { onProgress, signal, products } = {},
+  { onProgress, signal, products, pageFormat } = {},
 ) {
   const blobs = await processAllCuts(
     cuts,
@@ -515,6 +616,44 @@ export async function exportAsA4Grid(
     products,
   );
 
+  // 페이지 형식이 있으면 → 페이지 합성 → 각 페이지를 A4 한 면에
+  if (pageFormat && pageFormat.per_page) {
+    const canvases = await blobsToCanvases(blobs);
+    const pages = composePageGrid(canvases.filter(Boolean), pageFormat);
+    canvases.forEach(c => { if (c) { c.width = 0; c.height = 0; } });
+
+    const zip = new JSZip();
+    for (let i = 0; i < pages.length; i++) {
+      if (signal?.aborted) throw new DOMException('취소됨', 'AbortError');
+
+      const pg = pages[i];
+      const contentW = A4_WIDTH - A4_MARGIN * 2;
+      const contentH = A4_HEIGHT - A4_MARGIN * 2;
+      const scale = Math.min(contentW / pg.width, contentH / pg.height);
+      const imgW = Math.round(pg.width * scale);
+      const imgH = Math.round(pg.height * scale);
+      const ox = A4_MARGIN + Math.floor((contentW - imgW) / 2);
+      const oy = A4_MARGIN + Math.floor((contentH - imgH) / 2);
+
+      const a4 = document.createElement('canvas');
+      a4.width = A4_WIDTH;
+      a4.height = A4_HEIGHT;
+      const ctx = a4.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, A4_WIDTH, A4_HEIGHT);
+      ctx.drawImage(pg, ox, oy, imgW, imgH);
+      pg.width = 0; pg.height = 0;
+
+      const pb = await canvasToBlob(a4);
+      a4.width = 0; a4.height = 0;
+
+      if (pages.length === 1) return pb;
+      zip.file(`A4-page_${String(i + 1).padStart(2, '0')}.png`, pb);
+    }
+    return zip.generateAsync({ type: 'blob', compression: 'STORE' });
+  }
+
+  // vertical 형식 — 현행 그리드 (4×3)
   const validBlobs = [];
   for (let i = 0; i < blobs.length; i++) {
     if (blobs[i]) validBlobs.push({ blob: blobs[i], cutNumber: cuts[i].cut_number });

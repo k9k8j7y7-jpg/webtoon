@@ -281,7 +281,11 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
 
     const getUrl = (cut) => imageUrl(getCutImageUrl(cut));
     const onProgress = (done) => setExportModal(prev => prev ? { ...prev, done } : prev);
-    const opts = { onProgress, signal: abortCtrl.signal, products };
+    // 페이지 형식 전달 (vertical이면 null → 현행 경로)
+    const pf = gateStatus?.page_format || 'vertical';
+    const pfObj = PAGE_FORMATS[pf];
+    const pfOpt = (pfObj && pfObj.per_page) ? pfObj : null;
+    const opts = { onProgress, signal: abortCtrl.signal, products, pageFormat: pfOpt };
 
     try {
       let blob;
