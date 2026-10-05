@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="ko" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EziToon 모바일 목업 - 2. 게이트 진행 공통 프레임</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            eziboat: {
+              bg: '#0A0F1D',
+              card: 'rgba(255, 255, 255, 0.05)',
+              border: 'rgba(255, 255, 255, 0.1)',
+              purple: '#A855F7',
+              cyan: '#06B6D4',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;800&family=Outfit:wght@500;700;800&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Noto Sans KR', sans-serif;
+      background-color: #060913;
+      color: #F3F4F6;
+    }
+    .scrollbar-hide::-webkit-scrollbar {
+      display: none;
+    }
+    .scrollbar-hide {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    /* 라이트 모드 대응 */
+    html:not(.dark) body {
+      background-color: #F1F5F9;
+      color: #0F172A;
+    }
+    html:not(.dark) .phone-container {
+      background-color: #FFFFFF;
+      border-color: #E2E8F0;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+    }
+    html:not(.dark) .glass-card {
+      background: rgba(255, 255, 255, 0.8);
+      border: 1px solid rgba(226, 232, 240, 0.8);
+      color: #0F172A;
+    }
+    html:not(.dark) .glass-header {
+      background: rgba(255, 255, 255, 0.9);
+      border-bottom-color: rgba(226, 232, 240, 0.8);
+    }
+    html:not(.dark) .text-sub {
+      color: #64748B;
+    }
+    .glass-card {
+      background: rgba(255, 255, 255, 0.04);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .glass-header {
+      background: rgba(10, 15, 29, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+    .neon-text {
+      background: linear-gradient(135deg, #C084FC 0%, #38BDF8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-start p-0 sm:p-6">
+
+  <!-- PC 상단 목업 네비게이터 스위처 -->
+  <header class="w-full max-w-[440px] mb-3 px-4 py-2 bg-slate-900/90 text-white rounded-xl text-xs flex items-center justify-between border border-white/10 hidden sm:flex shadow-lg z-50">
+    <div class="flex items-center gap-1 font-bold text-cyan-400">
+      <span class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
+      EziToon Mobile Preview
+    </div>
+    <div class="flex items-center gap-2">
+      <select onchange="location.href=this.value" class="bg-slate-800 text-white border border-white/20 rounded px-2 py-1 outline-none text-xs cursor-pointer">
+        <option value="1_project_list.html">1. 프로젝트/에피소드 목록</option>
+        <option value="2_gate_progress.html" selected>2. 게이트 진행 공통 프레임</option>
+        <option value="3_gate5_review.html">3. 게이트5 이미지 검수</option>
+        <option value="4_public_viewer.html">4. 공개 뷰어</option>
+      </select>
+      <button onclick="toggleTheme()" class="p-1 rounded bg-white/10 hover:bg-white/20 transition" title="다크/라이트 테마 전환">
+        🌓
+      </button>
+    </div>
+  </header>
+
+  <!-- iPhone 14 Pro Frame Container (390px Target) -->
+  <div class="phone-container w-full sm:w-[390px] h-full sm:h-[844px] bg-[#0A0F1D] sm:rounded-[48px] border-0 sm:border-[10px] border-slate-800 shadow-[0_0_60px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col relative transition-colors duration-300">
+    
+    <!-- iPhone Top Notch -->
+    <div class="w-full h-11 bg-transparent shrink-0 flex items-center justify-between px-6 pt-2 select-none z-50">
+      <span class="text-xs font-semibold tracking-tight text-white dark:text-white">09:41</span>
+      <div class="w-24 h-5 bg-black rounded-full mx-auto hidden sm:block"></div>
+      <div class="flex items-center gap-1.5 text-xs text-white dark:text-white">
+        <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.22 19.55 10.57 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9z"/></svg>
+        <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M12 4C7.31 4 3.07 5.9 0 8.98L12 21 24 8.98C20.93 5.9 16.69 4 12 4z"/></svg>
+        <div class="w-5 h-2.5 border border-current rounded-sm p-0.5 flex items-center">
+          <div class="w-full h-full bg-current rounded-xs"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- App Header -->
+    <header class="glass-header sticky top-0 w-full h-14 border-b border-white/10 px-3 flex items-center justify-between z-40 shrink-0">
+      <div class="flex items-center gap-2 max-w-[60%]">
+        <a href="1_project_list.html" class="p-1 rounded-lg hover:bg-white/10 text-gray-300 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
+        </a>
+        <h1 class="text-sm font-bold text-white dark:text-white truncate">여름날의 추억 (EP.02)</h1>
+      </div>
+      <div class="flex items-center gap-2">
+        <div class="flex items-center gap-1 px-2.5 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-bold">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          <span>120 P</span>
+        </div>
+        <div class="w-7 h-7 rounded-full bg-slate-800 border border-white/10 flex items-center justify-center text-[10px] font-bold text-purple-300">
+          김
+        </div>
+      </div>
+    </header>
+
+    <!-- 5-Step Gate Progress Bar (Horizontal Scrollable + No Text Cutoff) -->
+    <div class="w-full bg-slate-950/80 border-b border-white/10 px-3 py-2.5 shrink-0 z-30">
+      <div id="step-bar" class="flex items-center gap-1.5 overflow-x-auto scrollbar-hide py-0.5">
+        
+        <!-- Step 1: 기획 (Approved) -->
+        <div class="flex items-center shrink-0">
+          <button class="flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[11px] font-bold whitespace-nowrap">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+            <span>기획</span>
+          </button>
+          <div class="w-3 h-0.5 bg-emerald-500/50 mx-1"></div>
+        </div>
+
+        <!-- Step 2: 대본 (Approved) -->
+        <div class="flex items-center shrink-0">
+          <button class="flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[11px] font-bold whitespace-nowrap">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+            <span>대본</span>
+          </button>
+          <div class="w-3 h-0.5 bg-purple-500/50 mx-1"></div>
+        </div>
+
+        <!-- Step 3: 자산 (Active Current Step 🔥) -->
+        <div class="flex items-center shrink-0">
+          <button class="flex items-center gap-1 px-3 py-1 rounded-full bg-gradient-to-r from-purple-600 to-cyan-500 text-white font-extrabold text-xs whitespace-nowrap shadow-[0_0_12px_rgba(168,85,247,0.5)] ring-2 ring-cyan-400 ring-offset-1 ring-offset-slate-950">
+            <span class="w-1.5 h-1.5 rounded-full bg-white animate-ping"></span>
+            <span>3. 자산</span>
+          </button>
+          <div class="w-3 h-0.5 bg-white/10 mx-1"></div>
+        </div>
+
+        <!-- Step 4: 콘티&장소 (Locked/Next) -->
+        <div class="flex items-center shrink-0">
+          <button class="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/5 text-gray-400 border border-white/10 text-[11px] font-medium whitespace-nowrap opacity-60">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+            <span>콘티&amp;장소</span>
+          </button>
+          <div class="w-3 h-0.5 bg-white/10 mx-1"></div>
+        </div>
+
+        <!-- Step 5: 이미지 (Locked/Next) -->
+        <div class="flex items-center shrink-0">
+          <a href="3_gate5_review.html" class="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/5 text-gray-400 border border-white/10 text-[11px] font-medium whitespace-nowrap opacity-60">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+            <span>이미지</span>
+          </a>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Step Title Bar -->
+    <div class="px-4 py-3 bg-slate-900/60 border-b border-white/5 flex items-center justify-between shrink-0">
+      <div>
+        <span class="text-[10px] font-bold text-cyan-400 tracking-wider">GATE 3 OF 5</span>
+        <h2 class="text-sm font-bold text-white dark:text-white">캐릭터 자산 &amp; 화풍 설정</h2>
+      </div>
+      <span class="px-2 py-1 rounded-md bg-purple-500/20 text-purple-300 text-[11px] font-semibold border border-purple-500/30">
+        AI 바이블 적용중
+      </span>
+    </div>
+
+    <!-- Main Workspace Content (Scrollable) -->
+    <main class="flex-1 overflow-y-auto px-4 py-4 space-y-4 scrollbar-hide pb-20">
+
+      <!-- AI Guide Tip Card -->
+      <div class="glass-card rounded-xl p-3 border-l-4 border-l-cyan-400 flex items-start gap-2.5">
+        <span class="text-base shrink-0">💡</span>
+        <div class="text-xs">
+          <p class="font-bold text-cyan-300 mb-0.5">화풍 및 등장인물 팁</p>
+          <p class="text-sub leading-relaxed">캐릭터의 얼굴 특징과 헤어 스타일이 잘 보이는 정면 사진을 2장 이상 등록해 주세요.</p>
+        </div>
+      </div>
+
+      <!-- Character Card Section 1 -->
+      <div class="glass-card rounded-2xl p-4 space-y-3">
+        <div class="flex items-center justify-between border-b border-white/10 pb-2.5">
+          <div class="flex items-center gap-2">
+            <span class="w-6 h-6 rounded-full bg-purple-500/20 text-purple-300 flex items-center justify-center font-bold text-xs">1</span>
+            <h3 class="text-xs font-bold text-white dark:text-white">남주인공 (민우)</h3>
+          </div>
+          <span class="text-[11px] text-cyan-400 font-semibold">참조사진 3장</span>
+        </div>
+
+        <!-- Character Photo Grid -->
+        <div class="grid grid-cols-3 gap-2">
+          <div class="aspect-square rounded-xl bg-slate-800 border border-white/10 overflow-hidden relative group">
+            <img src="https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&w=200&q=80" class="w-full h-full object-cover">
+            <span class="absolute bottom-1 left-1 px-1 bg-black/70 text-[9px] text-white rounded">대표</span>
+          </div>
+          <div class="aspect-square rounded-xl bg-slate-800 border border-white/10 overflow-hidden relative group">
+            <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80" class="w-full h-full object-cover">
+          </div>
+          <button class="aspect-square rounded-xl border border-dashed border-white/20 hover:border-cyan-400/50 flex flex-col items-center justify-center text-gray-400 hover:text-cyan-400 transition bg-white/5">
+            <svg class="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            <span class="text-[9px]">추가</span>
+          </button>
+        </div>
+
+        <!-- Prompt Description -->
+        <div class="space-y-1">
+          <label class="text-[11px] font-medium text-gray-300">캐릭터 외모 특징 프롬프트</label>
+          <input type="text" value="검은 단발 머리, 훈훈한 20대 대학생 외모, 날카로운 눈매" class="w-full px-3 py-2 rounded-lg bg-slate-900/80 border border-white/10 text-xs text-white outline-none focus:border-cyan-400">
+        </div>
+      </div>
+
+      <!-- Character Card Section 2 -->
+      <div class="glass-card rounded-2xl p-4 space-y-3">
+        <div class="flex items-center justify-between border-b border-white/10 pb-2.5">
+          <div class="flex items-center gap-2">
+            <span class="w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-300 flex items-center justify-center font-bold text-xs">2</span>
+            <h3 class="text-xs font-bold text-white dark:text-white">여주인공 (지은)</h3>
+          </div>
+          <span class="text-[11px] text-cyan-400 font-semibold">참조사진 2장</span>
+        </div>
+
+        <div class="grid grid-cols-3 gap-2">
+          <div class="aspect-square rounded-xl bg-slate-800 border border-white/10 overflow-hidden relative group">
+            <img src="https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=200&q=80" class="w-full h-full object-cover">
+            <span class="absolute bottom-1 left-1 px-1 bg-black/70 text-[9px] text-white rounded">대표</span>
+          </div>
+          <div class="aspect-square rounded-xl bg-slate-800 border border-white/10 overflow-hidden relative group">
+            <img src="https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=200&q=80" class="w-full h-full object-cover">
+          </div>
+          <button class="aspect-square rounded-xl border border-dashed border-white/20 hover:border-cyan-400/50 flex flex-col items-center justify-center text-gray-400 hover:text-cyan-400 transition bg-white/5">
+            <svg class="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            <span class="text-[9px]">추가</span>
+          </button>
+        </div>
+
+        <div class="space-y-1">
+          <label class="text-[11px] font-medium text-gray-300">캐릭터 외모 특징 프롬프트</label>
+          <input type="text" value="긴 갈색 웨이브 머리, 맑은 눈망울, 하얀 피케 셔츠 차림" class="w-full px-3 py-2 rounded-lg bg-slate-900/80 border border-white/10 text-xs text-white outline-none focus:border-cyan-400">
+        </div>
+      </div>
+
+    </main>
+
+    <!-- Bottom Action Navigation Controls -->
+    <div class="glass-header w-full h-16 border-t border-white/10 px-4 flex items-center justify-between shrink-0 z-40">
+      <button class="px-4 py-2.5 rounded-xl bg-white/10 text-gray-300 text-xs font-bold hover:bg-white/20 transition flex items-center gap-1">
+        &larr; 이전 (대본)
+      </button>
+      <a href="3_gate5_review.html" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-cyan-500 text-white text-xs font-bold shadow-lg shadow-purple-500/25 hover:opacity-90 transition flex items-center gap-1">
+        <span>다음: 콘티 생성 &rarr;</span>
+      </a>
+    </div>
+
+  </div>
+
+  <script>
+    function toggleTheme() {
+      document.documentElement.classList.toggle('dark');
+    }
+  </script>
+</body>
+</html>

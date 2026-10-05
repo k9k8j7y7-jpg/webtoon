@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="ko" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EziToon 모바일 목업 - 4. 공개 뷰어</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            eziboat: {
+              bg: '#0A0F1D',
+              card: 'rgba(255, 255, 255, 0.05)',
+              border: 'rgba(255, 255, 255, 0.1)',
+              purple: '#A855F7',
+              cyan: '#06B6D4',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;800&family=Outfit:wght@500;700;800&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Noto Sans KR', sans-serif;
+      background-color: #060913;
+      color: #F3F4F6;
+    }
+    .scrollbar-hide::-webkit-scrollbar {
+      display: none;
+    }
+    .scrollbar-hide {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    /* 라이트 모드 대응 */
+    html:not(.dark) body {
+      background-color: #F8FAFC;
+      color: #0F172A;
+    }
+    html:not(.dark) .phone-container {
+      background-color: #FFFFFF;
+      border-color: #E2E8F0;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+    }
+    html:not(.dark) .glass-card {
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid rgba(226, 232, 240, 0.9);
+      color: #0F172A;
+    }
+    html:not(.dark) .glass-header {
+      background: rgba(255, 255, 255, 0.95);
+      border-bottom-color: rgba(226, 232, 240, 0.9);
+    }
+    .glass-card {
+      background: rgba(255, 255, 255, 0.04);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .glass-header {
+      background: rgba(10, 15, 29, 0.9);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+    .neon-text {
+      background: linear-gradient(135deg, #C084FC 0%, #38BDF8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    /* 컷 간격 상수: 42px (지시서 기준 넉넉한 간격) */
+    .cut-gap {
+      margin-bottom: 42px;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-start p-0 sm:p-6">
+
+  <!-- PC 상단 목업 네비게이터 스위처 -->
+  <header class="w-full max-w-[440px] mb-3 px-4 py-2 bg-slate-900/90 text-white rounded-xl text-xs flex items-center justify-between border border-white/10 hidden sm:flex shadow-lg z-50">
+    <div class="flex items-center gap-1 font-bold text-cyan-400">
+      <span class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
+      EziToon Mobile Preview
+    </div>
+    <div class="flex items-center gap-2">
+      <select onchange="location.href=this.value" class="bg-slate-800 text-white border border-white/20 rounded px-2 py-1 outline-none text-xs cursor-pointer">
+        <option value="1_project_list.html">1. 프로젝트/에피소드 목록</option>
+        <option value="2_gate_progress.html">2. 게이트 진행 공통 프레임</option>
+        <option value="3_gate5_review.html">3. 게이트5 이미지 검수</option>
+        <option value="4_public_viewer.html" selected>4. 공개 뷰어</option>
+      </select>
+      <button onclick="toggleTheme()" class="p-1 rounded bg-white/10 hover:bg-white/20 transition" title="다크/라이트 테마 전환">
+        🌓
+      </button>
+    </div>
+  </header>
+
+  <!-- iPhone 14 Pro Frame Container (390px Target) -->
+  <div class="phone-container w-full sm:w-[390px] h-full sm:h-[844px] bg-[#0A0F1D] sm:rounded-[48px] border-0 sm:border-[10px] border-slate-800 shadow-[0_0_60px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col relative transition-colors duration-300">
+    
+    <!-- iPhone Top Notch -->
+    <div class="w-full h-11 bg-transparent shrink-0 flex items-center justify-between px-6 pt-2 select-none z-50">
+      <span class="text-xs font-semibold tracking-tight text-white dark:text-white">09:41</span>
+      <div class="w-24 h-5 bg-black rounded-full mx-auto hidden sm:block"></div>
+      <div class="flex items-center gap-1.5 text-xs text-white dark:text-white">
+        <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.22 19.55 10.57 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9z"/></svg>
+        <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M12 4C7.31 4 3.07 5.9 0 8.98L12 21 24 8.98C20.93 5.9 16.69 4 12 4z"/></svg>
+        <div class="w-5 h-2.5 border border-current rounded-sm p-0.5 flex items-center">
+          <div class="w-full h-full bg-current rounded-xs"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Viewer Sticky Header -->
+    <header class="glass-header sticky top-0 w-full h-14 border-b border-white/10 px-3 flex items-center justify-between z-40 shrink-0">
+      <div class="flex items-center gap-2 max-w-[70%]">
+        <a href="1_project_list.html" class="p-1 rounded-lg hover:bg-white/10 text-gray-300 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
+        </a>
+        <div class="truncate">
+          <h1 class="text-xs font-extrabold text-white dark:text-white truncate">파도를 닮은 너에게</h1>
+          <p class="text-[10px] text-cyan-400 font-semibold truncate">EP.03 여름날의 바다</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="shareLink()" class="p-1.5 rounded-full hover:bg-white/10 text-gray-300 transition" title="공유하기">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
+        </button>
+        <span class="text-xl font-black tracking-tighter neon-text font-['Outfit']">EziToon</span>
+      </div>
+    </header>
+
+    <!-- Webtoon Vertical Scroll Canvas (Cut-by-Cut Scrollable Area with Generous Gap) -->
+    <main class="flex-1 overflow-y-auto scrollbar-hide py-4 px-0 bg-[#070A14] dark:bg-[#070A14]">
+      
+      <!-- Episode Title Badge Card inside canvas -->
+      <div class="mx-4 mb-8 p-4 rounded-2xl bg-gradient-to-br from-purple-900/30 to-cyan-900/30 border border-white/10 text-center">
+        <span class="px-2.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 text-[10px] font-bold border border-cyan-500/30">
+          SHORT WEBTOON
+        </span>
+        <h2 class="text-lg font-bold text-white mt-1">EP.03 파도를 닮은 너에게</h2>
+        <p class="text-xs text-gray-400 mt-1">글/그림: EziToon AI · 패킷 제작작</p>
+      </div>
+
+      <!-- Cut 1 (Vertical Cut with 42px Gap) -->
+      <div class="w-full cut-gap relative group">
+        <div class="relative w-full aspect-[9/14] bg-slate-900 overflow-hidden shadow-2xl">
+          <img src="https://images.unsplash.com/photo-1579783902614-a3fb3927b675?auto=format&fit=crop&w=800&q=80" alt="웹툰 컷 1" class="w-full h-full object-cover">
+          
+          <!-- Speech Bubble Overlay -->
+          <div class="absolute top-8 left-6 max-w-[70%] bg-white text-slate-900 px-4 py-3 rounded-3xl rounded-tl-none text-xs font-bold shadow-2xl border border-slate-300 leading-relaxed">
+            "지은아... 정말 이번 여름이 지나면 떠나는 거야?"
+          </div>
+
+          <span class="absolute bottom-3 left-3 text-[10px] text-white/50 bg-black/40 px-2 py-0.5 rounded backdrop-blur">CUT 01</span>
+        </div>
+      </div>
+
+      <!-- Cut 2 (Vertical Cut with 42px Gap) -->
+      <div class="w-full cut-gap relative group">
+        <div class="relative w-full aspect-[9/14] bg-slate-900 overflow-hidden shadow-2xl">
+          <img src="https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=800&q=80" alt="웹툰 컷 2" class="w-full h-full object-cover">
+          
+          <!-- Speech Bubble Overlay Right -->
+          <div class="absolute bottom-10 right-6 max-w-[75%] bg-white text-slate-900 px-4 py-3 rounded-3xl rounded-br-none text-xs font-bold shadow-2xl border border-slate-300 leading-relaxed">
+            "응, 하지만 약속할게. 다시 이 바다로 돌아올 거라고."
+          </div>
+
+          <!-- Sound Effect Overlay -->
+          <div class="absolute top-10 left-8 text-amber-300 font-black italic text-2xl tracking-widest drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)] transform -rotate-12">
+            샤아아-!
+          </div>
+
+          <span class="absolute bottom-3 left-3 text-[10px] text-white/50 bg-black/40 px-2 py-0.5 rounded backdrop-blur">CUT 02</span>
+        </div>
+      </div>
+
+      <!-- Cut 3 (Vertical Cut with 42px Gap) -->
+      <div class="w-full cut-gap relative group">
+        <div class="relative w-full aspect-[9/14] bg-slate-900 overflow-hidden shadow-2xl">
+          <img src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80" alt="웹툰 컷 3" class="w-full h-full object-cover">
+          
+          <!-- Narration Box Overlay -->
+          <div class="absolute top-12 inset-x-8 bg-slate-950/85 text-cyan-200 p-3 rounded-xl text-center text-xs font-medium border border-cyan-500/30 backdrop-blur leading-relaxed">
+            파도 소리만이 두 사람의 아쉬운 침묵을 감싸안고 있었다.
+          </div>
+
+          <span class="absolute bottom-3 left-3 text-[10px] text-white/50 bg-black/40 px-2 py-0.5 rounded backdrop-blur">CUT 03 (FIN)</span>
+        </div>
+      </div>
+
+      <!-- Bottom Interactive Social & Like Bar -->
+      <div class="mx-4 py-8 flex flex-col items-center justify-center border-t border-white/10 space-y-4">
+        
+        <div class="flex items-center gap-6">
+          <div class="flex items-center gap-1.5 text-gray-400 text-sm font-semibold">
+            <svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+            <span>2,410</span>
+          </div>
+
+          <!-- Like Heart Toggle Button -->
+          <button id="like-btn" onclick="toggleLike()" class="flex items-center gap-2 px-6 py-2.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold text-sm transition-all duration-300 transform active:scale-95 shadow">
+            <span id="like-icon" class="text-base">🤍</span>
+            <span id="like-count">482</span>
+          </button>
+        </div>
+
+        <div class="flex gap-2">
+          <button class="px-3 py-1.5 rounded-lg bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 text-xs font-medium">카톡 공유</button>
+          <button onclick="shareLink()" class="px-3 py-1.5 rounded-lg bg-white/5 text-gray-300 border border-white/10 text-xs font-medium">링크 복사</button>
+        </div>
+      </div>
+
+      <!-- Bottom High-Impact CTA Section ("나도 만들기") -->
+      <div class="mx-4 my-6 p-6 rounded-3xl bg-gradient-to-b from-purple-950/60 to-slate-950 border border-purple-500/40 text-center space-y-4 shadow-2xl relative overflow-hidden">
+        <div class="absolute -top-10 -right-10 w-32 h-32 bg-cyan-500/20 rounded-full blur-2xl"></div>
+        <div class="relative z-10 space-y-2">
+          <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-gradient-to-r from-purple-500 to-cyan-500 text-white">
+            EziToon AI 웹툰 만들기
+          </span>
+          <h3 class="text-base font-extrabold text-white">나만의 사진으로 웹툰을 만들어보세요</h3>
+          <p class="text-xs text-gray-400">그림 실력이 없어도 OK! AI가 알아서 스토리와 컷을 생성해 줍니다.</p>
+        </div>
+
+        <a href="1_project_list.html" class="block w-full py-4 px-6 rounded-full bg-gradient-to-r from-purple-600 via-purple-500 to-cyan-500 text-white font-black text-base shadow-[0_0_30px_rgba(168,85,247,0.5)] hover:scale-[1.02] active:scale-[0.98] transition-transform">
+          🚀 나도 만들어보기
+        </a>
+
+        <p class="text-[11px] text-gray-500">카카오 · 구글 · 네이버로 3초 만에 무료 시작</p>
+      </div>
+
+      <!-- Footer Footer -->
+      <footer class="text-center py-6 text-[11px] text-gray-600 border-t border-white/5">
+        &copy; 2026 EziToon Inc. All rights reserved.
+      </footer>
+
+    </main>
+
+  </div>
+
+  <script>
+    function toggleTheme() {
+      document.documentElement.classList.toggle('dark');
+    }
+
+    let liked = false;
+    let count = 482;
+    function toggleLike() {
+      liked = !liked;
+      count += liked ? 1 : -1;
+      document.getElementById('like-icon').innerText = liked ? '❤️' : '🤍';
+      document.getElementById('like-count').innerText = count;
+      const btn = document.getElementById('like-btn');
+      if (liked) {
+        btn.classList.add('bg-red-500/20', 'border-red-500/50', 'text-red-400');
+      } else {
+        btn.classList.remove('bg-red-500/20', 'border-red-500/50', 'text-red-400');
+      }
+    }
+
+    function shareLink() {
+      alert('공유 링크가 클립보드에 복사되었습니다! 🎉');
+    }
+  </script>
+</body>
+</html>
