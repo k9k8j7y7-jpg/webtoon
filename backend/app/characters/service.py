@@ -119,6 +119,7 @@ async def generate_character_sheets(
     adapter = get_image_adapter()
     total = len(characters_data)
     skipped = []
+    skipped_photo_real = []
     results = []
 
     for i, char_data in enumerate(characters_data):
@@ -139,6 +140,15 @@ async def generate_character_sheets(
         if character and character.episode_id != episode_id:
             skipped.append({"ref_key": ref_key, "name": character.name or name})
             results.append({"ref_key": ref_key, "name": character.name or name, "status": "skipped_linked"})
+            job = get_job(job_id)
+            if job:
+                update_job(job_id, progress={"done": i + 1, "total": total})
+            continue
+
+        # 실사 캐릭터는 사진이 곧 참조 — 시트 생성·이미지 삭제 없이 스킵
+        if character and character.is_photo_real:
+            skipped_photo_real.append({"ref_key": ref_key, "name": character.name or name})
+            results.append({"ref_key": ref_key, "name": character.name or name, "status": "skipped_photo_real"})
             job = get_job(job_id)
             if job:
                 update_job(job_id, progress={"done": i + 1, "total": total})
@@ -299,7 +309,7 @@ async def generate_character_sheets(
 
     db.commit()
     db.close()
-    return {"characters": results, "skipped": skipped}
+    return {"characters": results, "skipped": skipped, "skipped_photo_real": skipped_photo_real}
 
 
 async def extract_appearance_from_photos(

@@ -13,7 +13,10 @@ from app.users.models import User
 from app.projects.models import Project, Episode, Series
 from app.storyboard.models import Cut
 from app.characters.models import Character, EpisodeCharacter
-from app.storyboard.service import create_cuts_from_script, recommend_cut_count, readjust_storyboard
+from app.storyboard.service import (
+    create_cuts_from_script, recommend_cut_count, readjust_storyboard,
+    auto_add_mentioned_characters, episode_character_names,
+)
 from app.workflow.gate import approve_gate, get_gate_number, get_page_format
 from app.composition.service import compose_cut
 from app.adapters.gemini import generate_text, parse_ai_json, AI_TOKENS_MEDIUM
@@ -189,7 +192,8 @@ async def list_cuts(
             "composed_image_url": c.composed_image_url,
             "shot": (c.spec or {}).get("shot"),
             "characters": [
-                {"character_id": ch.get("character_id"), "emotion": ch.get("emotion"), "pose": ch.get("pose")}
+                {"character_id": ch.get("character_id"), "emotion": ch.get("emotion"), "pose": ch.get("pose"),
+                 "auto_added": bool(ch.get("auto_added"))}
                 for ch in (c.spec or {}).get("characters", [])
             ],
             "location_id": (c.spec or {}).get("location_id"),
@@ -220,19 +224,25 @@ async def update_cut(
         raise HTTPException(status_code=404, detail="Cut not found")
 
     spec = dict(cut.spec)
+    old_char_ids = {c.get("character_id") for c in spec.get("characters", []) if c.get("character_id")}
     for key in ["shot", "action", "emphasis", "transition", "prompt_override", "location_id"]:
         if key in body:
             spec[key] = body[key]
     if "dialogue" in body:
         spec["dialogue"] = body["dialogue"]
+    removed = set()
     if "characters" in body:
         spec["characters"] = body["characters"]
+        # 사용자가 이번 수정에서 직접 뺀 캐릭터는 자동 보강으로 되살리지 않는다
+        removed = old_char_ids - {c.get("character_id") for c in spec["characters"] if c.get("character_id")}
     if "has_product" in body:
         spec["has_product"] = bool(body["has_product"])
 
+    added = auto_add_mentioned_characters(spec, episode_character_names(cut.episode_id, db), skip=removed)
+
     cut.spec = spec
     db.commit()
-    return {"cut_id": cut_id, "updated": True}
+    return {"cut_id": cut_id, "updated": True, "auto_added": added}
 
 
 @router.post("/projects/{project_id}/episodes/{episode_id}/storyboard/approve")

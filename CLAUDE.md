@@ -220,6 +220,7 @@ WEBTOON/
 - **ref_key UI 표시:** 사용자에게 ref_key 직접 노출 금지 → 한글 이름 + 작은 회색 ref_key. `utils/refNames.js` 공용 헬퍼(`locationName`, `characterName`, `locationOptionLabel`) 사용
 - **서브 경로:** Vite `base: '/WEBTOON/'`, FastAPI `root_path="/WEBTOON"` — 새 컴포넌트 작성 시 prefix 반영
 - **정적 파일:** `app.mount()` 미사용 → SPA fallback 핸들러에서 storage/assets/frontend 통합 서빙
+- **배포 전 생성 작업 확인:** 배포 전 서버 로그(`/tmp/uvicorn.log`)에서 진행 중인 생성 작업(`generate_all_cuts START` 후 `DONE` 없음) 유무 확인, 있으면 완료 후 배포. `--reload`는 진행 중 작업이 끝날 때까지 새 요청을 받지 않아 health·폴링이 수 분간 멈추고, 재시작 후 인메모리 job이 사라짐(2026-10-05 ep41)
 - **배포:** 파일별 `scp` → uvicorn `--reload` 자동 감지 (프론트는 빌드 후 dist 배포). **`.env` 변경은 `--reload`가 감지 못함** → 변경 후 반드시 `touch app/config.py`로 재시작 + `tail /tmp/uvicorn.log`에서 `Started server process` 확인
 - **dev 서버:** 항상 백그라운드 기동 + curl 폴링 후 진행. 재시작 시 묻지 않고 수행, 한 줄 보고
 - **다단계 지시서:** `docs/PROGRESS.md`에 현재 단계 갱신. 맥락 불확실 시 이 파일부터 읽기

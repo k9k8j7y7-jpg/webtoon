@@ -5,12 +5,15 @@ Cut-Spec-Schema v1.0 준수.
 """
 
 import json
+import logging
 import math
 
 from sqlalchemy.orm import Session
 
 from app.storyboard.models import Cut
 from app.adapters.gemini import generate_text
+
+logger = logging.getLogger(__name__)
 
 
 def recommend_cut_count(script_data: dict) -> dict:
@@ -144,6 +147,51 @@ def _detect_product_in_cut(cut_data: dict, product_names: list[str]) -> bool:
     return False
 
 
+def episode_character_names(episode_id: int, db: Session) -> list[tuple[str, str]]:
+    """이 에피소드에 연결된 캐릭터 (ref_key, 한글 이름) 목록."""
+    from app.characters.models import Character, EpisodeCharacter
+    rows = (
+        db.query(Character.ref_key, Character.name)
+        .join(EpisodeCharacter, EpisodeCharacter.character_id == Character.id)
+        .filter(EpisodeCharacter.episode_id == episode_id)
+        .all()
+    )
+    return [(r.ref_key, (r.name or "").strip()) for r in rows if r.ref_key]
+
+
+def auto_add_mentioned_characters(
+    spec: dict, ep_chars: list[tuple[str, str]], skip: set[str] | None = None,
+) -> list[str]:
+    """지문·대사 화자에 나오는 연결 캐릭터가 등장인물에 빠져 있으면 추가한다 (spec 제자리 수정).
+
+    빠지면 참조 이미지가 첨부되지 않아 다른 모습으로 그려진다(ep41 #3·#8).
+    skip: 사용자가 이번 수정에서 직접 뺀 캐릭터 — 다시 넣지 않는다.
+    Returns: 추가한 ref_key 목록.
+    """
+    present = {c.get("character_id") for c in spec.get("characters", []) if c.get("character_id")}
+    action = spec.get("action") or ""
+    speakers = {(d.get("speaker") or "").strip() for d in spec.get("dialogue", []) if d.get("speaker")}
+    added = []
+    for ref_key, name in ep_chars:
+        if ref_key in present or (skip and ref_key in skip):
+            continue
+        mentioned = (
+            (name and (name in action or name in speakers))
+            or ref_key in speakers
+            or (len(ref_key) >= 3 and ref_key in action)
+        )
+        if mentioned:
+            spec.setdefault("characters", []).append({
+                "character_id": ref_key, "emotion": "neutral", "pose": "", "outfit": "default",
+                "auto_added": True,
+            })
+            added.append(ref_key)
+    if added:
+        logger.warning("Cut %s auto-added characters (mentioned in action/dialogue): %s",
+                       spec.get("cut_id"), added)
+    return added
+
+
 def create_cuts_from_script(
     episode_id: int, script_data: dict, db: Session,
     product_names: list[str] | None = None,
@@ -151,6 +199,7 @@ def create_cuts_from_script(
     """대본에서 컷 명세를 추출해 DB에 저장한다."""
     cuts_result = []
     global_cut_number = 0
+    ep_chars = episode_character_names(episode_id, db)
 
     for scene in script_data.get("scenes", []):
         scene_id = scene.get("scene_id", "s00")
@@ -180,6 +229,7 @@ def create_cuts_from_script(
                 "status": "pending",
                 "generation": None,
             }
+            auto_add_mentioned_characters(spec, ep_chars)
 
             # DB 저장
             cut = Cut(

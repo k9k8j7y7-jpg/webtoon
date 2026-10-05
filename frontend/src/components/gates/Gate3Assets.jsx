@@ -166,12 +166,14 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
   };
 
   const loadAssets = async () => {
-    const [charRes, locRes, styleRes, presetsRes] = await Promise.all([
+    const [charRes, locRes, styleRes, presetsRes, planningRes] = await Promise.all([
       api.get(`/projects/${projectId}/episodes/${episodeId}/characters`),
       api.get(`/projects/${projectId}/episodes/${episodeId}/locations`),
       api.get(`/projects/${projectId}/episodes/${episodeId}/style`).catch(() => ({ data: null })),
       api.get('/styles/presets').catch(() => ({ data: { core: [], beta: [] } })),
+      api.get(`/projects/${projectId}/episodes/${episodeId}/planning`).catch(() => ({ data: null })),
     ]);
+    setScriptChars(planningRes.data?.characters || []);
 
     const charDetails = await Promise.all(
       charRes.data.map((c) => api.get(`/characters/${c.id}`).then((r) => r.data).catch(() => c))
@@ -190,8 +192,25 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
   const { loading: initialLoading, error: loadError, retry: retryLoad } = useGateLoad(loadAssets);
 
   const [skippedInfo, setSkippedInfo] = useState(null);
+  // 대본(기획) 등장인물 — 시트 생성 대상·실사 추가 선택지
+  const [scriptChars, setScriptChars] = useState([]);
+  const [showRealPicker, setShowRealPicker] = useState(false);
+  const photoRealKeys = new Set(characters.filter((c) => c.is_photo_real).map((c) => c.ref_key));
+  const linkedKeys = new Set(
+    characters.filter((c) => c.episode_id && c.episode_id !== Number(episodeId)).map((c) => c.ref_key),
+  );
+  const photoRealCount = characters.filter((c) => c.is_photo_real).length;
 
   const generateCharacters = async () => {
+    const targets = scriptChars.filter((sc) => !photoRealKeys.has(sc.ref_key) && !linkedKeys.has(sc.ref_key));
+    const n = targets.length;
+    if (n === 0) {
+      window.alert(photoRealCount > 0
+        ? `만들 캐릭터 시트가 없어요 (실사 캐릭터 ${photoRealCount}명 제외)`
+        : '만들 캐릭터 시트가 없어요');
+      return;
+    }
+    if (!window.confirm(`대본 등장인물 ${n}명의 캐릭터 시트를 만듭니다 (${n}×2패킷). 진행할까요?`)) return;
     setPhase('characters');
     setError('');
     setSkippedInfo(null);
@@ -289,13 +308,14 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
   const [usePhotoReference, setUsePhotoReference] = useState(false);
   const [charPhotoError, setCharPhotoError] = useState(''); // 사진 업로드 에러 (카드 내 표시)
 
-  const _guessIsAnimal = (c) => /강아지|고양이|포메|개|냥|dog|cat|pet|animal|푸들|말티즈|시츄|햄스터|토끼|rabbit|hamster/i.test((c.detail_notes || '') + (c.name || '') + (c.description || ''));
-
-  const openCharEditor = (c) => {
+  // is_animal은 백엔드가 게이트1 판정 규칙(story/service._is_animal_character)으로 내려줌
+  const openCharEditor = (c, overrides = {}) => {
     setEditingChar({
       id: c.id,
       name: c.name,
-      is_animal: c.is_animal ?? _guessIsAnimal(c),
+      is_animal: c.is_animal ?? false,
+      is_photo_real: c.is_photo_real || false,
+      consent_given: c.consent_given || false,
       gender: c.gender || '',
       age_group: c.age_group || '',
       hair_style: c.hair_style || '',
@@ -304,10 +324,24 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
       mood: c.mood || '',
       detail_notes: c.detail_notes || '',
       reference_photos: c.reference_photos || [],
+      ...overrides,
     });
     setCharPhotoExtracted(false);
     setCharPhotoError('');
     setUsePhotoReference(false);
+  };
+
+  // 실사 캐릭터 추가: 대본 인물의 레코드만 만들고(시트 생성 없음, 0패킷) 실사 체크된 편집 폼을 연다
+  const addRealCharacter = async (refKey) => {
+    setShowRealPicker(false);
+    setError('');
+    try {
+      const { data } = await api.post(`/projects/${projectId}/episodes/${episodeId}/characters/stub`, { ref_key: refKey });
+      await loadAssets();
+      openCharEditor(data, { is_photo_real: true });
+    } catch (err) {
+      setError(extractError(err));
+    }
   };
 
   const updateCharField = (field, value) => {
@@ -1025,7 +1059,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
           <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2">
             <Users size={20} className="text-purple-500" /> 캐릭터 시트
           </h2>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <button
               onClick={openPicker}
               disabled={!!job}
@@ -1038,10 +1072,43 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
               disabled={!!job || !hasStyle}
               className="flex items-center gap-1 px-4 py-2 bg-purple-600 text-white rounded-full text-xs font-bold hover:bg-purple-700 hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50"
             >
-              {hasCharacters ? <><RefreshCw size={12} /> 재생성 (1인 2패킷)</> : '+ 새 캐릭터 생성 (1인 2패킷)'}
+              {hasCharacters ? <><RefreshCw size={12} /> 재생성 (1인 2패킷)</> : '등장 캐릭터 자동 생성 (1인 2패킷)'}
             </button>
+            <div className="relative">
+              <button
+                onClick={() => setShowRealPicker((v) => !v)}
+                disabled={!!job || scriptChars.length === 0}
+                className="flex items-center gap-1 px-3 py-2 text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-full transition-colors disabled:opacity-50"
+              >
+                <Camera size={12} /> 실사 캐릭터 추가 (사진·패킷 0)
+              </button>
+              {showRealPicker && (
+                <div className="absolute right-0 mt-1 z-20 min-w-[180px] p-1 rounded-xl border border-border dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-lg">
+                  <p className="px-2 py-1 text-[10px] font-bold text-gray-400 dark:text-zinc-500">대본 등장인물 중 선택</p>
+                  {scriptChars.map((sc) => {
+                    const already = photoRealKeys.has(sc.ref_key);
+                    return (
+                      <button
+                        key={sc.ref_key}
+                        onClick={() => addRealCharacter(sc.ref_key)}
+                        disabled={already}
+                        className="w-full text-left px-2 py-1.5 text-xs font-bold rounded-lg text-ink-black dark:text-white hover:bg-blue-50 dark:hover:bg-blue-900/30 disabled:opacity-40 disabled:hover:bg-transparent"
+                      >
+                        {sc.name || sc.ref_key}
+                        <span className="ml-1 text-[10px] font-normal text-gray-400 dark:text-zinc-500">{already ? '실사 등록됨' : sc.ref_key}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </div>
+        {hasCharacters && photoRealCount > 0 && (
+          <p className="text-[11px] font-bold text-blue-500 dark:text-blue-400 -mt-2 mb-3 text-right">
+            재생성 시 실사 캐릭터 {photoRealCount}명 제외
+          </p>
+        )}
         {!hasStyle && (
           <p className="text-sm font-bold text-amber-500 dark:text-amber-400 mb-3">스타일을 먼저 선택해주세요</p>
         )}
@@ -1118,8 +1185,8 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
                               <X size={10} /> 삭제
                             </button>
                           </div>
-                          {/* 참조 토글 */}
-                          <label className="flex items-center gap-2 text-[10px] text-gray-500 dark:text-gray-400 cursor-pointer">
+                          {/* 참조 토글 — 실사 캐릭터는 사진이 곧 참조라 숨김 */}
+                          {!editingChar.is_photo_real && <label className="flex items-center gap-2 text-[10px] text-gray-500 dark:text-gray-400 cursor-pointer">
                             <input
                               type="checkbox"
                               checked={usePhotoReference}
@@ -1128,7 +1195,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
                             />
                             <span className="font-bold">사진을 참조 이미지로도 첨부</span>
                             <span className="font-normal">(실험 — 사진풍이 섞일 수 있음)</span>
-                          </label>
+                          </label>}
                         </div>
                       ) : (
                         <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-purple-300 dark:border-purple-700 rounded-lg cursor-pointer hover:border-purple-500 dark:hover:border-purple-500 hover:bg-purple-50/50 dark:hover:bg-purple-900/10 transition-colors">
@@ -1361,7 +1428,25 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
                   </div>
                 )}
 
-                {c.images && c.images.length > 0 && (() => {
+                {/* 실사 캐릭터: 시트 대신 참고 사진(첫 장 = 정면) */}
+                {c.is_photo_real && c.reference_photos?.length > 0 && (
+                  <div className="flex gap-2 mt-2 overflow-x-auto">
+                    {c.reference_photos.map((url, idx) => {
+                      const label = idx === 0 ? '정면' : `사진 ${idx + 1}`;
+                      return (
+                        <div key={idx} className="flex-shrink-0 cursor-pointer" onClick={() => setLightbox({ url: imageUrl(url), label: `${c.name} — ${label}` })}>
+                          <img
+                            src={imageUrl(url)}
+                            alt={label}
+                            className="w-20 h-20 object-cover rounded-lg border border-blue-300 dark:border-blue-700 hover:ring-2 hover:ring-blue-400 transition-all"
+                          />
+                          <div className="text-[10px] text-center text-gray-500 dark:text-gray-400 mt-1">{label}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {!c.is_photo_real && c.images && c.images.length > 0 && (() => {
                   const LABEL_MAP = { '정면': '정면', 'expressions': '표정 시트', 'smile': '😊', 'angry': '😠', 'front': '정면' };
                   const displayLabel = (img) => LABEL_MAP[img.label] || LABEL_MAP[img.type] || img.label || img.type;
                   return (
@@ -1383,7 +1468,13 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
             ))}
           </div>
         ) : (
-          hasStyle && <p className="text-sm font-bold text-gray-400 dark:text-zinc-500">캐릭터 시트를 생성해주세요.</p>
+          hasStyle && (
+            <p className="text-sm font-bold text-gray-400 dark:text-zinc-500">
+              {scriptChars.length > 0
+                ? `대본 등장인물(${scriptChars.map((sc) => sc.name || sc.ref_key).join(', ')})의 모습을 정해주세요 — 불러오기 / 자동 생성 / 실사 사진`
+                : '대본 등장인물의 모습을 정해주세요 — 불러오기 / 자동 생성 / 실사 사진'}
+            </p>
+          )
         )}
       </div>
 

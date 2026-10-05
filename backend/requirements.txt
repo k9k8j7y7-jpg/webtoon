@@ -16,3 +16,4 @@ Pillow==11.*
 google-genai==1.*
 passlib[bcrypt]==1.7.*
 alembic==1.16.*
+openai>=3.19,<4

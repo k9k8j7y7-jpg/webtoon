@@ -80,6 +80,40 @@ def build_cut_prompt(
 
     parts = []
 
+    characters = cut_spec.get("characters", [])
+    char_ids_with_ref = [c.get("character_id") for c in characters if c.get("character_id") and c.get("character_id") in character_descs]
+    photo_real_ids = [
+        cid for cid in char_ids_with_ref
+        if isinstance(character_descs.get(cid), dict) and character_descs[cid].get("is_photo_real")
+    ] if has_photo_real_char else []
+
+    def _ref_tag(char_id: str) -> str:
+        """실제 첨부 순번 기준 'Image N' / 'Images N, M' (실사 경로). 없으면 캐릭터 순서."""
+        nums = character_descs[char_id].get("ref_images") if isinstance(character_descs.get(char_id), dict) else None
+        if has_photo_real_char and nums:
+            return ("Image " if len(nums) == 1 else "Images ") + ", ".join(str(n) for n in nums)
+        if char_id in char_ids_with_ref:
+            return f"Image {char_ids_with_ref.index(char_id) + 1}"
+        return ""
+
+    # ── 0a. 실사 인물 포함 컷: 화면 전체가 웹툰 일러스트임을 맨 앞에 못 박는다 ──
+    # (실사 지시가 배경·다른 인물·동물로 번져 사진처럼 그려지는 문제 방지)
+    if has_photo_real_char:
+        parts.append(
+            "This entire image is a 2D Korean webtoon illustration: flat cel shading, clean line art, "
+            "illustrated background, furniture, props, other animals and other people"
+        )
+        if photo_real_ids:
+            names = ", ".join(
+                f"'{cid}' ({_ref_tag(cid)})" for cid in photo_real_ids
+            )
+            parts.append(
+                f"The ONLY exception: the person from the reference photo(s) — {names} — keeps their real face, "
+                f"body, age, hairstyle and exact outfit from the photo, as if a real person is placed inside a "
+                f"cartoon world, even when small or distant in the frame. Everything else — every animal, every "
+                f"other person, the whole background — is drawn as 2D illustration, never photographic"
+            )
+
     # ── 0. 단일 일러스트 강제 (패널 분할 방지) ──
     parts.append(
         "Output exactly ONE single-panel illustration that fills the entire canvas edge to edge. "
@@ -88,15 +122,9 @@ def build_cut_prompt(
     )
 
     # ── 1. 캐릭터 앵커링 지시 (A-2: 최우선) ──
-    characters = cut_spec.get("characters", [])
-    char_ids_with_ref = [c.get("character_id") for c in characters if c.get("character_id") and c.get("character_id") in character_descs]
-
     if char_ids_with_ref:
         # 이미지-캐릭터 매핑 (A-1)
-        mapping_parts = []
-        for i, char_id in enumerate(char_ids_with_ref):
-            mapping_parts.append(f"Image {i + 1} = {char_id}")
-        mapping_str = ", ".join(mapping_parts)
+        mapping_str = ", ".join(f"{_ref_tag(cid)} = {cid}" for cid in char_ids_with_ref)
 
         parts.append(
             f"CRITICAL: The characters in this image MUST exactly match the provided reference images. "
@@ -108,23 +136,17 @@ def build_cut_prompt(
 
     # ── 1.5. 실사 캐릭터 전용 강화 지시 ──
     if has_photo_real_char:
-        photo_real_ids = [
-            cid for cid in char_ids_with_ref
-            if isinstance(character_descs.get(cid), dict) and character_descs[cid].get("is_photo_real")
-        ]
         webtoon_ids = [cid for cid in char_ids_with_ref if cid not in photo_real_ids]
 
         if photo_real_ids:
             parts.append(
-                f"REAL PERSON(S) in reference photo(s) ({', '.join(photo_real_ids)}): "
-                f"keep EXACT face, body shape, age, skin tone, hairstyle — "
-                f"photorealistic as in the photo. Only outfit may follow the scene description. "
-                f"NEVER alter facial identity, body proportions, or age"
+                f"Real person(s) ({', '.join(photo_real_ids)}): keep EXACT face, body shape, age, skin tone, "
+                f"hairstyle and outfit as in the photo. NEVER alter facial identity, body proportions, age or clothes"
             )
         if webtoon_ids:
             parts.append(
-                f"Illustrated character(s) ({', '.join(webtoon_ids)}): "
-                f"match the reference sheet's proportions and eye size exactly, "
+                f"Illustrated character(s) ({', '.join(webtoon_ids)}): drawn in 2D webtoon style exactly like "
+                f"their reference sheet — match its proportions and eye size, never photographic, "
                 f"no chibi exaggeration, no SD (super-deformed) style"
             )
 
@@ -139,8 +161,8 @@ def build_cut_prompt(
 
         if appearance:
             # appearance_en이 있으면 명세 블록 주입
-            ref_idx = char_ids_with_ref.index(char_id) + 1 if char_id in char_ids_with_ref else 0
-            img_tag = f" (Image {ref_idx})" if ref_idx else ""
+            ref_tag = _ref_tag(char_id) if char_id in character_descs else ""
+            img_tag = f" ({ref_tag})" if ref_tag else ""
             char_prompt = (
                 f"Character '{char_id}'{img_tag}: {appearance}. "
                 f"{APPEARANCE_ANCHOR}. "
@@ -156,11 +178,15 @@ def build_cut_prompt(
 
     # ── 3. 장소·상황 ──
     if location_desc:
+        # 실사 인물 컷: 장소 묘사가 배경을 사진처럼 끌지 않도록 일러스트 접두
+        loc_text = (
+            f"illustrated in the webtoon style — {location_desc}" if has_photo_real_char else location_desc
+        )
         if loc_image_attached:
-            parts.append(f"Setting: {location_desc}")
+            parts.append(f"Setting: {loc_text}")
             parts.append(LOCATION_REFRAME)
         else:
-            parts.append(f"Setting (text description only, no location image attached): {location_desc}")
+            parts.append(f"Setting (text description only, no location image attached): {loc_text}")
 
     if loc_is_photo:
         parts.append(
@@ -191,8 +217,8 @@ def build_cut_prompt(
     # ── 4. 스타일 (얼굴 정체성을 덮지 않는 선에서) ──
     if has_photo_real_char:
         parts.append(
-            f"{style_prompt}. Apply this art style to backgrounds and illustrated characters ONLY. "
-            f"Real person(s) must remain photorealistic — do NOT apply illustration style to their face or body"
+            f"{style_prompt}. Apply this art style to the whole image — background, props, animals and "
+            f"illustrated characters. Only the real person from the photo keeps their real face and body"
         )
     else:
         parts.append(f"{style_prompt}. Apply this art style to coloring and rendering only, preserve character facial identity from references")

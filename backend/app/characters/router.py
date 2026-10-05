@@ -20,6 +20,7 @@ from app.workflow.service import invalidate_asset
 from app.styles.models import Style, STYLE_PRESETS
 from app.storyboard.models import CutAssetRef
 from app.packets.service import require_packets
+from app.story.service import _is_animal_character
 
 router = APIRouter(tags=["gate3-characters"])
 
@@ -51,19 +52,19 @@ async def create_characters(
             detail="No characters found in planning data",
         )
 
-    # 패킷 사전 확인: 생성 대상 캐릭터 수 × 2패킷 (피커 연결 캐릭터는 스킵)
+    # 패킷 사전 확인: 생성 대상 캐릭터 수 × 2패킷 (피커 연결·실사 캐릭터는 스킵)
     gen_count = 0
     for cd in characters_data:
         rk = cd.get("ref_key", "")
-        linked = (
+        existing = (
             db.query(Character)
             .join(EpisodeCharacter, EpisodeCharacter.character_id == Character.id)
-            .filter(EpisodeCharacter.episode_id == episode_id, Character.ref_key == rk,
-                    Character.episode_id != episode_id)
+            .filter(EpisodeCharacter.episode_id == episode_id, Character.ref_key == rk)
             .first()
         )
-        if not linked:
-            gen_count += 1
+        if existing and (existing.episode_id != episode_id or existing.is_photo_real):
+            continue
+        gen_count += 1
     if gen_count > 0:
         require_packets(current_user.id, gen_count * 2, db)
 
@@ -109,8 +110,38 @@ async def get_character(
         .scalar()
     )
 
+    return _character_detail(character, ep_count, db)
+
+
+def _planning_character(episode: Episode | None, ref_key: str) -> dict | None:
+    """에피소드 기획(planning.characters)에서 ref_key로 인물을 찾는다."""
+    if not episode:
+        return None
+    for pc in ((episode.script or {}).get("planning") or {}).get("characters") or []:
+        if pc.get("ref_key") == ref_key:
+            return pc
+    return None
+
+
+def _is_animal_for(character: Character, db: Session) -> bool:
+    """동물 캐릭터 판정 — 게이트1 판정 규칙(_is_animal_character)과 통일.
+
+    기획 인물의 gender가 "기타"가 아니면(남/여) 동물 아님.
+    """
+    episode = db.query(Episode).filter(Episode.id == character.episode_id).first()
+    pc = _planning_character(episode, character.ref_key)
+    if pc:
+        gender = (pc.get("gender") or "").strip()
+        if gender and gender != "기타":
+            return False
+        return _is_animal_character(pc)
+    return _is_animal_character({"name": character.name, "description": character.description})
+
+
+def _character_detail(character: Character, ep_count: int, db: Session) -> dict:
     return {
         "id": character.id,
+        "episode_id": character.episode_id,
         "ref_key": character.ref_key,
         "name": character.name,
         "description": character.description,
@@ -118,6 +149,7 @@ async def get_character(
         "reference_photos": character.reference_photos,
         "is_photo_real": character.is_photo_real,
         "consent_given": character.consent_given,
+        "is_animal": _is_animal_for(character, db),
         "gender": character.gender,
         "age_group": character.age_group,
         "hair_style": character.hair_style,
@@ -174,6 +206,72 @@ async def list_characters(
         }
         for c in characters
     ]
+
+
+class CharacterStubRequest(BaseModel):
+    ref_key: str
+
+
+@router.post("/projects/{project_id}/episodes/{episode_id}/characters/stub")
+async def create_character_stub(
+    project_id: int,
+    episode_id: int,
+    body: CharacterStubRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """대본 인물의 캐릭터 레코드만 만든다(시트 생성 없음, 0패킷) — 실사 캐릭터 추가용.
+
+    이미 이 에피소드에 연결된 같은 ref_key 캐릭터가 있으면 그대로 반환.
+    """
+    episode = _get_episode_for_user(db, project_id, episode_id, current_user.id)
+    gate = get_gate_number(episode.gate_status)
+    if gate != 3:
+        raise HTTPException(status_code=400, detail=f"Current gate is {gate}, characters require gate 3")
+
+    pc = _planning_character(episode, body.ref_key)
+    if not pc:
+        raise HTTPException(status_code=404, detail="대본 등장인물에 없는 캐릭터입니다")
+
+    character = (
+        db.query(Character)
+        .join(EpisodeCharacter, EpisodeCharacter.character_id == Character.id)
+        .filter(EpisodeCharacter.episode_id == episode_id, Character.ref_key == body.ref_key)
+        .first()
+    )
+    if not character:
+        # 이전 unlink로 EC 없이 남은 고아 레코드 재활용
+        character = (
+            db.query(Character)
+            .filter(Character.episode_id == episode_id, Character.ref_key == body.ref_key)
+            .first()
+        )
+        if not character:
+            style = db.query(Style).filter(Style.episode_id == episode_id).first()
+            character = Character(
+                ref_key=body.ref_key,
+                episode_id=episode_id,
+                project_id=project_id,
+                name=pc.get("name", ""),
+                description=pc.get("description", ""),
+                style=style.preset_key if style else None,
+                status="draft",
+            )
+            db.add(character)
+            db.flush()
+            db.add(CharacterOutfit(
+                character_id=character.id, outfit_key="default", label="기본 의상", is_default=True,
+            ))
+        db.add(EpisodeCharacter(episode_id=episode_id, character_id=character.id))
+        db.commit()
+        db.refresh(character)
+
+    ep_count = (
+        db.query(sa_func.count(EpisodeCharacter.episode_id))
+        .filter(EpisodeCharacter.character_id == character.id)
+        .scalar()
+    )
+    return _character_detail(character, ep_count, db)
 
 
 class CharacterUpdateRequest(BaseModel):

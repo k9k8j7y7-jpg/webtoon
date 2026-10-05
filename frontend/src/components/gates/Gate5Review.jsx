@@ -210,6 +210,19 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
     }
   }, [cuts]);
 
+  // 폴링 중 서버 재시작으로 job을 잃었으면(404) 안내 후 컷 목록 재조회 — 생성 자체는 끝까지 진행됐을 수 있음
+  const recoverLostJob = async (err) => {
+    if (!err?.jobLost) return false;
+    setJob(null);
+    setError(err.message);
+    setCacheBuster(Date.now());
+    try {
+      await loadCuts();
+    } catch { /* 재조회 실패는 안내 문구로 충분 */ }
+    window.dispatchEvent(new Event('packets:refresh'));
+    return true;
+  };
+
   const handleGenerateAll = async () => {
     setError('');
     setPartialResult(null);
@@ -230,6 +243,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
         });
       }
     } catch (err) {
+      if (await recoverLostJob(err)) return;
       setJob(null);
       const detail = err.response?.data?.detail;
       if (err.response?.status === 402 && detail?.message) {
@@ -252,6 +266,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
       await loadCuts();
       window.dispatchEvent(new Event('packets:refresh'));
     } catch (err) {
+      if (await recoverLostJob(err)) return;
       setJob(null);
       const detail = err.response?.data?.detail;
       if (err.response?.status === 402 && detail?.message) {
@@ -502,6 +517,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
       setCacheBuster(Date.now());
       await loadCuts();
     } catch (err) {
+      if (await recoverLostJob(err)) { setStoryboardEdit(null); return; }
       const detail = err.response?.data?.detail;
       if (err.response?.status === 402 && detail?.message) {
         setError(`${detail.message} (잔량 ${detail.balance}, 필요 ${detail.needed})`);

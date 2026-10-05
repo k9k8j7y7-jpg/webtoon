@@ -658,6 +658,14 @@ export default function Gate4Storyboard({ projectId, episodeId, onRefresh, readO
                     {cut.characters.map((ch, i) => (
                       <span key={i} className="text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
                         {characterName(ch.character_id, episodeCharacters)}{ch.emotion ? ` (${ch.emotion})` : ''}
+                        {ch.auto_added && (
+                          <span
+                            title="지문·대사에 이름이 나와 자동으로 넣었어요"
+                            className="ml-1 text-[9px] font-bold px-1 rounded bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300"
+                          >
+                            자동 추가
+                          </span>
+                        )}
                       </span>
                     ))}
                   </div>

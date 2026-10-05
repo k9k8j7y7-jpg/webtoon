@@ -199,11 +199,14 @@ def _get_character_references(
 
     for char_id, img_bytes, name in front_images:
         ref_images.append(img_bytes)
+        # 실제 첨부 순번(1부터) — 실사 캐릭터는 사진이 여러 장이라 "Image N = 캐릭터" 매핑에 필요
+        if isinstance(char_descs.get(char_id), dict):
+            char_descs[char_id].setdefault("ref_images", []).append(len(ref_images))
         is_pr = char_descs.get(char_id, {}).get("is_photo_real", False) if isinstance(char_descs.get(char_id), dict) else False
         if is_pr:
             ref_labels.append(
                 f"Character '{char_id}' ({name}) - REAL PERSON photograph. "
-                f"Preserve exact face, body shape, age, skin tone, and hairstyle"
+                f"Preserve exact face, body shape, age, skin tone, hairstyle and outfit"
             )
         else:
             ref_labels.append(f"Character '{char_id}' ({name}) - front reference sheet")
