@@ -65,6 +65,11 @@ export default function PrivacyPage() {
                   <td className="py-2">국외(미국 등) 서버에서 처리될 수 있음</td>
                 </tr>
                 <tr className="border-b border-border dark:border-zinc-800">
+                  <td className="py-2 pr-4">OpenAI, L.L.C.</td>
+                  <td className="py-2 pr-4">실사 캐릭터 포함 에피소드의 이미지 생성 처리 (업로드 사진 전송)</td>
+                  <td className="py-2">국외(미국) 서버에서 처리</td>
+                </tr>
+                <tr className="border-b border-border dark:border-zinc-800">
                   <td className="py-2 pr-4">Amazon Web Services</td>
                   <td className="py-2 pr-4">서버 호스팅 및 데이터 보관</td>
                   <td className="py-2">국내(서울) 리전</td>
@@ -117,6 +122,7 @@ export default function PrivacyPage() {
           <p>본 방침의 내용이 변경되는 경우, 시행 최소 7일 전에 서비스 내 공지사항을 통해 고지합니다.</p>
 
           <p className="font-bold">시행일: 2026년 9월 9일</p>
+          <p className="font-bold">개정: 2026년 10월 12일 시행 (3항 처리 위탁 및 국외 이전 — OpenAI, L.L.C. 추가)</p>
         </div>
       </div>
     </div>
