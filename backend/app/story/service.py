@@ -42,7 +42,7 @@ SYSTEM_INSTRUCTION = """너는 웹툰 스토리 기획 전문가야.
 - 동물의 description에는 품종/종을 적을 것 (아이디어에 명시되어 있으면 그대로)
 - 동물의 나이는 해당 동물 기준의 자연스러운 나이로
 - 사람의 description에는 외형·역할을 한 줄로
-- 동물 캐릭터(강아지·고양이·토끼 등)의 gender는 반드시 "기타"
+- gender "기타"는 캐릭터 본인이 동물인 경우에만(강아지·고양이·토끼 등). 동물을 키우거나 함께 다니는 사람은 남/여
 - 사용자가 입력한 인물 description 원문은 앞부분에 그대로 유지하고, 보충 내용만 뒤에 이어 붙일 것 (원문 덮어쓰기 금지)
 - synopsis는 반드시 4단 dict 형식(ki/seung/jeon/gyeol)으로 출력"""
 
@@ -66,7 +66,7 @@ SUGGEST_CHARACTERS_INSTRUCTION = """너는 웹툰 캐릭터 기획 전문가야.
 - 동물의 description에는 품종/종을 적을 것 (아이디어에 명시되어 있으면 그대로, 예: "포메라니안")
 - 동물의 나이는 해당 동물 기준의 자연스러운 나이로
 - 사람의 description에는 외형·역할을 한 줄로 (예: "도도의 보호자, 40대 아빠")
-- 동물 캐릭터(강아지·고양이·토끼 등)의 gender는 반드시 "기타"
+- gender "기타"는 캐릭터 본인이 동물인 경우에만(강아지·고양이·토끼 등). 동물을 키우거나 함께 다니는 사람은 남/여
 - 3~5명의 캐릭터를 제안해줘. 사람 이름은 한국 이름으로 해줘."""
 
 
@@ -107,15 +107,68 @@ _ANIMAL_KEYWORDS = (
     "강아지", "개", "고양이", "포메", "반려견", "반려묘", "새", "햄스터",
     "토끼", "거북이", "앵무새", "잉꼬", "치와와", "푸들", "말티즈",
     "시바", "웰시코기", "코기", "래브라도", "골든리트리버", "비숑",
-    "시츄", "페르시안", "러시안블루", "스코티시폴드", "강아지들",
+    "시츄", "페르시안", "러시안블루", "스코티시폴드", "진돗개",
     "dog", "cat", "puppy", "kitten", "pet", "animal",
 )
+# 동물 키워드 뒤에 붙으면 "다른 대상으로서의 동물"(목적격·동반격·소유격) → 본인 아님
+_ANIMAL_OTHER_PARTICLES = ("를", "을", "와", "과", "랑", "의", "에게", "한테")
+# 키워드 뒤 서술형 어미 → 본인이 동물 ("포메라니안이다", "푸들인")
+_ANIMAL_SELF_ENDINGS = ("다", "인")
+# 비유 표현은 본인 아님 ("강아지같다", "고양이처럼")
+_ANIMAL_SIMILE = ("같", "처럼", "스럽", "답")
+_QUOTE_CHARS = "'\"‘’“”()[]「」『』"
+
+
+def _animal_keyword_in_word(core: str) -> tuple[str, str] | None:
+    """단어 안의 동물 키워드와 그 뒤 나머지 문자열. 없으면 None.
+
+    한 글자 키워드(개·새)는 단어 맨 앞에서만 인정(소개·새로운 오탐 방지).
+    영문 키워드는 단어 전체 일치(복수형 s 허용).
+    """
+    for kw in _ANIMAL_KEYWORDS:
+        if kw.isascii():
+            if core in (kw, kw + "s"):
+                return kw, ""
+            continue
+        idx = core.find(kw)
+        if idx < 0 or (len(kw) == 1 and idx != 0):
+            continue
+        return kw, core[idx + len(kw):]
+    return None
 
 
 def _is_animal_character(char: dict) -> bool:
-    """캐릭터 이름·설명에 동물 키워드가 있으면 True."""
-    text = f"{char.get('name', '')} {char.get('description', '')}".lower()
-    return any(kw in text for kw in _ANIMAL_KEYWORDS)
+    """캐릭터 본인이 동물이면 True. 동물을 언급만 하는 사람은 False.
+
+    - 이름란에 동물 키워드가 있으면 동물.
+    - 설명: 키워드 뒤에 목적격·동반격·소유격 조사(를/을/와/과/랑/의/에게/한테)가
+      붙으면 제외. 키워드가 문장 끝·"이다/다/인/." 앞에 있을 때만 동물.
+      예) "갈색 포메라니안 도도를 아끼는 엄마" → False, "갈색 포메라니안." → True
+    """
+    name = str(char.get("name", "") or "").lower()
+    for w in name.split():
+        if _animal_keyword_in_word(w.strip(_QUOTE_CHARS)):
+            return True
+
+    words = str(char.get("description", "") or "").lower().split()
+    for i, word in enumerate(words):
+        clean = word.strip(_QUOTE_CHARS)
+        sentence_end = clean.endswith(".") or i == len(words) - 1
+        core = clean.rstrip(".,!?").strip(_QUOTE_CHARS)
+        hit = _animal_keyword_in_word(core)
+        if not hit:
+            continue
+        kw, rem = hit
+        if rem.endswith(_ANIMAL_OTHER_PARTICLES) or any(s in rem for s in _ANIMAL_SIMILE):
+            continue
+        if len(kw) == 1 and rem not in ("", "다", "이다", "인"):
+            continue
+        if rem.endswith(_ANIMAL_SELF_ENDINGS):
+            return True
+        # 문장 끝: 키워드(+품종명 꼬리 "라니안"·"견")로 끝나고 다른 조사가 없을 때만
+        if sentence_end and not rem.endswith(("이", "가", "은", "는", "도", "로", "에", "만")):
+            return True
+    return False
 
 
 def _name_to_ref_key(name: str) -> str:
@@ -298,7 +351,7 @@ async def generate_planning(
             if c.get("age"):
                 parts.append(f"나이: {c['age']}세")
             prompt += f"\n- {', '.join(parts)}"
-        prompt += "\n\n위 등장인물을 반드시 포함해서 기획안을 만들어줘. 등장인물의 ref_key는 네가 생성하고, description은 사용자가 입력한 추가설명 원문을 앞부분에 그대로 유지한 채 보충 내용만 뒤에 이어 붙여줘(원문 덮어쓰기 금지). 동물 캐릭터의 gender는 반드시 '기타'로."
+        prompt += "\n\n위 등장인물을 반드시 포함해서 기획안을 만들어줘. 등장인물의 ref_key는 네가 생성하고, description은 사용자가 입력한 추가설명 원문을 앞부분에 그대로 유지한 채 보충 내용만 뒤에 이어 붙여줘(원문 덮어쓰기 금지). gender '기타'는 캐릭터 본인이 동물인 경우에만(동물을 키우거나 함께 다니는 사람은 남/여)."
     else:
         prompt += "\n\n위 아이디어로 웹툰 기획안을 만들어줘."
 
@@ -377,7 +430,7 @@ IDEA_BRIEF_INSTRUCTION = f"""너는 웹툰 기획 어시스턴트야.
 
 규칙:
 - characters는 2~5명. 동물이면 종·색·특징을 description에 포함
-- characters의 gender는 "남", "여", "기타" 중 하나. 동물 캐릭터(강아지·고양이·토끼 등)는 반드시 "기타"
+- characters의 gender는 "남", "여", "기타" 중 하나. "기타"는 캐릭터 본인이 동물인 경우에만(강아지·고양이·토끼 등). 동물을 키우거나 함께 다니는 사람은 남/여
 - characters의 age는 숫자 문자열. 동물이면 해당 동물 기준 나이 추정, 불명이면 빈 문자열
 - story는 단편 완결 구조 — 예고식 결말 금지, 기승전결 각 1~3문장
 - suggested의 genre는 반드시 {_GENRE_KEYS} 중 하나

@@ -34,6 +34,14 @@ const DEVELOPMENT_OPTIONS = [
 
 const SYNOPSIS_LABELS = [['ki', '도입'], ['seung', '전개'], ['jeon', '전환'], ['gyeol', '결말']];
 
+// 주격 조사 이/가 (받침 유무)
+const subjectJosa = (word) => {
+  const w = word || '';
+  const code = w.charCodeAt(w.length - 1) - 0xAC00;
+  if (code < 0 || code > 11171) return '가';
+  return code % 28 ? '이' : '가';
+};
+
 export default function Gate1Planning({ projectId, episodeId, onRefresh, gateStatus, readOnly = false, derivedFromSeries = false }) {
   // idea_brief 상태
   const [ideaBrief, setIdeaBrief] = useState(null);
@@ -44,6 +52,10 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
   const [revising, setRevising] = useState(false);
   // 기획서 저장 상태: null | 'dirty' | 'saving' | 'saved' | 'error'
   const [briefSaveStatus, setBriefSaveStatus] = useState(null);
+  // 삭제한 캐릭터 이름 (이야기에 남아 있으면 재정리 배너)
+  const [removedNames, setRemovedNames] = useState([]);
+  // 마지막 기획 생성 시점 입력 서명 (null = 이 화면에서 아직 생성 안 함 → 안내 없음)
+  const [lastGenSig, setLastGenSig] = useState(null);
 
   const [characters, setCharacters] = useState([]);
   const [charTouched, setCharTouched] = useState(false); // 등장인물 user_touched
@@ -226,6 +238,33 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
     }));
   };
 
+  // 삭제한 캐릭터가 이야기(한 줄 소개·도입~결말)에 남아 있는지 — 남아 있으면 재정리 배너
+  const briefStoryText = (brief) => [
+    brief?.summary,
+    ...SYNOPSIS_LABELS.map(([k]) => brief?.story?.[k]),
+  ].filter(Boolean).join('\n');
+
+  const staleRemovedNames = useMemo(() => {
+    const text = briefStoryText(ideaBrief);
+    return removedNames.filter((n) => text.includes(n));
+  }, [removedNames, ideaBrief]);
+
+  const markCharacterRemoved = (name) => {
+    const n = (name || '').trim();
+    if (!n) return;
+    const next = removedNames.includes(n) ? removedNames : [...removedNames, n];
+    setRemovedNames(next);
+    const text = briefStoryText(ideaBrief);
+    const stale = next.filter((x) => text.includes(x));
+    if (stale.length > 0) setReviseHint(`${stale.join(', ')} 빼고 나머지 인물만으로 다시 정리`);
+  };
+
+  // 같은 이름을 다시 추가하면 삭제 목록에서 뺀다
+  const unmarkCharacterRemoved = (name) => {
+    const n = (name || '').trim();
+    if (n && removedNames.includes(n)) setRemovedNames(removedNames.filter((x) => x !== n));
+  };
+
   const toggleOption = (current, setter, key, touchSetter) => {
     setter(current === key ? null : key);
     touchSetter(true);
@@ -236,6 +275,18 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
     if (!ideaBrief?.raw?.trim()) return;
     if (characters.length > 0) {
       if (!window.confirm('지금 등장인물을 기획서 기준으로 다시 채울까요?')) return;
+    }
+    // 아이디어 정리 캐릭터가 있으면 그것만 카드로 (조연을 지어내지 않음)
+    const briefChars = (ideaBrief.characters || []).filter((c) => (c.name || '').trim());
+    if (briefChars.length > 0) {
+      setCharacters(briefChars.map((c) => ({
+        name: c.name,
+        description: c.description || '',
+        gender: c.gender || '기타',
+        age: c.age || '',
+      })));
+      setCharTouched(false);
+      return;
     }
     setSuggesting(true);
     setError('');
@@ -265,8 +316,18 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
   };
 
   const removeCharacter = (index) => {
+    const name = (characters[index]?.name || '').trim();
     setCharacters(characters.filter((_, i) => i !== index));
     setCharTouched(true);
+    if (!name) return;
+    // 같은 이름의 아이디어 정리 캐릭터도 삭제 (기획 생성 시 승계로 되살아나지 않게)
+    const briefChars = ideaBrief?.characters || [];
+    const remaining = briefChars.filter((c) => (c.name || '').trim() !== name);
+    if (remaining.length !== briefChars.length) {
+      setIdeaBrief(prev => ({ ...prev, characters: remaining }));
+      saveBriefField('characters', remaining);
+    }
+    markCharacterRemoved(name);
   };
 
   // synopsis를 4단 또는 문자열로 표시하는 헬퍼
@@ -282,6 +343,15 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
     }
     return p?.synopsis || '';
   };
+
+  // 마지막 [기획 생성] 때의 입력(카드·3축) — 이후 바뀌면 결과 카드에 재생성 안내
+  const inputSig = useMemo(() => JSON.stringify({
+    chars: characters.map((c) => [
+      (c.name || '').trim(), (c.description || '').trim(), c.gender || '', String(c.age ?? '').trim(),
+    ]),
+    genre, mood, development,
+  }), [characters, genre, mood, development]);
+  const inputsChanged = lastGenSig !== null && lastGenSig !== inputSig;
 
   const handleGenerate = async () => {
     // idea: idea_brief가 있으면 기승전결을 조합, 없으면 raw
@@ -300,6 +370,8 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
       ideaText = ideaBrief?.raw || '';
     }
     if (!ideaText.trim()) return;
+    if (staleRemovedNames.length > 0
+      && !window.confirm('이야기를 다시 정리하지 않으면 삭제한 캐릭터가 다시 들어올 수 있어요. 계속할까요?')) return;
 
     setGenerating(true);
     setError('');
@@ -314,6 +386,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
         story_options: storyOptions,
       });
       setPlanning(data);
+      setLastGenSig(inputSig);
     } catch (err) {
       setError(err.response?.data?.detail || '기획 생성에 실패했습니다.');
     } finally {
@@ -322,6 +395,8 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
   };
 
   const handleApprove = async () => {
+    if (inputsChanged
+      && !window.confirm('등장인물/설정이 마지막 기획 생성 이후 바뀌었어요. 바뀐 내용은 반영되지 않은 채로 승인할까요?')) return;
     setApproving(true);
     try {
       await api.post(`/projects/${projectId}/episodes/${episodeId}/planning/approve`, { auto_advance: false });
@@ -493,6 +568,16 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
           아이디어 정리
         </h2>
 
+        {/* 삭제한 캐릭터가 이야기에 남아 있음 → 재정리 안내 */}
+        {staleRemovedNames.length > 0 && !briefLoading && (
+          <div className="mb-3 flex items-start gap-2 px-3 py-2 rounded-xl border-2 border-yellow-300 bg-yellow-50 text-yellow-800 dark:border-yellow-500/40 dark:bg-yellow-500/10 dark:text-yellow-200 text-xs font-bold">
+            <span>⚠</span>
+            <span>
+              삭제한 {staleRemovedNames.join(', ')}{subjectJosa(staleRemovedNames[staleRemovedNames.length - 1])} 이야기에 아직 나와요 — 이야기를 다시 정리해 주세요
+            </span>
+          </div>
+        )}
+
         {/* 원문 접이식 */}
         {ideaBrief?.raw && (
           <div className="mb-3">
@@ -575,7 +660,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                   <input
                     value={c.name}
                     onChange={(e) => updateBriefCharacter(i, 'name', e.target.value)}
-                    onBlur={() => saveBriefField('characters', ideaBrief.characters)}
+                    onBlur={() => { saveBriefField('characters', ideaBrief.characters); unmarkCharacterRemoved(c.name); }}
                     placeholder="이름"
                     className="w-24 min-w-0 px-2 py-1.5 border-2 border-border dark:border-zinc-700 bg-transparent rounded-lg text-sm font-bold text-ink-black dark:text-white focus:outline-none focus:border-comic-orange"
                   />
@@ -587,7 +672,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                     className="flex-1 min-w-0 px-2 py-1.5 border-2 border-border dark:border-zinc-700 bg-transparent rounded-lg text-sm font-bold text-ink-black dark:text-white focus:outline-none focus:border-comic-orange"
                   />
                   <button
-                    onClick={() => { removeBriefCharacter(i); saveBriefField('characters', ideaBrief.characters.filter((_, j) => j !== i)); }}
+                    onClick={() => { removeBriefCharacter(i); saveBriefField('characters', ideaBrief.characters.filter((_, j) => j !== i)); markCharacterRemoved(c.name); }}
                     className="p-1 text-gray-300 hover:text-red-500 dark:text-zinc-600 dark:hover:text-red-400 transition-colors"
                   >
                     <Trash2 size={14} />
@@ -771,6 +856,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                     <input
                       value={c.name}
                       onChange={(e) => updateCharacter(i, 'name', e.target.value)}
+                      onBlur={() => unmarkCharacterRemoved(c.name)}
                       placeholder="이름"
                       className="w-24 min-w-0 px-3 py-1.5 border-2 border-border dark:border-zinc-600 bg-white dark:bg-zinc-800 rounded-lg text-sm font-bold text-ink-black dark:text-white focus:outline-none focus:border-comic-orange"
                     />
@@ -842,6 +928,12 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
         const synParts = getSynopsisParts(planning);
         return (
         <div className="glass-card p-6 space-y-4">
+          {inputsChanged && !generating && (
+            <div className="flex items-start gap-2 px-3 py-2 rounded-xl border-2 border-yellow-300 bg-yellow-50 text-yellow-800 dark:border-yellow-500/40 dark:bg-yellow-500/10 dark:text-yellow-200 text-xs font-bold">
+              <span>⚠</span>
+              <span>등장인물/설정이 바뀌었어요 — [기획 생성]을 다시 눌러야 반영돼요</span>
+            </div>
+          )}
           <div className="flex items-start justify-between gap-2">
             {editing ? (
               <input
