@@ -92,10 +92,12 @@ export default function LoginPage() {
     <div className="min-h-screen bg-transparent flex items-center justify-center p-4">
       <div className="glass-card !bg-white/80 dark:!bg-night-card/80 p-8 w-full max-w-md shadow-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-comic-orange/10 rounded-2xl mb-4">
-            <Sparkles size={32} className="text-comic-orange" />
-          </div>
-          <h1 className="text-2xl font-bold font-serif text-ink-black dark:text-white">EziToon</h1>
+          <Link to="/" className="inline-block no-underline">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-comic-orange/10 rounded-2xl mb-4">
+              <Sparkles size={32} className="text-comic-orange" />
+            </div>
+            <h1 className="text-2xl font-bold font-serif text-ink-black dark:text-white">EziToon</h1>
+          </Link>
           <p className="text-gray-500 dark:text-gray-400 mt-1">AI 웹툰 생성 서비스</p>
         </div>
 

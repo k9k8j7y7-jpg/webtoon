@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { Menu } from 'lucide-react';
+import MobileDrawer from '../components/MobileDrawer';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
 const CATEGORY_MAP = { '단편': 'short', '연작': 'series', '광고·홍보': 'ad' };
@@ -23,6 +25,7 @@ const faqs = [
 export default function LandingPage() {
   const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('단편');
   const [galleryData, setGalleryData] = useState({ short: [], series: [], ad: [] });
   const [products, setProducts] = useState([]);
@@ -53,7 +56,14 @@ export default function LandingPage() {
       {/* 1. Header */}
       <header className={`fixed top-0 w-full z-50 transition-all duration-300 ${scrolled ? 'bg-[#0A0F1D]/80 backdrop-blur-md border-b border-white/10 shadow-lg shadow-black/20' : 'bg-transparent'}`}>
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-8">
+          <div className="flex items-center gap-4 md:gap-8">
+            <button
+              onClick={() => setDrawerOpen(true)}
+              className="sm:hidden p-2 -ml-2 text-gray-400 hover:text-white transition-colors"
+              style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Menu size={22} />
+            </button>
             <h1 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-500 to-cyan-400 tracking-tighter cursor-pointer" onClick={() => window.scrollTo({top: 0, behavior: 'smooth'})}>
               EziToon
             </h1>
@@ -69,6 +79,14 @@ export default function LandingPage() {
           </button>
         </div>
       </header>
+
+      <MobileDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        user={null}
+        packets={null}
+        onLogout={() => {}}
+      />
 
       <main>
         {/* 2. Hero Section */}

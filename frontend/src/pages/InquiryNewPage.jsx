@@ -32,10 +32,10 @@ export default function InquiryNewPage() {
         for (const p of projects) {
           const { data: epList } = await api.get(`/projects/${p.id}/episodes`);
           for (const ep of epList) {
-            eps.push({ id: ep.id, title: ep.title || `에피소드 ${ep.ep_no}`, projectName: p.name });
+            eps.push({ id: ep.id, title: ep.title || `에피소드 ${ep.episode_no}`, projectName: p.title || `프로젝트 ${p.id}` });
           }
         }
-        setEpisodes(eps);
+        setEpisodes(eps.reverse());
       } catch { /* ignore */ }
     })();
   }, []);
@@ -175,7 +175,7 @@ export default function InquiryNewPage() {
               >
                 <option value="">선택 안 함</option>
                 {episodes.map(ep => (
-                  <option key={ep.id} value={ep.id}>{ep.projectName} — {ep.title}</option>
+                  <option key={ep.id} value={ep.id}>{ep.projectName} › {ep.title}</option>
                 ))}
               </select>
             </div>

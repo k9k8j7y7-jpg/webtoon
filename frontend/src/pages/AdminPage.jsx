@@ -883,6 +883,210 @@ function ProductsTab() {
   );
 }
 
+/* ── 문의 관리 ────────────────────────────────── */
+
+const INQ_PERIOD = [
+  { key: 'all', label: '전체' }, { key: '1w', label: '1주' },
+  { key: '1m', label: '1달' }, { key: '3m', label: '3달' },
+];
+const INQ_CATEGORY = [
+  { key: '', label: '전체' }, { key: 'bug', label: '버그' },
+  { key: 'howto', label: '사용법' }, { key: 'payment', label: '결제' },
+  { key: 'feature', label: '기능' }, { key: 'other', label: '기타' },
+];
+const INQ_STATUS = [
+  { key: '', label: '전체' }, { key: 'received', label: '접수' },
+  { key: 'checking', label: '확인 중' }, { key: 'answered', label: '답변' },
+  { key: 'closed', label: '종료' },
+];
+const INQ_STATUS_COLORS = {
+  received: 'bg-yellow-600', checking: 'bg-blue-600',
+  answered: 'bg-green-600', closed: 'bg-gray-600',
+};
+
+function InquiriesTab() {
+  const [data, setData] = useState({ inquiries: [], unanswered_count: 0 });
+  const [period, setPeriod] = useState('all');
+  const [category, setCategory] = useState('');
+  const [status, setStatus] = useState('');
+  const [selected, setSelected] = useState(null); // 상세
+  const [messages, setMessages] = useState([]);
+  const [reply, setReply] = useState('');
+  const [sending, setSending] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const fetchList = useCallback(async () => {
+    setLoading(true);
+    const params = { period };
+    if (category) params.category = category;
+    if (status) params.status = status;
+    const { data: d } = await api.get('/admin/inquiries', { params });
+    setData(d);
+    setLoading(false);
+  }, [period, category, status]);
+
+  useEffect(() => { fetchList(); }, [fetchList]);
+
+  const openDetail = async (inq) => {
+    setSelected(inq);
+    setReply('');
+    const { data: d } = await api.get(`/inquiries/${inq.id}`);
+    setMessages(d.messages || []);
+  };
+
+  const handleReply = async () => {
+    if (!reply.trim() || sending) return;
+    setSending(true);
+    await api.post(`/inquiries/${selected.id}/messages`, { body: reply.trim() });
+    setReply('');
+    setSending(false);
+    // 새로고침
+    const { data: d } = await api.get(`/inquiries/${selected.id}`);
+    setMessages(d.messages || []);
+    setSelected(prev => ({ ...prev, status: d.status, status_label: d.status_label }));
+    fetchList();
+  };
+
+  const changeStatus = async (newStatus) => {
+    await api.post(`/admin/inquiries/${selected.id}/status`, { status: newStatus });
+    setSelected(prev => ({ ...prev, status: newStatus }));
+    fetchList();
+  };
+
+  const fmtDate = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  };
+
+  if (selected) {
+    return (
+      <div>
+        <button onClick={() => setSelected(null)} className="text-sm text-cyan-400 hover:text-cyan-300 mb-4">← 목록으로</button>
+        <div className="bg-[#1a1a2e] border border-white/10 rounded-xl p-6 mb-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span className={`px-2 py-0.5 text-[10px] font-bold text-white rounded-full ${INQ_STATUS_COLORS[selected.status] || 'bg-gray-600'}`}>{selected.status_label}</span>
+            <span className="text-xs text-gray-400">{selected.category_label}</span>
+            <span className="text-xs text-gray-500">{fmtDate(selected.created_at)}</span>
+            <span className="text-xs text-gray-600">user #{selected.user_id}</span>
+          </div>
+          <h3 className="text-lg font-bold text-white mb-2">{selected.title}</h3>
+          <p className="text-sm text-gray-300 whitespace-pre-wrap">{selected.content}</p>
+          {selected.attachments?.length > 0 && (
+            <div className="flex gap-2 mt-3">
+              {selected.attachments.map((url, i) => (
+                <a key={i} href={url.startsWith('/storage') ? `/WEBTOON${url}` : url} target="_blank" rel="noopener noreferrer">
+                  <img src={url.startsWith('/storage') ? `/WEBTOON${url}` : url} alt="" className="w-24 h-24 object-cover rounded border border-white/10" />
+                </a>
+              ))}
+            </div>
+          )}
+          {selected.device_info && (
+            <div className="mt-3 text-[10px] text-gray-500">
+              {selected.device_info.device_type} · {selected.device_info.screen_width}px · {(selected.device_info.ua || '').slice(0, 80)}
+            </div>
+          )}
+          {selected.episode_id && (
+            <a href={`/WEBTOON/projects/0/episodes/${selected.episode_id}/workflow`} target="_blank" rel="noopener noreferrer" className="inline-block mt-2 text-xs text-cyan-400 hover:underline">
+              관련 에피소드 #{selected.episode_id} →
+            </a>
+          )}
+        </div>
+
+        {/* 상태 변경 */}
+        <div className="flex gap-2 mb-4">
+          {['received', 'checking', 'answered', 'closed'].map(s => (
+            <button key={s} onClick={() => changeStatus(s)} disabled={selected.status === s}
+              className={`px-3 py-1 text-xs font-bold rounded-full border transition-colors ${selected.status === s ? 'border-cyan-500 text-cyan-300 bg-cyan-500/20' : 'border-white/10 text-gray-400 hover:text-white hover:border-white/30'}`}
+            >
+              {INQ_STATUS.find(x => x.key === s)?.label || s}
+            </button>
+          ))}
+        </div>
+
+        {/* 메시지 */}
+        <div className="space-y-2 mb-4 max-h-[400px] overflow-y-auto">
+          {messages.map(msg => (
+            <div key={msg.id} className={`rounded-xl px-4 py-3 ${msg.is_admin ? 'bg-cyan-900/20 border border-cyan-800/30' : 'bg-[#1a1a2e] border border-white/10'}`}>
+              <div className="flex items-center gap-2 mb-1">
+                <span className={`text-[10px] font-bold ${msg.is_admin ? 'text-cyan-400' : 'text-gray-400'}`}>{msg.is_admin ? '관리자' : '사용자'}</span>
+                <span className="text-[10px] text-gray-500">{fmtDate(msg.created_at)}</span>
+              </div>
+              <p className="text-sm text-gray-200 whitespace-pre-wrap">{msg.body}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* 답변 입력 */}
+        <div className="flex gap-2">
+          <textarea value={reply} onChange={e => setReply(e.target.value)} placeholder="답변을 입력하세요" rows={2}
+            className="flex-1 px-4 py-2 bg-[#1a1a2e] border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 resize-none"
+          />
+          <button onClick={handleReply} disabled={sending || !reply.trim()}
+            className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-bold rounded-xl disabled:opacity-50 shrink-0"
+          >
+            {sending ? '전송 중…' : '답변'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-bold text-white">문의 관리</h2>
+        {data.unanswered_count > 0 && (
+          <span className="px-3 py-1 text-xs font-bold bg-red-600 text-white rounded-full">미답변 {data.unanswered_count}건</span>
+        )}
+      </div>
+
+      {/* 필터 */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        {INQ_PERIOD.map(o => (
+          <button key={o.key} onClick={() => setPeriod(o.key)}
+            className={`px-2.5 py-1 text-[11px] font-bold rounded-full border transition-colors ${period === o.key ? 'border-cyan-500 text-cyan-300 bg-cyan-500/20' : 'border-white/10 text-gray-400 hover:text-white'}`}
+          >{o.label}</button>
+        ))}
+        <select value={category} onChange={e => setCategory(e.target.value)}
+          className="px-2.5 py-1 text-[11px] font-bold border border-white/10 rounded-full bg-transparent text-gray-400 focus:outline-none"
+        >{INQ_CATEGORY.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}</select>
+        <select value={status} onChange={e => setStatus(e.target.value)}
+          className="px-2.5 py-1 text-[11px] font-bold border border-white/10 rounded-full bg-transparent text-gray-400 focus:outline-none"
+        >{INQ_STATUS.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}</select>
+      </div>
+
+      {/* 목록 */}
+      {loading ? (
+        <div className="text-gray-500 text-sm py-8 text-center">로딩 중…</div>
+      ) : data.inquiries.length === 0 ? (
+        <div className="text-gray-500 text-sm py-8 text-center">문의가 없습니다</div>
+      ) : (
+        <div className="space-y-1">
+          {data.inquiries.map(inq => (
+            <button key={inq.id} onClick={() => openDetail(inq)}
+              className="w-full text-left bg-[#1a1a2e] hover:bg-[#22224a] border border-white/10 rounded-xl px-4 py-3 flex items-center gap-3 transition-colors"
+            >
+              <span className={`w-2 h-2 rounded-full shrink-0 ${INQ_STATUS_COLORS[inq.status] || 'bg-gray-600'}`} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 text-[10px] text-gray-500 mb-0.5">
+                  <span>{inq.category_label}</span>
+                  <span>{fmtDate(inq.created_at)}</span>
+                  <span>user #{inq.user_id}</span>
+                </div>
+                <p className="text-sm font-bold text-white truncate">{inq.title}</p>
+              </div>
+              <span className={`px-2 py-0.5 text-[10px] font-bold text-white rounded-full shrink-0 ${INQ_STATUS_COLORS[inq.status] || 'bg-gray-600'}`}>
+                {inq.status_label}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── 메뉴 항목 ────────────────────────────────── */
 const NAV_ITEMS = [
   { to: '/admin', label: '대시보드', end: true },
@@ -890,6 +1094,7 @@ const NAV_ITEMS = [
   { to: '/admin/packets', label: '패킷' },
   { to: '/admin/notices', label: '공지' },
   { to: '/admin/products', label: '상품' },
+  { to: '/admin/inquiries', label: '문의' },
 ];
 
 /* ── 메인 레이아웃 ────────────────────────────── */
@@ -945,6 +1150,7 @@ export default function AdminPage() {
           <Route path="packets" element={<PacketsTab />} />
           <Route path="notices" element={<NoticesTab />} />
           <Route path="products" element={<ProductsTab />} />
+          <Route path="inquiries" element={<InquiriesTab />} />
         </Routes>
       </main>
     </div>
