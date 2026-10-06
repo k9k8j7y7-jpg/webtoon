@@ -60,9 +60,9 @@ export default function FaqPage() {
         </div>
         <div className="mt-10 text-center">
           <p className="text-sm text-gray-400 dark:text-zinc-500">찾는 답변이 없나요?</p>
-          <a href="mailto:k9k8j7y7@naver.com" className="text-sm font-bold text-comic-blue dark:text-comic-orange hover:underline">
+          <Link to="/inquiries/new" className="text-sm font-bold text-comic-blue dark:text-comic-orange hover:underline no-underline">
             1:1 문의하기
-          </a>
+          </Link>
         </div>
       </div>
     </div>

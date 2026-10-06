@@ -16,6 +16,9 @@ import PacketsPage from './pages/PacketsPage';
 import LandingPage from './pages/LandingPage';
 import ViewerPage from './pages/ViewerPage';
 import AdminPage from './pages/AdminPage';
+import InquiryListPage from './pages/InquiryListPage';
+import InquiryNewPage from './pages/InquiryNewPage';
+import InquiryDetailPage from './pages/InquiryDetailPage';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -49,6 +52,9 @@ function AppRoutes() {
         <Route path="/projects/:projectId/episodes/:episodeId/workflow" element={<WorkflowPage />} />
         <Route path="/projects/:projectId/series/:seriesId" element={<SeriesPage />} />
         <Route path="/packets" element={<PacketsPage />} />
+        <Route path="/inquiries" element={<InquiryListPage />} />
+        <Route path="/inquiries/new" element={<InquiryNewPage />} />
+        <Route path="/inquiries/:inquiryId" element={<InquiryDetailPage />} />
       </Route>
     </Routes>
   );
