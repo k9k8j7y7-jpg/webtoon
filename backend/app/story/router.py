@@ -56,6 +56,14 @@ class IdeaBriefUpdate(BaseModel):
     raw: str | None = None
 
 
+class PlanningDraftUpdate(BaseModel):
+    genre: str | None = None
+    mood: str | None = None
+    development: str | None = None
+    characters: list[dict] | None = None
+    snapshot: bool = False  # True면 last_gen_input에도 동일 값 저장
+
+
 # ── idea-brief 엔드포인트 ──────────────────────────
 
 @router.get("/projects/{project_id}/episodes/{episode_id}/idea-brief")
@@ -136,6 +144,37 @@ async def update_idea_brief(
     db.refresh(episode)
 
     return merged
+
+
+@router.put("/projects/{project_id}/episodes/{episode_id}/planning-draft")
+async def update_planning_draft(
+    project_id: int,
+    episode_id: int,
+    body: PlanningDraftUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """게이트1 카드(장르·분위기·전개·등장인물) 임시 저장 — debounce 자동 호출."""
+    episode = _get_episode_for_user(db, project_id, episode_id, current_user.id)
+    gate = get_gate_number(episode.gate_status)
+    if gate != 1:
+        raise HTTPException(status_code=400, detail="게이트1에서만 저장할 수 있습니다.")
+
+    gs = dict(episode.gate_status or {})
+    draft = {
+        "genre": body.genre,
+        "mood": body.mood,
+        "development": body.development,
+        "characters": body.characters or [],
+    }
+    gs["planning_draft"] = draft
+
+    if body.snapshot:
+        gs["last_gen_input"] = {**draft}
+
+    episode.gate_status = gs
+    db.commit()
+    return {"status": "saved"}
 
 
 @router.get("/projects/{project_id}/episodes/{episode_id}/planning")
@@ -225,6 +264,20 @@ async def create_planning(
         "planning": result,
         **({"story_options": so} if so else {}),
     }
+
+    # last_gen_input: 기획 생성 시점의 카드 스냅샷 → 새로고침 후 stale 배너용
+    gs = dict(episode.gate_status or {})
+    gen_input = {
+        "genre": so.get("genre") if so else None,
+        "mood": so.get("mood") if so else None,
+        "development": so.get("development") if so else None,
+        "characters": [c.model_dump() for c in body.characters] if body.characters else [],
+    }
+    gs["last_gen_input"] = gen_input
+    # planning_draft도 동기화 (현재 입력 = 마지막 생성 입력)
+    gs["planning_draft"] = {**gen_input}
+    episode.gate_status = gs
+
     db.commit()
     db.refresh(episode)
 

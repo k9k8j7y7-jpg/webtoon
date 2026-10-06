@@ -76,6 +76,13 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
   const [moodTouched, setMoodTouched] = useState(false);
   const [devTouched, setDevTouched] = useState(false);
 
+  // planning_draft 자동 저장 상태
+  const [draftSaveStatus, setDraftSaveStatus] = useState(null); // null | 'saving' | 'saved' | 'error'
+  const [draftSaveSource, setDraftSaveSource] = useState(null); // 'chars' | 'axis' | null
+  const draftTimer = useRef(null);
+  const draftInitialized = useRef(false); // 초기 복원 중 자동 저장 방지
+  const lastSavedDraftSig = useRef(null); // 마지막 서버 저장된 draft 서명 (중복 저장 방지)
+
   const saveTimer = useRef(null);
 
   // idea_brief를 gate_status에서 초기화
@@ -87,11 +94,86 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
     }
   }, [gateStatus?.idea_brief]);
 
+  // planning_draft 복원 (gate_status에서)
+  useEffect(() => {
+    if (draftInitialized.current || !gateStatus) return;
+    const draft = gateStatus.planning_draft;
+    const lastGen = gateStatus.last_gen_input;
+    if (draft) {
+      // 저장된 카드 복원
+      if (draft.characters?.length > 0 && characters.length === 0) {
+        setCharacters(draft.characters.map(c => ({
+          name: c.name || '', description: c.description || '',
+          gender: c.gender || '기타', age: c.age || '',
+        })));
+        setCharTouched(true); // 복원된 값은 사용자가 편집한 것으로 간주
+      }
+      if (draft.genre) { setGenre(draft.genre); setGenreTouched(true); }
+      if (draft.mood) { setMood(draft.mood); setMoodTouched(true); }
+      if (draft.development) { setDevelopment(draft.development); setDevTouched(true); }
+    }
+    // stale 비교 기준 복원
+    if (lastGen) {
+      setLastGenSig(JSON.stringify({
+        chars: (lastGen.characters || []).map(c => [
+          (c.name || '').trim(), (c.description || '').trim(), c.gender || '', String(c.age ?? '').trim(),
+        ]),
+        genre: lastGen.genre, mood: lastGen.mood, development: lastGen.development,
+      }));
+    }
+    // 복원된 값의 서명을 기록 (초기 1회 저장 방지)
+    if (draft) {
+      lastSavedDraftSig.current = computeDraftSig(
+        draft.characters || [], draft.genre || null, draft.mood || null, draft.development || null,
+      );
+    }
+    // gateStatus가 로드되면 초기화 완료 (draft 유무와 무관)
+    draftInitialized.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gateStatus]);
+
+  // draft 서명 계산 (값 비교용, trim 적용)
+  const computeDraftSig = (chars, g, m, d) => JSON.stringify({
+    chars: chars.filter(c => (c.name || '').trim()).map(c => [
+      (c.name || '').trim(), (c.description || '').trim(), c.gender || '', String(c.age ?? '').trim(),
+    ]),
+    genre: g || null, mood: m || null, development: d || null,
+  });
+
+  // planning_draft 서버 저장 (debounce 또는 즉시)
+  const saveDraftToServer = async (chars, g, m, d, source = 'chars', snapshot = false) => {
+    if (readOnly) return;
+    const sig = computeDraftSig(chars, g, m, d);
+    // 직전 저장값과 같으면 스킵
+    if (!snapshot && sig === lastSavedDraftSig.current) return;
+    setDraftSaveSource(source);
+    setDraftSaveStatus('saving');
+    try {
+      await api.put(`/projects/${projectId}/episodes/${episodeId}/planning-draft`, {
+        genre: g, mood: m, development: d,
+        characters: chars.filter(c => (c.name || '').trim()),
+        snapshot,
+      });
+      lastSavedDraftSig.current = sig;
+      setDraftSaveStatus('saved');
+      setTimeout(() => setDraftSaveStatus(prev => prev === 'saved' ? null : prev), 3000);
+    } catch {
+      setDraftSaveStatus('error');
+    }
+  };
+
+  const scheduleDraftSave = (chars, g, m, d, source = 'chars') => {
+    if (readOnly || !draftInitialized.current) return;
+    if (draftTimer.current) clearTimeout(draftTimer.current);
+    draftTimer.current = setTimeout(() => saveDraftToServer(chars, g, m, d, source), 800);
+  };
+
   const loadPlanning = async () => {
     const { data } = await api.get(`/projects/${projectId}/episodes/${episodeId}/planning`);
     if (data) {
       setPlanning(data);
-      if (data.story_options) {
+      // planning_draft가 없을 때만 story_options에서 3축 복원 (draft가 우선)
+      if (data.story_options && !gateStatus?.planning_draft) {
         setGenre(data.story_options.genre || null);
         setMood(data.story_options.mood || null);
         setDevelopment(data.story_options.development || null);
@@ -112,6 +194,11 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, gateStatus?.idea_brief]);
+
+  // cleanup: 언마운트 시 대기 중인 타이머 취소
+  useEffect(() => {
+    return () => { if (draftTimer.current) clearTimeout(draftTimer.current); };
+  }, []);
 
   // idea_brief에서 등장인물/3축 채우기 공용 함수
   const applyBriefSuggestions = (data) => {
@@ -265,9 +352,15 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
     if (n && removedNames.includes(n)) setRemovedNames(removedNames.filter((x) => x !== n));
   };
 
-  const toggleOption = (current, setter, key, touchSetter) => {
-    setter(current === key ? null : key);
+  const toggleOption = (current, setter, key, touchSetter, axis) => {
+    const newVal = current === key ? null : key;
+    setter(newVal);
     touchSetter(true);
+    // 새 값으로 즉시 저장 예약 (state 반영 전이므로 직접 계산)
+    const g = axis === 'genre' ? newVal : genre;
+    const m = axis === 'mood' ? newVal : mood;
+    const d = axis === 'development' ? newVal : development;
+    scheduleDraftSave(characters, g, m, d, 'axis');
   };
 
   const handleSuggestCharacters = async () => {
@@ -279,13 +372,15 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
     // 아이디어 정리 캐릭터가 있으면 그것만 카드로 (조연을 지어내지 않음)
     const briefChars = (ideaBrief.characters || []).filter((c) => (c.name || '').trim());
     if (briefChars.length > 0) {
-      setCharacters(briefChars.map((c) => ({
+      const mapped = briefChars.map((c) => ({
         name: c.name,
         description: c.description || '',
         gender: c.gender || '기타',
         age: c.age || '',
-      })));
+      }));
+      setCharacters(mapped);
       setCharTouched(false);
+      saveDraftToServer(mapped, genre, mood, development);
       return;
     }
     setSuggesting(true);
@@ -294,8 +389,10 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
       const { data } = await api.post(`/projects/${projectId}/episodes/${episodeId}/planning/suggest-characters`, {
         idea: ideaBrief.raw.trim(),
       });
-      setCharacters(data.characters || []);
+      const suggestedChars = data.characters || [];
+      setCharacters(suggestedChars);
       setCharTouched(false); // 자동 생성이므로 touched 리셋
+      saveDraftToServer(suggestedChars, genre, mood, development);
     } catch (err) {
       setError(err.response?.data?.detail || '캐릭터 제안에 실패했습니다.');
     } finally {
@@ -304,8 +401,10 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
   };
 
   const addCharacter = () => {
-    setCharacters([...characters, { name: '', description: '', gender: '남', age: '' }]);
+    const next = [...characters, { name: '', description: '', gender: '남', age: '' }];
+    setCharacters(next);
     setCharTouched(true);
+    saveDraftToServer(next, genre, mood, development);
   };
 
   const updateCharacter = (index, field, value) => {
@@ -313,12 +412,15 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
     updated[index] = { ...updated[index], [field]: value };
     setCharacters(updated);
     setCharTouched(true);
+    scheduleDraftSave(updated, genre, mood, development, 'chars');
   };
 
   const removeCharacter = (index) => {
     const name = (characters[index]?.name || '').trim();
-    setCharacters(characters.filter((_, i) => i !== index));
+    const next = characters.filter((_, i) => i !== index);
+    setCharacters(next);
     setCharTouched(true);
+    saveDraftToServer(next, genre, mood, development);
     if (!name) return;
     // 같은 이름의 아이디어 정리 캐릭터도 삭제 (기획 생성 시 승계로 되살아나지 않게)
     const briefChars = ideaBrief?.characters || [];
@@ -760,7 +862,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                   <button
                     key={opt.key}
                     type="button"
-                    onClick={() => toggleOption(genre, setGenre, opt.key, setGenreTouched)}
+                    onClick={() => toggleOption(genre, setGenre, opt.key, setGenreTouched, 'genre')}
                     className={`px-3 py-1.5 text-xs font-bold rounded-full border-2 transition-all ${
                       genre === opt.key
                         ? 'border-comic-orange bg-comic-orange text-white'
@@ -781,7 +883,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                   <button
                     key={opt.key}
                     type="button"
-                    onClick={() => toggleOption(mood, setMood, opt.key, setMoodTouched)}
+                    onClick={() => toggleOption(mood, setMood, opt.key, setMoodTouched, 'mood')}
                     className={`px-3 py-1.5 text-xs font-bold rounded-full border-2 transition-all ${
                       mood === opt.key
                         ? 'border-comic-blue bg-comic-blue text-white'
@@ -802,7 +904,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                   <button
                     key={opt.key}
                     type="button"
-                    onClick={() => toggleOption(development, setDevelopment, opt.key, setDevTouched)}
+                    onClick={() => toggleOption(development, setDevelopment, opt.key, setDevTouched, 'development')}
                     className={`group flex flex-col items-start px-3 py-1.5 text-xs font-bold rounded-xl border-2 transition-all ${
                       development === opt.key
                         ? 'border-green-500 bg-green-500 text-white'
@@ -817,11 +919,25 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                 ))}
               </div>
             </div>
+            {/* 저장 상태 — 3축 영역 오른쪽 끝 */}
+            {draftSaveStatus && draftSaveSource === 'axis' && (
+              <div className="flex justify-end mt-1">
+                <span className={`text-xs font-bold ${
+                  draftSaveStatus === 'saving' ? 'text-blue-500 dark:text-blue-400' :
+                  draftSaveStatus === 'saved' ? 'text-emerald-600 dark:text-emerald-400' :
+                  'text-red-500 dark:text-red-400'
+                }`}>
+                  {draftSaveStatus === 'saving' && '저장 중…'}
+                  {draftSaveStatus === 'saved' && '저장됨 ✓'}
+                  {draftSaveStatus === 'error' && '저장 실패'}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* 등장인물 섹션 */}
           <div>
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
               <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">
                 등장인물 <span className="text-gray-400 font-normal">(선택)</span>
               </label>
@@ -851,45 +967,71 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                 {characters.map((c, i) => (
                   <div
                     key={i}
-                    className="flex items-center gap-2 p-3 border-2 border-border dark:border-zinc-700 rounded-xl bg-gray-50 dark:bg-zinc-800/50"
+                    className="p-3 border-2 border-border dark:border-zinc-700 rounded-xl bg-gray-50 dark:bg-zinc-800/50"
                   >
-                    <input
-                      value={c.name}
-                      onChange={(e) => updateCharacter(i, 'name', e.target.value)}
-                      onBlur={() => unmarkCharacterRemoved(c.name)}
-                      placeholder="이름"
-                      className="w-24 min-w-0 px-3 py-1.5 border-2 border-border dark:border-zinc-600 bg-white dark:bg-zinc-800 rounded-lg text-sm font-bold text-ink-black dark:text-white focus:outline-none focus:border-comic-orange"
-                    />
-                    <input
+                    {/* PC: 한 줄 / 모바일: 2줄 */}
+                    <div className="flex items-center gap-2">
+                      <input
+                        value={c.name}
+                        onChange={(e) => updateCharacter(i, 'name', e.target.value)}
+                        onBlur={() => unmarkCharacterRemoved(c.name)}
+                        placeholder="이름"
+                        className="w-28 sm:w-24 min-w-0 px-3 py-1.5 border-2 border-border dark:border-zinc-600 bg-white dark:bg-zinc-800 rounded-lg text-sm font-bold text-ink-black dark:text-white focus:outline-none focus:border-comic-orange"
+                      />
+                      {/* PC에서만 설명 인라인 표시 */}
+                      <input
+                        value={c.description || ''}
+                        onChange={(e) => updateCharacter(i, 'description', e.target.value)}
+                        placeholder="추가설명 (예: 포메라니안, 안경 쓴 회사원)"
+                        className="hidden sm:block flex-1 min-w-0 px-3 py-1.5 border-2 border-border dark:border-zinc-600 bg-white dark:bg-zinc-800 rounded-lg text-sm font-bold text-ink-black dark:text-white focus:outline-none focus:border-comic-orange"
+                      />
+                      <select
+                        value={c.gender || '남'}
+                        onChange={(e) => updateCharacter(i, 'gender', e.target.value)}
+                        className="px-3 py-1.5 border-2 border-border dark:border-zinc-600 bg-white dark:bg-zinc-800 rounded-lg text-sm font-bold text-ink-black dark:text-white focus:outline-none focus:border-comic-orange"
+                      >
+                        <option value="남">남</option>
+                        <option value="여">여</option>
+                        <option value="기타">기타</option>
+                      </select>
+                      <input
+                        type="number"
+                        value={c.age || ''}
+                        onChange={(e) => updateCharacter(i, 'age', e.target.value)}
+                        placeholder="나이"
+                        className="w-20 px-3 py-1.5 border-2 border-border dark:border-zinc-600 bg-white dark:bg-zinc-800 rounded-lg text-sm font-bold text-ink-black dark:text-white focus:outline-none focus:border-comic-orange"
+                      />
+                      <button
+                        onClick={() => removeCharacter(i)}
+                        className="p-1.5 text-gray-300 hover:text-red-500 dark:text-zinc-600 dark:hover:text-red-400 transition-colors shrink-0"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                    {/* 모바일: 설명 2줄째 */}
+                    <textarea
                       value={c.description || ''}
                       onChange={(e) => updateCharacter(i, 'description', e.target.value)}
                       placeholder="추가설명 (예: 포메라니안, 안경 쓴 회사원)"
-                      className="flex-1 min-w-0 px-3 py-1.5 border-2 border-border dark:border-zinc-600 bg-white dark:bg-zinc-800 rounded-lg text-sm font-bold text-ink-black dark:text-white focus:outline-none focus:border-comic-orange"
+                      rows={2}
+                      className="sm:hidden w-full mt-2 px-3 py-1.5 border-2 border-border dark:border-zinc-600 bg-white dark:bg-zinc-800 rounded-lg text-sm font-bold text-ink-black dark:text-white focus:outline-none focus:border-comic-orange resize-none"
                     />
-                    <select
-                      value={c.gender || '남'}
-                      onChange={(e) => updateCharacter(i, 'gender', e.target.value)}
-                      className="px-3 py-1.5 border-2 border-border dark:border-zinc-600 bg-white dark:bg-zinc-800 rounded-lg text-sm font-bold text-ink-black dark:text-white focus:outline-none focus:border-comic-orange"
-                    >
-                      <option value="남">남</option>
-                      <option value="여">여</option>
-                      <option value="기타">기타</option>
-                    </select>
-                    <input
-                      type="number"
-                      value={c.age || ''}
-                      onChange={(e) => updateCharacter(i, 'age', e.target.value)}
-                      placeholder="나이"
-                      className="w-20 px-3 py-1.5 border-2 border-border dark:border-zinc-600 bg-white dark:bg-zinc-800 rounded-lg text-sm font-bold text-ink-black dark:text-white focus:outline-none focus:border-comic-orange"
-                    />
-                    <button
-                      onClick={() => removeCharacter(i)}
-                      className="p-1.5 text-gray-300 hover:text-red-500 dark:text-zinc-600 dark:hover:text-red-400 transition-colors"
-                    >
-                      <Trash2 size={16} />
-                    </button>
                   </div>
                 ))}
+                {/* 저장 상태 — 캐릭터 카드 아래 우측 */}
+                {draftSaveStatus && draftSaveSource === 'chars' && (
+                  <div className="flex justify-end">
+                    <span className={`text-xs font-bold ${
+                      draftSaveStatus === 'saving' ? 'text-blue-500 dark:text-blue-400' :
+                      draftSaveStatus === 'saved' ? 'text-emerald-600 dark:text-emerald-400' :
+                      'text-red-500 dark:text-red-400'
+                    }`}>
+                      {draftSaveStatus === 'saving' && '저장 중…'}
+                      {draftSaveStatus === 'saved' && '저장됨 ✓'}
+                      {draftSaveStatus === 'error' && '저장 실패'}
+                    </span>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="text-center py-4 border-2 border-dashed border-border dark:border-zinc-700 rounded-xl">
@@ -904,9 +1046,18 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
           <button
             onClick={handleGenerate}
             disabled={generating || (!(ideaBrief?.raw || '').trim() && !(ideaBrief?.story?.ki || '').trim())}
-            className="flex items-center gap-1.5 px-5 py-2.5 bg-ink-black text-white dark:bg-white dark:text-ink-black rounded-full text-sm font-bold hover:bg-comic-blue dark:hover:bg-comic-orange hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50"
+            className={`flex items-center gap-1.5 px-5 py-2.5 rounded-full text-sm font-bold hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50 ${
+              inputsChanged && !generating
+                ? 'bg-orange-500 text-white hover:bg-orange-600'
+                : 'bg-ink-black text-white dark:bg-white dark:text-ink-black hover:bg-comic-blue dark:hover:bg-comic-orange'
+            }`}
           >
-            {generating ? <><RefreshCw size={14} className="animate-spin" /> 생성 중...</> : '기획 생성'}
+            {generating
+              ? <><RefreshCw size={14} className="animate-spin" /> 생성 중...</>
+              : inputsChanged
+                ? '기획 다시 생성 — 등장인물/설정이 바뀌었어요'
+                : '기획 생성'
+            }
           </button>
         </div>
 
