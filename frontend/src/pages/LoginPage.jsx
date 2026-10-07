@@ -1,5 +1,6 @@
+import { useEffect } from 'react';
 import { Sparkles } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
 
@@ -88,6 +89,14 @@ const providers = [
 ];
 
 export default function LoginPage() {
+  const location = useLocation();
+  useEffect(() => {
+    const from = location.state?.from;
+    if (from && from !== '/' && from !== '/login') {
+      sessionStorage.setItem('login_redirect', from);
+    }
+  }, [location.state]);
+
   return (
     <div className="min-h-screen bg-transparent flex items-center justify-center p-4">
       <div className="glass-card !bg-white/80 dark:!bg-night-card/80 p-8 w-full max-w-md shadow-md">

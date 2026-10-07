@@ -930,7 +930,7 @@ function InquiriesTab() {
   const openDetail = async (inq) => {
     setSelected(inq);
     setReply('');
-    const { data: d } = await api.get(`/inquiries/${inq.id}`);
+    const { data: d } = await api.get(`/admin/inquiries/${inq.id}`);
     setMessages(d.messages || []);
   };
 
@@ -941,7 +941,7 @@ function InquiriesTab() {
     setReply('');
     setSending(false);
     // 새로고침
-    const { data: d } = await api.get(`/inquiries/${selected.id}`);
+    const { data: d } = await api.get(`/admin/inquiries/${selected.id}`);
     setMessages(d.messages || []);
     setSelected(prev => ({ ...prev, status: d.status, status_label: d.status_label }));
     fetchList();

@@ -1,4 +1,4 @@
-import { Outlet, Link, useNavigate } from 'react-router-dom';
+import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { LogOut, Sparkles, Package, Bell, HelpCircle, Menu, Sun, Moon, MessageSquare, FileText } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -10,6 +10,7 @@ import { useTheme } from '../contexts/ThemeContext';
 export default function Layout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [packets, setPackets] = useState(null);
   const { theme, toggleTheme } = useTheme();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -30,12 +31,20 @@ export default function Layout() {
     return () => window.removeEventListener('packets:refresh', handler);
   }, [refreshPackets]);
 
-  // 미읽은 문의 답변 수
-  useEffect(() => {
+  // 미읽은 문의 답변 수 — 라우트 이동·포커스 복귀 시에도 갱신
+  const refreshUnread = useCallback(() => {
     if (user) {
       api.get('/inquiries/unread-count').then(({ data }) => setUnreadCount(data.unread_count || 0)).catch(() => {});
     }
   }, [user]);
+
+  useEffect(() => { refreshUnread(); }, [refreshUnread, location.pathname]);
+
+  useEffect(() => {
+    const onFocus = () => refreshUnread();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [refreshUnread]);
 
   // ? 드롭다운 바깥 클릭 닫기
   useEffect(() => {

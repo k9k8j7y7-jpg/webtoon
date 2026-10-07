@@ -18,9 +18,12 @@ export default function OAuthCallbackPage() {
       return;
     }
 
+    const redirectTo = sessionStorage.getItem('login_redirect') || '/';
+    sessionStorage.removeItem('login_redirect');
+
     api.post(`/auth/${provider}/callback`, { code })
       .then(({ data }) => login(data.access_token))
-      .then(() => navigate('/', { replace: true }))
+      .then(() => navigate(redirectTo, { replace: true }))
       .catch((err) => {
         const msg = err.response?.data?.detail || '로그인에 실패했습니다.';
         setError(msg);

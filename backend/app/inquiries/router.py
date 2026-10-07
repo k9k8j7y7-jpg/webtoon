@@ -194,7 +194,7 @@ async def get_inquiry_detail(
         .all()
     )
 
-    # 읽음 처리
+    # 읽음 처리 — 사용자 엔드포인트이므로 본인 문의면 관리자여도 갱신
     if inquiry.user_id == current_user.id and inquiry.answered_at:
         inquiry.user_read_at = datetime.now(timezone.utc)
         db.commit()
@@ -302,6 +302,29 @@ async def admin_list_inquiries(
         "inquiries": [_inquiry_to_dict(inq, include_device=True) for inq in inquiries],
         "unanswered_count": unanswered,
     }
+
+
+@router.get("/admin/inquiries/{inquiry_id}")
+async def admin_get_inquiry_detail(
+    inquiry_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    """관리자: 문의 상세 + 메시지. user_read_at 갱신 없음."""
+    inquiry = db.query(Inquiry).filter(Inquiry.id == inquiry_id).first()
+    if not inquiry:
+        raise HTTPException(status_code=404, detail="문의를 찾을 수 없습니다.")
+
+    messages = (
+        db.query(InquiryMessage)
+        .filter(InquiryMessage.inquiry_id == inquiry_id)
+        .order_by(InquiryMessage.created_at.asc())
+        .all()
+    )
+
+    result = _inquiry_to_dict(inquiry, include_device=True)
+    result["messages"] = [_message_to_dict(m) for m in messages]
+    return result
 
 
 @router.post("/admin/inquiries/{inquiry_id}/status")

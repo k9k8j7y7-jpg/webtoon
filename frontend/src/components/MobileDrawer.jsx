@@ -91,7 +91,7 @@ export default function MobileDrawer({ open, onClose, user, packets, onLogout })
               <MenuItem to="/" icon={Image} label="갤러리" />
               <Divider />
               <MenuItem to="/faq" icon={HelpCircle} label="FAQ" />
-              <MenuItem to="/login" icon={MessageSquare} label="문의하기" />
+              <MenuItem to="/inquiries/new" icon={MessageSquare} label="문의하기" />
               <MenuItem to="/terms" icon={FileText} label="이용약관" />
               <MenuItem to="/privacy" icon={Shield} label="개인정보처리방침" />
             </>

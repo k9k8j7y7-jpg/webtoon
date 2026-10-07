@@ -18,6 +18,10 @@ api.interceptors.response.use(
   (err) => {
     if (err.response?.status === 401) {
       localStorage.removeItem('token');
+      const path = window.location.pathname.replace(/^\/WEBTOON/, '') || '/';
+      if (path !== '/' && path !== '/login') {
+        sessionStorage.setItem('login_redirect', path);
+      }
       window.location.href = '/WEBTOON/login';
     }
     if (err.response?.status === 402) {
