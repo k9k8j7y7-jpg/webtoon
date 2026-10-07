@@ -37,6 +37,29 @@ async function overflowX(page) {
         console.log(`${prefix} ${name}: overflowX=${await overflowX(page)} → ${file}`);
       };
 
+      // 드로어 열린 상태 (모바일만)
+      if (mobile) {
+        await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+        await page.waitForTimeout(1500);
+        // ☰ 버튼 = sm:hidden인 첫 번째 button
+        const hamburger = await page.$('header button.sm\\:hidden');
+        if (hamburger) { await hamburger.click(); await page.waitForTimeout(800); }
+        await shot('drawer');
+        // 닫기: dim 배경 클릭
+        await page.click('.fixed.inset-0', { timeout: 2000 }).catch(() => {});
+        await page.waitForTimeout(400);
+      }
+
+      // 문의 목록
+      await page.goto(`${BASE}/inquiries`, { waitUntil: 'networkidle' });
+      await page.waitForTimeout(1500);
+      await shot('inquiries-list');
+
+      // 문의 작성 폼
+      await page.goto(`${BASE}/inquiries/new`, { waitUntil: 'networkidle' });
+      await page.waitForTimeout(1500);
+      await shot('inquiries-new');
+
       // 프로젝트 목록 (대시보드)
       await page.goto(`${BASE}/projects/5`, { waitUntil: 'networkidle' });
       await page.waitForTimeout(2000);
