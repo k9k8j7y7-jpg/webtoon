@@ -210,6 +210,7 @@ async def list_characters(
 
 class CharacterStubRequest(BaseModel):
     ref_key: str
+    is_photo_real: bool = False
 
 
 @router.post("/projects/{project_id}/episodes/{episode_id}/characters/stub")
@@ -256,6 +257,7 @@ async def create_character_stub(
                 description=pc.get("description", ""),
                 style=style.preset_key if style else None,
                 status="draft",
+                is_photo_real=body.is_photo_real,
             )
             db.add(character)
             db.flush()
@@ -283,6 +285,8 @@ class CharacterUpdateRequest(BaseModel):
     body_type: str | None = None
     mood: str | None = None
     detail_notes: str | None = None
+    is_photo_real: bool | None = None
+    consent_given: bool | None = None
 
 
 @router.put("/characters/{character_id}")
@@ -314,6 +318,14 @@ async def update_character(
         character.description = build_character_description(character)
         # appearance_en 재생성 (영문 외형 명세 — 컷 프롬프트 주입용)
         character.appearance_en = await build_appearance_en(character)
+
+    # 실사 캐릭터 플래그
+    if body.is_photo_real is not None:
+        character.is_photo_real = body.is_photo_real
+    if body.consent_given is not None:
+        if body.consent_given and not character.is_photo_real:
+            raise HTTPException(status_code=400, detail="실사 캐릭터가 아닌데 동의를 설정할 수 없습니다")
+        character.consent_given = body.consent_given
 
     db.commit()
 

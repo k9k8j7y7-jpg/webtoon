@@ -110,7 +110,9 @@ def build_cut_prompt(
             parts.append(
                 f"The ONLY exception: the person from the reference photo(s) — {names} — keeps their real face, "
                 f"body, age, hairstyle and exact outfit from the photo, as if a real person is placed inside a "
-                f"cartoon world, even when small or distant in the frame. Everything else — every animal, every "
+                f"cartoon world, even when small or distant in the frame "
+                f"— including full natural color, even when the chosen style is monochrome/black-and-white. "
+                f"Everything else — every animal, every "
                 f"other person, the whole background — is drawn as 2D illustration, never photographic"
             )
 

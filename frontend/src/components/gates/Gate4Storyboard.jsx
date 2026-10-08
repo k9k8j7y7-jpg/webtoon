@@ -268,7 +268,7 @@ export default function Gate4Storyboard({ projectId, episodeId, onRefresh, readO
       const body = target ? { target_cut_count: target } : {};
       const { data } = await api.post(`/projects/${projectId}/episodes/${episodeId}/storyboard`, body);
       setCuts(data.cuts || []);
-      await loadCuts();
+      await Promise.all([loadCuts(), loadLocations()]);
       await loadRecommendation();
       await onRefresh();
     } catch (err) {

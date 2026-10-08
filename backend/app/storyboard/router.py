@@ -84,7 +84,7 @@ async def create_storyboard(
                 detail=f"최대 {rec['recommended_max']}컷까지 가능합니다.",
             )
 
-    # 장소 누락 체크: 대본이 참조하는 location_id 중 DB에 없는 것
+    # 장소 누락 체크 → 자동 생성 (텍스트 전용, 0패킷)
     from app.locations.models import Location as LocModel
     script_location_ids = set()
     for scene in script_data.get("scenes", []):
@@ -102,10 +102,26 @@ async def create_storyboard(
         }
         missing = script_location_ids - existing_refs
         if missing:
-            raise HTTPException(
-                status_code=400,
-                detail=f"장소를 먼저 정리해 주세요. 누락: {', '.join(sorted(missing))}",
-            )
+            # 대본의 locations 정보에서 누락 장소를 자동 생성 (텍스트 전용, 0패킷)
+            script_locations = {
+                loc.get("ref_key"): loc
+                for loc in script_data.get("locations", [])
+                if loc.get("ref_key")
+            }
+            for ref_key in sorted(missing):
+                loc_info = script_locations.get(ref_key, {})
+                new_loc = LocModel(
+                    episode_id=episode_id,
+                    ref_key=ref_key,
+                    name=loc_info.get("name", ref_key),
+                    description=loc_info.get("description", ""),
+                    mood_notes=loc_info.get("mood_notes", ""),
+                    status="draft",
+                )
+                db.add(new_loc)
+            db.flush()
+            logger.info("auto-created %d missing locations for ep%s: %s",
+                        len(missing), episode_id, ", ".join(sorted(missing)))
 
     # 캐릭터 누락 체크: 대본이 참조하는 character_id 중 에피소드 캐릭터에 없는 것
     from app.characters.models import Character as CharModel, EpisodeCharacter as ECModel

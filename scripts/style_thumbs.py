@@ -119,6 +119,11 @@ SCENES = {
         "An old bearded wizard in a weathered cloak hands a glowing map to a young farm boy in a bustling medieval market, torchlight on their faces",
         "Medieval European market square at dusk, stone buildings, torches, market stalls",
     ),
+    "bw_manga": (
+        "medium",
+        "A narrow back-alley sidewalk in a modern Korean city on a clear day, apartment blocks and small shops on both sides, utility poles with tangled wires, wall-mounted air-conditioner units, graffiti on a concrete wall, a row of trees far down the road, empty or one person seen from behind in casual modern clothes. NO Japanese elements — no kimono, no katana, no wooden Edo buildings, no paper lanterns",
+        "Modern Korean urban back alley, daytime, concrete and brick buildings, block-paved sidewalk",
+    ),
 }
 
 
@@ -131,6 +136,7 @@ SHOT_OVERRIDE = {
     "pixel_art": "full",
     "storybook": "full",
     "marvel": "full",
+    "bw_manga": "full",
 }
 
 

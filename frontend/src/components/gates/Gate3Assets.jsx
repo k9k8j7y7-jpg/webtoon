@@ -336,7 +336,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
     setShowRealPicker(false);
     setError('');
     try {
-      const { data } = await api.post(`/projects/${projectId}/episodes/${episodeId}/characters/stub`, { ref_key: refKey });
+      const { data } = await api.post(`/projects/${projectId}/episodes/${episodeId}/characters/stub`, { ref_key: refKey, is_photo_real: true });
       await loadAssets();
       openCharEditor(data, { is_photo_real: true });
     } catch (err) {
@@ -418,6 +418,8 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
         body_type: editingChar.body_type || null,
         mood: editingChar.mood || null,
         detail_notes: editingChar.detail_notes || null,
+        is_photo_real: editingChar.is_photo_real || false,
+        consent_given: editingChar.consent_given || false,
       });
       setEditingChar(null);
       await loadAssets();
@@ -441,6 +443,8 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
           body_type: editingChar.body_type || null,
           mood: editingChar.mood || null,
           detail_notes: editingChar.detail_notes || null,
+          is_photo_real: editingChar.is_photo_real || false,
+          consent_given: editingChar.consent_given || false,
         });
       } catch (err) {
         setError(err.response?.data?.detail || err.message);
@@ -1165,12 +1169,64 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
                         className="w-full mt-0.5 px-2 py-1.5 text-xs font-bold rounded-lg border border-border dark:border-zinc-600 bg-white dark:bg-zinc-800 text-ink-black dark:text-white"
                       />
                     </div>
-                    {/* 사진 업로드 */}
+                    {/* C: 동물 캐릭터 체크박스 */}
+                    {!editingChar.is_photo_real && (
+                    <label className="flex items-center gap-2 text-[10px] text-gray-600 dark:text-gray-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={editingChar.is_animal || false}
+                        onChange={e => updateCharField('is_animal', e.target.checked)}
+                        className="rounded border-gray-300 dark:border-zinc-600"
+                      />
+                      <span className="font-bold">동물 캐릭터</span>
+                      <span className="font-normal text-gray-400 dark:text-gray-500">(사진 분석 시 동물용 프롬프트 사용)</span>
+                    </label>
+                    )}
+
+                    {/* D: 실사 캐릭터 토글 — 사진 업로드보다 위에 배치 (동의 먼저 체크) */}
+                    <label className="flex items-center gap-2 text-[10px] text-gray-600 dark:text-gray-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={editingChar.is_photo_real || false}
+                        onChange={e => updateCharField('is_photo_real', e.target.checked)}
+                        className="rounded border-gray-300 dark:border-zinc-600"
+                      />
+                      <span className="font-bold text-blue-600 dark:text-blue-400">실사 캐릭터</span>
+                      <span className="font-normal text-gray-400 dark:text-gray-500">(사진 속 인물이 웹툰에 등장)</span>
+                    </label>
+                    {editingChar.is_photo_real && (
+                      <div className="space-y-2 pl-5">
+                        <label className="flex items-center gap-2 text-[10px] text-gray-600 dark:text-gray-300 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={editingChar.consent_given || false}
+                            onChange={e => updateCharField('consent_given', e.target.checked)}
+                            className="rounded border-blue-300 dark:border-blue-600"
+                          />
+                          <span className="font-bold">본인이거나 초상권 사용에 동의한 사람의 사진입니다</span>
+                        </label>
+                        {!editingChar.consent_given && (
+                          <p className="text-[10px] text-red-500 dark:text-red-400 font-bold">동의 체크 후 사진을 업로드할 수 있습니다</p>
+                        )}
+                        <p className="text-[10px] text-blue-500 dark:text-blue-400">
+                          사진 1~3장을 업로드하세요 (정면 필수·전신 권장). 시트 생성 없이 사진이 곧 참조입니다.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* 사진 업로드 — 실사 캐릭터는 동의 체크 후에만 활성화 */}
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400">
                         참고 사진 <span className="font-normal">(1~3장 — 외형을 자동으로 읽어옵니다)</span>
                       </label>
-                      {editingChar.reference_photos?.length > 0 ? (
+                      {editingChar.is_photo_real && !editingChar.consent_given ? (
+                        <div className="flex items-center gap-2 px-3 py-2 border border-dashed border-gray-300 dark:border-zinc-600 rounded-lg opacity-50">
+                          <Camera size={12} className="text-gray-400" />
+                          <span className="text-xs font-bold text-gray-400 dark:text-gray-500">
+                            초상권 동의를 먼저 체크하세요
+                          </span>
+                        </div>
+                      ) : editingChar.reference_photos?.length > 0 ? (
                         <div className="space-y-2">
                           <div className="flex items-center gap-2">
                             {editingChar.reference_photos.map((url, idx) => (
@@ -1234,51 +1290,6 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
                           사진에서 외형을 읽어왔어요. 확인 후 저장하세요
                         </p>
                         <button onClick={() => setCharPhotoExtracted(false)} className="ml-auto text-purple-400 hover:text-purple-600"><X size={12} /></button>
-                      </div>
-                    )}
-
-                    {/* C: 동물 캐릭터 체크박스 */}
-                    {!editingChar.is_photo_real && (
-                    <label className="flex items-center gap-2 text-[10px] text-gray-600 dark:text-gray-300 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={editingChar.is_animal || false}
-                        onChange={e => updateCharField('is_animal', e.target.checked)}
-                        className="rounded border-gray-300 dark:border-zinc-600"
-                      />
-                      <span className="font-bold">동물 캐릭터</span>
-                      <span className="font-normal text-gray-400 dark:text-gray-500">(사진 분석 시 동물용 프롬프트 사용)</span>
-                    </label>
-                    )}
-
-                    {/* D: 실사 캐릭터 토글 */}
-                    <label className="flex items-center gap-2 text-[10px] text-gray-600 dark:text-gray-300 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={editingChar.is_photo_real || false}
-                        onChange={e => updateCharField('is_photo_real', e.target.checked)}
-                        className="rounded border-gray-300 dark:border-zinc-600"
-                      />
-                      <span className="font-bold text-blue-600 dark:text-blue-400">실사 캐릭터</span>
-                      <span className="font-normal text-gray-400 dark:text-gray-500">(사진 속 인물이 웹툰에 등장)</span>
-                    </label>
-                    {editingChar.is_photo_real && (
-                      <div className="space-y-2 pl-5">
-                        <label className="flex items-center gap-2 text-[10px] text-gray-600 dark:text-gray-300 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={editingChar.consent_given || false}
-                            onChange={e => updateCharField('consent_given', e.target.checked)}
-                            className="rounded border-blue-300 dark:border-blue-600"
-                          />
-                          <span className="font-bold">본인이거나 초상권 사용에 동의한 사람의 사진입니다</span>
-                        </label>
-                        {!editingChar.consent_given && (
-                          <p className="text-[10px] text-red-500 dark:text-red-400 font-bold">동의 없이는 저장할 수 없습니다</p>
-                        )}
-                        <p className="text-[10px] text-blue-500 dark:text-blue-400">
-                          사진 1~3장을 업로드하세요 (정면 필수·전신 권장). 시트 생성 없이 사진이 곧 참조입니다.
-                        </p>
                       </div>
                     )}
 
@@ -1428,6 +1439,14 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
                   </div>
                 )}
 
+                {/* 실사 캐릭터: 사진 미업로드 안내 */}
+                {c.is_photo_real && (!c.reference_photos || c.reference_photos.length === 0) && (
+                  <div className="mt-2 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                    <p className="text-[11px] font-bold text-amber-600 dark:text-amber-400">
+                      사진 없음 — 실사 추가 미완료. 카드를 눌러 동의 체크 후 사진을 업로드하세요.
+                    </p>
+                  </div>
+                )}
                 {/* 실사 캐릭터: 시트 대신 참고 사진(첫 장 = 정면) */}
                 {c.is_photo_real && c.reference_photos?.length > 0 && (
                   <div className="flex gap-2 mt-2 overflow-x-auto">

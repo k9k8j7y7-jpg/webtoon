@@ -33,6 +33,7 @@ STYLE_PRESETS = {
     "emotional_romance": {"tier": "beta", "label": "감성로맨스", "prompt": "Emotional romance webtoon style, soft pastel tones, delicate expressions, warm ambient lighting, gentle gradients, intimate mood"},
     "marvel": {"tier": "beta", "label": "마블풍", "prompt": "Marvel comics inspired style, bold dynamic composition, strong muscular proportions, dramatic shadows, vibrant saturated colors, action-packed"},
     "western_fantasy": {"tier": "beta", "label": "서양판타지", "prompt": "Western fantasy illustration style, painterly rendering, medieval European aesthetic, dramatic lighting, rich earth tones, detailed environments"},
+    "bw_manga": {"tier": "beta", "label": "흑백 만화", "prompt": "black and white manga illustration, pure monochrome (no color at all), clean pen-and-ink line art, screentone halftone dot shading for mid-tones, solid blacks for deep shadows, detailed perspective backgrounds, seinen-style manga print look (pen line art + screentone), setting-neutral"},
 }
 
 
