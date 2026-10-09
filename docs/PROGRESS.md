@@ -1,6 +1,11 @@
 # 진행 상태 추적
 
-## 현재: 구독·알림 1a — step30 리허설·백업 완료, 운영 적용 "실행해" 대기 (2026-10-09)
+## 현재: 구독·알림 1b 배포 — 도도 확인 대기 (2026-10-09)
+- 1a 커밋 599e963. 1b: 랜딩 "/" 회원도 공개 홈(대시보드는 /my), 구독 API·버튼, /subscriptions, notify()/notify_followers()(최초 공개 1회), 문의 답변 notify, /notifications·🔔 알림센터(PC 드롭다운·모바일 전체 화면)
+- project_t_test에 step29·30 적용됨(1b 시나리오 검증용, 시드 정리 완료)
+- 4단계 CLAUDE.md 반영 필요: "비로그인 루트=랜딩/로그인=대시보드" → "/" 상시 랜딩, 대시보드 /my
+
+## 이전: 구독·알림 1a — step30 운영 적용·배포 완료 (2026-10-09)
 - 지시서 `docs/지시서-구독알림.md`, 조사 `docs/조사-구독알림.md`
 - 결정: 안 A(작가 공개 is_public + 관리자 featured 분리), 작가 페이지 `/u/:nickname`, 닉네임은 [공개하기] 시점 필수(모달)
 - step30: users nickname·bio·avatar_path / episodes is_public·published_at·featured(기존 showcase 4편 이관) / author_subscriptions(기존 billing subscriptions와 충돌 회피) / notifications

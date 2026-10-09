@@ -108,7 +108,7 @@ export default function SettingsPage() {
           disabled={saving || !nickname.trim()}
           className="neon-btn w-full flex items-center justify-center gap-1 h-11 !rounded-full text-sm disabled:opacity-50"
         >
-          <Save size={14} /> {saving ? '저장 중…' : '저장'}
+          <Save size={14} /> {saving ? '저장 중…' : user?.nickname ? '변경 저장' : '저장'}
         </button>
       </section>
 

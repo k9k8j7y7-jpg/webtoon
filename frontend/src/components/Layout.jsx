@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../api/client';
 import NoticeBar from './NoticeBar';
 import MobileDrawer from './MobileDrawer';
+import NotificationBell from './NotificationBell';
 import { useTheme } from '../contexts/ThemeContext';
 
 export default function Layout() {
@@ -31,10 +32,10 @@ export default function Layout() {
     return () => window.removeEventListener('packets:refresh', handler);
   }, [refreshPackets]);
 
-  // 미읽은 문의 답변 수 — 라우트 이동·포커스 복귀 시에도 갱신
+  // 안 읽은 알림 수(새 화·문의 답변 등 알림센터 통합) — 라우트 이동·포커스 복귀·읽음 처리 시 갱신
   const refreshUnread = useCallback(() => {
     if (user) {
-      api.get('/inquiries/unread-count').then(({ data }) => setUnreadCount(data.unread_count || 0)).catch(() => {});
+      api.get('/notifications/unread-count').then(({ data }) => setUnreadCount(data.unread_count || 0)).catch(() => {});
     }
   }, [user]);
 
@@ -43,7 +44,11 @@ export default function Layout() {
   useEffect(() => {
     const onFocus = () => refreshUnread();
     window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
+    window.addEventListener('notifications:refresh', onFocus);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('notifications:refresh', onFocus);
+    };
   }, [refreshUnread]);
 
   // ? 드롭다운 바깥 클릭 닫기
@@ -118,13 +123,8 @@ export default function Layout() {
               )}
             </div>
 
-            {/* 🔔 알림 */}
-            <Link to="/inquiries" className="relative p-1.5 text-gray-400 dark:text-zinc-500 hover:text-comic-orange rounded transition-colors shrink-0" title="알림">
-              <Bell size={18} />
-              {unreadCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full" />
-              )}
-            </Link>
+            {/* 🔔 알림센터 */}
+            <NotificationBell unreadCount={unreadCount} />
 
             {/* PC: 프로필(→ 설정) + 로그아웃 */}
             <Link to="/settings" className="hidden sm:flex items-center gap-1 text-sm font-bold text-gray-600 dark:text-gray-300 whitespace-nowrap hover:text-comic-orange no-underline" title="설정">
@@ -143,6 +143,7 @@ export default function Layout() {
         onClose={() => setDrawerOpen(false)}
         user={user}
         packets={packets}
+        unreadCount={unreadCount}
         onLogout={handleLogout}
       />
 

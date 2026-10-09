@@ -1137,7 +1137,7 @@ export default function AdminPage() {
         ))}
         <div className="mt-auto pt-4 border-t border-white/10">
           <button
-            onClick={() => navigate('/')}
+            onClick={() => navigate('/my')}
             className="w-full px-3 py-2 rounded-lg text-sm text-gray-500 hover:text-white hover:bg-white/5 text-left transition-colors"
           >
             ← 서비스로 돌아가기

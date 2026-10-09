@@ -21,6 +21,8 @@ import InquiryNewPage from './pages/InquiryNewPage';
 import InquiryDetailPage from './pages/InquiryDetailPage';
 import SettingsPage from './pages/SettingsPage';
 import AuthorPage from './pages/AuthorPage';
+import SubscriptionsPage from './pages/SubscriptionsPage';
+import NotificationsPage from './pages/NotificationsPage';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -37,7 +39,7 @@ function AppRoutes() {
 
   return (
     <Routes>
-      <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
+      <Route path="/login" element={user ? <Navigate to="/my" replace /> : <LoginPage />} />
       <Route path="/login/callback/:provider" element={<OAuthCallbackPage />} />
       <Route path="/bubble-test" element={<BubbleTestPage />} />
       <Route path="/privacy" element={<PrivacyPage />} />
@@ -47,11 +49,13 @@ function AppRoutes() {
       <Route path="/u/:nickname" element={<AuthorPage />} />
       <Route path="/admin/*" element={<AdminPage />} />
 
-      <Route path="/" element={user ? <ProtectedRoute><Layout /></ProtectedRoute> : <LandingPage />}>
-        <Route index element={user ? <DashboardPage /> : null} />
-      </Route>
+      {/* 랜딩 = 로그인 여부와 무관한 공개 홈(추천·전체 갤러리). 내 작품 대시보드는 /my */}
+      <Route path="/" element={<LandingPage />} />
 
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+        <Route path="/my" element={<DashboardPage />} />
+        <Route path="/subscriptions" element={<SubscriptionsPage />} />
+        <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/projects/:projectId" element={<ProjectPage />} />
         <Route path="/projects/:projectId/episodes/:episodeId/workflow" element={<WorkflowPage />} />
         <Route path="/projects/:projectId/series/:seriesId" element={<SeriesPage />} />

@@ -18,7 +18,7 @@ export default function OAuthCallbackPage() {
       return;
     }
 
-    const redirectTo = sessionStorage.getItem('login_redirect') || '/';
+    const redirectTo = sessionStorage.getItem('login_redirect') || '/my';
     sessionStorage.removeItem('login_redirect');
 
     api.post(`/auth/${provider}/callback`, { code })

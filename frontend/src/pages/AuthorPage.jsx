@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { Settings } from 'lucide-react';
 import { Avatar } from '../components/AuthorLink';
+import SubscribeButton from '../components/SubscribeButton';
 import resolveUrl, { CATEGORY_LABELS } from '../utils/resolveUrl';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
@@ -10,7 +11,6 @@ const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
 // 작가 페이지 /u/:nickname — 비로그인 열람 가능, 뷰어처럼 항상 다크
 export default function AuthorPage() {
   const { nickname } = useParams();
-  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
 
@@ -26,14 +26,6 @@ export default function AuthorPage() {
       .catch((err) => { if (!cancelled) setError(err.response?.status || 'error'); });
     return () => { cancelled = true; };
   }, [nickname]);
-
-  const handleSubscribe = () => {
-    if (!localStorage.getItem('token')) {
-      navigate('/login', { state: { from: `/u/${nickname}` } });
-      return;
-    }
-    alert('구독 기능은 곧 열려요!');
-  };
 
   const shell = (children) => (
     <div className="min-h-screen bg-[#0A0F1D] text-white" style={{ fontFamily: "'Noto Sans KR', sans-serif" }}>
@@ -85,9 +77,13 @@ export default function AuthorPage() {
             <Settings size={14} /> 프로필 편집
           </Link>
         ) : (
-          <button onClick={handleSubscribe} className="neon-btn mt-1 h-10 !px-8 !rounded-full text-sm">
-            구독
-          </button>
+          <div className="mt-1">
+            <SubscribeButton
+              authorId={author.id}
+              subscribed={data.is_subscribed}
+              onChange={(r) => setData((d) => ({ ...d, is_subscribed: r.subscribed, subscriber_count: r.subscriber_count }))}
+            />
+          </div>
         )}
       </section>
 
@@ -101,7 +97,7 @@ export default function AuthorPage() {
               <Link
                 key={w.share_token}
                 to={`/view/${w.share_token}`}
-                className="group rounded-2xl overflow-hidden bg-white/5 border border-white/10 hover:border-purple-500/50 transition-colors p-2 flex flex-col no-underline text-white"
+                className="group min-w-0 rounded-2xl overflow-hidden bg-white/5 border border-white/10 hover:border-purple-500/50 transition-colors p-2 flex flex-col no-underline text-white"
               >
                 <div className="relative aspect-[3/4] rounded-xl overflow-hidden bg-[#0A0F1D]/80 mb-2">
                   {w.thumbnail_url ? (

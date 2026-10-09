@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Menu } from 'lucide-react';
 import MobileDrawer from '../components/MobileDrawer';
 import AuthorLink from '../components/AuthorLink';
+import { useAuth } from '../contexts/AuthContext';
 import { CATEGORY_LABELS } from '../utils/resolveUrl';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
@@ -27,6 +28,10 @@ const faqs = [
 
 export default function LandingPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { user, logout } = useAuth();
+  // 회원도 랜딩을 공개 홈으로 쓴다 — 시작 버튼은 회원이면 내 작품(/my)으로
+  const startPath = user ? '/my' : '/login';
   const [scrolled, setScrolled] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('단편');
@@ -60,6 +65,13 @@ export default function LandingPage() {
   }, [activeTab, allWorks]);
 
   // 전체 탭: 서버가 공개순으로 준 카테고리 그룹을 합친 것 (그룹 내 순서 유지)
+  // ☰ "갤러리"(/#gallery)로 들어오면 갤러리로 스크롤
+  useEffect(() => {
+    if (location.hash === '#gallery') {
+      setTimeout(() => document.getElementById('gallery')?.scrollIntoView({ behavior: 'smooth' }), 100);
+    }
+  }, [location.hash, location.key]);
+
   const filteredWebtoons = activeTab === '전체'
     ? (allWorks || [])
     : (galleryData[CATEGORY_MAP[activeTab]] || []).map(t => ({ ...t, category: CATEGORY_MAP[activeTab] }));
@@ -91,8 +103,8 @@ export default function LandingPage() {
               <button onClick={() => scrollToSection('faq')} className="hover:text-white transition-colors">FAQ</button>
             </nav>
           </div>
-          <button onClick={() => navigate('/login')} className="px-6 py-2.5 bg-white/5 border border-white/10 hover:bg-white/10 rounded-full text-sm font-medium transition-colors">
-            시작하기
+          <button onClick={() => navigate(startPath)} className="px-5 sm:px-6 py-2.5 bg-white/5 border border-white/10 hover:bg-white/10 rounded-full text-sm font-medium transition-colors whitespace-nowrap">
+            {user ? '내 작품' : '시작하기'}
           </button>
         </div>
       </header>
@@ -100,9 +112,9 @@ export default function LandingPage() {
       <MobileDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        user={null}
+        user={user}
         packets={null}
-        onLogout={() => {}}
+        onLogout={() => { logout(); navigate('/'); }}
       />
 
       <main>
@@ -123,15 +135,15 @@ export default function LandingPage() {
           </p>
           
           <div className="flex flex-col sm:flex-row gap-4 z-10 mb-8">
-            <button onClick={() => navigate('/login')} className="group relative px-8 py-4 bg-white/5 backdrop-blur-sm border border-white/10 rounded-full overflow-hidden transition-all hover:scale-105 hover:shadow-[0_0_40px_rgba(168,85,247,0.4)]">
+            <button onClick={() => navigate(startPath)} className="group relative px-8 py-4 bg-white/5 backdrop-blur-sm border border-white/10 rounded-full overflow-hidden transition-all hover:scale-105 hover:shadow-[0_0_40px_rgba(168,85,247,0.4)]">
               <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-purple-600 to-cyan-500 opacity-80 group-hover:opacity-100 transition-opacity"></div>
-              <span className="relative text-white font-semibold text-lg tracking-wide">무료로 시작하기</span>
+              <span className="relative text-white font-semibold text-lg tracking-wide">{user ? '내 작품 만들기' : '무료로 시작하기'}</span>
             </button>
             <button onClick={() => scrollToSection('gallery')} className="px-8 py-4 bg-white/5 backdrop-blur-sm border border-white/10 hover:bg-white/10 rounded-full text-white font-semibold text-lg transition-all hover:scale-105">
               작품 구경하기
             </button>
           </div>
-          <p className="text-sm text-gray-500 z-10">카카오 · 구글 · 네이버로 3초 가입</p>
+          {!user && <p className="text-sm text-gray-500 z-10">카카오 · 구글 · 네이버로 3초 가입</p>}
         </section>
 
         {/* 3. Gallery Section */}
@@ -176,8 +188,8 @@ export default function LandingPage() {
                   
                   {/* 하단 정보 영역 */}
                   <div className="flex flex-col gap-2 px-1">
-                    <div className="flex justify-between items-start gap-2">
-                      <h3 className="text-lg font-bold text-white truncate leading-tight">{toon.title}</h3>
+                    <div className="flex justify-between items-start gap-2 min-w-0">
+                      <h3 className="flex-1 min-w-0 text-lg font-bold text-white truncate leading-tight">{toon.title}</h3>
                       <span className="shrink-0 px-2 py-1 bg-white/10 rounded-md text-[10px] text-cyan-300 border border-white/10 font-semibold whitespace-nowrap">
                         {CATEGORY_LABELS[toon.category] || activeTab}
                       </span>
@@ -241,7 +253,7 @@ export default function LandingPage() {
                   <div className={`w-full py-3 rounded-xl text-center mb-6 ${isPro ? 'bg-white/10' : 'bg-white/5'}`}>
                     <span className={`text-cyan-400 font-bold ${isPro ? 'text-lg' : ''}`}>{p.packets}</span> 패킷
                   </div>
-                  <button onClick={() => navigate('/login')} className={`w-full py-3 rounded-full font-medium transition-colors ${
+                  <button onClick={() => navigate(user ? '/packets' : '/login')} className={`w-full py-3 rounded-full font-medium transition-colors ${
                     isPro
                       ? 'bg-gradient-to-r from-purple-600 to-cyan-500 hover:opacity-90 font-bold text-white'
                       : 'border border-white/20 hover:bg-white/10'

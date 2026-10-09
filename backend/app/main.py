@@ -90,9 +90,14 @@ if os.path.isdir(FRONTEND_DIR):
             storage_path = os.path.join(LOCAL_STORAGE_DIR, path[len("storage/"):])
             if os.path.isfile(storage_path):
                 return StarletteFileResponse(storage_path)
-        # 프론트엔드 정적 파일 서빙
+        # 프론트엔드 정적 파일 서빙 — 해시 파일명(assets/)은 장기 캐시
         file_path = os.path.join(FRONTEND_DIR, path)
-        if os.path.isfile(file_path):
-            return StarletteFileResponse(file_path)
-        # SPA fallback
-        return StarletteFileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+        if os.path.isfile(file_path) and not path.endswith("index.html"):
+            headers = {"Cache-Control": "public, max-age=31536000, immutable"} if path.startswith("assets/") else None
+            return StarletteFileResponse(file_path, headers=headers)
+        # SPA fallback — index.html은 매번 재검증(no-cache). 캐시 헤더가 없으면 브라우저가 배포 전
+        # index.html(→ 옛 번들)을 휴리스틱 캐시로 계속 써서 새 라우팅이 안 보인다(2026-10-09 로고→/my)
+        return StarletteFileResponse(
+            os.path.join(FRONTEND_DIR, "index.html"),
+            headers={"Cache-Control": "no-cache"},
+        )

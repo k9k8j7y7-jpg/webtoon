@@ -9,6 +9,7 @@ from app.users.models import User
 from app.projects.models import Episode, Project, ShowcaseLike
 from app.storyboard.models import Cut
 from app.products.models import Product
+from app.social.models import AuthorSubscription
 from app.social.service import author_payload, default_category, first_cut_image
 
 router = APIRouter(prefix="/showcase", tags=["showcase"])
@@ -125,11 +126,20 @@ def get_viewer_data(
 
     from app.workflow.gate import get_page_format
     author = db.query(User).filter(User.id == project.user_id).first()
+    is_me = current_user is not None and current_user.id == project.user_id
+    is_subscribed = False
+    if current_user is not None and not is_me:
+        is_subscribed = db.query(AuthorSubscription.id).filter(
+            AuthorSubscription.follower_id == current_user.id,
+            AuthorSubscription.author_id == project.user_id,
+        ).first() is not None
 
     return {
         "title": episode.title or project.title,
         "episode_no": episode.episode_no,
         "author": author_payload(author),
+        "is_me": is_me,
+        "is_subscribed": is_subscribed,
         "is_public": bool(episode.is_public),
         "view_count": episode.view_count,
         "like_count": episode.like_count,

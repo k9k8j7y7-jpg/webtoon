@@ -1,14 +1,14 @@
 import { useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { X, Home, Palette, Image, Package, Bell, HelpCircle, MessageSquare, FileText, Shield, Sun, Moon, LogOut, Settings } from 'lucide-react';
+import { X, Home, Palette, Image, Package, Bell, HelpCircle, MessageSquare, FileText, Shield, Sun, Moon, LogOut, Settings, Users, Inbox } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 
-export default function MobileDrawer({ open, onClose, user, packets, onLogout }) {
+export default function MobileDrawer({ open, onClose, user, packets, unreadCount = 0, onLogout }) {
   const location = useLocation();
   const { theme, toggleTheme } = useTheme();
 
   // 라우트 이동 시 닫힘
-  useEffect(() => { if (open) onClose(); }, [location.pathname]);
+  useEffect(() => { if (open) onClose(); }, [location.pathname, location.hash]);
 
   // ESC로 닫기
   useEffect(() => {
@@ -71,25 +71,27 @@ export default function MobileDrawer({ open, onClose, user, packets, onLogout })
           {user ? (
             <>
               <SectionLabel>만들기</SectionLabel>
-              <MenuItem to="/" icon={Palette} label="내 작품" />
+              <MenuItem to="/my" icon={Palette} label="내 작품" />
 
               <SectionLabel>둘러보기</SectionLabel>
-              <MenuItem to="/" icon={Image} label="갤러리" />
+              <MenuItem to="/#gallery" icon={Image} label="갤러리" />
+              <MenuItem to="/subscriptions" icon={Users} label="내 구독" />
 
               <SectionLabel>계정</SectionLabel>
+              <MenuItem to="/notifications" icon={Bell} label="알림" badge={unreadCount > 0 ? `${unreadCount}` : null} />
               <MenuItem to="/packets" icon={Package} label="패킷 충전" badge={packets?.balance != null ? `${packets.balance}패킷` : null} />
-              <MenuItem to="/inquiries" icon={Bell} label="알림" />
               <MenuItem to="/settings" icon={Settings} label="설정" badge={user.nickname ? null : '닉네임 없음'} />
 
               <SectionLabel>도움말</SectionLabel>
               <MenuItem to="/faq" icon={HelpCircle} label="FAQ" />
               <MenuItem to="/inquiries/new" icon={MessageSquare} label="문의하기" />
+              <MenuItem to="/inquiries" icon={Inbox} label="내 문의 내역" />
               <MenuItem to="/terms" icon={FileText} label="이용약관" />
               <MenuItem to="/privacy" icon={Shield} label="개인정보처리방침" />
             </>
           ) : (
             <>
-              <MenuItem to="/" icon={Image} label="갤러리" />
+              <MenuItem to="/#gallery" icon={Image} label="갤러리" />
               <Divider />
               <MenuItem to="/faq" icon={HelpCircle} label="FAQ" />
               <MenuItem to="/inquiries/new" icon={MessageSquare} label="문의하기" />

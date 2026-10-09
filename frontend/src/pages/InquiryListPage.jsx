@@ -64,8 +64,8 @@ export default function InquiryListPage() {
   return (
     <div className="min-h-screen bg-transparent">
       <div className="max-w-2xl mx-auto px-4 py-8">
-        <Link to="/" className="inline-flex items-center gap-1 text-sm font-bold text-gray-400 hover:text-comic-orange transition-colors mb-6 no-underline">
-          <ArrowLeft size={16} /> 홈
+        <Link to="/my" className="inline-flex items-center gap-1 text-sm font-bold text-gray-400 hover:text-comic-orange transition-colors mb-6 no-underline">
+          <ArrowLeft size={16} /> 내 작품
         </Link>
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold font-serif text-ink-black dark:text-white">내 문의</h1>

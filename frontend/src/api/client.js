@@ -16,7 +16,11 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.response?.status === 401) {
+    // 앱 시작 시 /me 확인은 예외 — 만료 토큰이면 지우기만 하고 공개 페이지(랜딩·뷰어·작가)에 머문다.
+    // 보호 페이지는 ProtectedRoute가 로그인으로 보낸다
+    if (err.response?.status === 401 && err.config?.url === '/me') {
+      localStorage.removeItem('token');
+    } else if (err.response?.status === 401) {
       localStorage.removeItem('token');
       const path = window.location.pathname.replace(/^\/WEBTOON/, '') || '/';
       if (path !== '/' && path !== '/login') {

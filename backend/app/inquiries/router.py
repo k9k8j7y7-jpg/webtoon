@@ -15,6 +15,8 @@ from app.users.models import User
 from app.inquiries.models import Inquiry, InquiryMessage
 from app.image_util import validate_and_process
 from app.storage import upload_image
+from app.social.models import Notification
+from app.social.service import notify
 
 router = APIRouter(tags=["inquiries"])
 
@@ -197,6 +199,13 @@ async def get_inquiry_detail(
     # 읽음 처리 — 사용자 엔드포인트이므로 본인 문의면 관리자여도 갱신
     if inquiry.user_id == current_user.id and inquiry.answered_at:
         inquiry.user_read_at = datetime.now(timezone.utc)
+        # 알림센터의 이 문의 답변 알림도 함께 읽음
+        db.query(Notification).filter(
+            Notification.user_id == current_user.id,
+            Notification.type == "inquiry_answer",
+            Notification.link == f"/inquiries/{inquiry_id}",
+            Notification.is_read == False,
+        ).update({Notification.is_read: True}, synchronize_session=False)
         db.commit()
 
     result = _inquiry_to_dict(inquiry, include_device=current_user.is_admin)
@@ -236,6 +245,14 @@ async def add_message(
     if is_admin:
         inquiry.status = "answered"
         inquiry.answered_at = datetime.now(timezone.utc)
+        if inquiry.user_id != current_user.id:
+            notify(
+                db, inquiry.user_id, "inquiry_answer",
+                title="문의에 답변이 달렸어요",
+                body=inquiry.title,
+                link=f"/inquiries/{inquiry_id}",
+                actor_id=current_user.id,
+            )
 
     db.commit()
     db.refresh(msg)

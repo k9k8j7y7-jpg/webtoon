@@ -182,7 +182,7 @@ export default function ProjectPage() {
 
   return (
     <div>
-      <button onClick={() => navigate('/')} className="flex items-center gap-1 text-sm font-bold text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 mb-4 transition-colors">
+      <button onClick={() => navigate('/my')} className="flex items-center gap-1 text-sm font-bold text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 mb-4 transition-colors">
         <ArrowLeft size={16} /> 프로젝트 목록
       </button>
 
