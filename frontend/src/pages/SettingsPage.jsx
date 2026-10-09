@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Camera, ExternalLink, Save } from 'lucide-react';
 import api from '../api/client';
@@ -112,6 +112,8 @@ export default function SettingsPage() {
         </button>
       </section>
 
+      <BlockedUsers />
+
       <section className="glass-card p-4 sm:p-6">
         <h2 className="text-sm font-bold text-gray-700 dark:text-gray-200 mb-2">로그인 계정</h2>
         <p className="text-sm text-gray-500 dark:text-gray-400 break-all">
@@ -120,5 +122,56 @@ export default function SettingsPage() {
         <p className="mt-1 text-[11px] text-gray-400">로그인 계정 이름·이메일은 다른 사람에게 보이지 않아요.</p>
       </section>
     </div>
+  );
+}
+
+// 내가 차단한 사용자 — 해제하면 다시 내 작품에 댓글을 쓸 수 있다
+function BlockedUsers() {
+  const [rows, setRows] = useState(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    api.get('/me/blocks')
+      .then(({ data }) => setRows(data))
+      .catch((err) => { setError(err.response?.data?.detail || '불러오지 못했어요'); setRows([]); });
+  }, []);
+
+  const unblock = async (u) => {
+    if (!window.confirm(`${u.nickname || '이 사용자'}님의 차단을 해제할까요?`)) return;
+    try {
+      await api.delete('/authors/block', { params: { user_id: u.id } });
+      setRows((prev) => prev.filter((r) => r.id !== u.id));
+    } catch (err) {
+      alert(err.response?.data?.detail || '해제하지 못했어요');
+    }
+  };
+
+  return (
+    <section className="glass-card p-4 sm:p-6">
+      <h2 className="text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">차단한 사용자</h2>
+      <p className="text-[11px] text-gray-400 mb-3">차단한 사용자는 내 작품에 댓글을 쓸 수 없어요.</p>
+      {rows === null ? (
+        <p className="text-xs text-gray-400">불러오는 중…</p>
+      ) : error ? (
+        <p className="text-xs font-bold text-red-500">{error}</p>
+      ) : rows.length === 0 ? (
+        <p className="text-xs text-gray-400">차단한 사용자가 없어요</p>
+      ) : (
+        <ul className="divide-y divide-border dark:divide-night-border">
+          {rows.map((u) => (
+            <li key={u.id} className="flex items-center gap-3 py-2.5">
+              <Avatar src={u.avatar} size={32} />
+              <span className="flex-1 min-w-0 truncate text-sm font-bold text-gray-700 dark:text-gray-200">{u.nickname || '(닉네임 없음)'}</span>
+              <button
+                onClick={() => unblock(u)}
+                className="shrink-0 h-8 px-4 rounded-full text-xs font-bold bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300 border border-transparent dark:border-white/10"
+              >
+                차단 해제
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

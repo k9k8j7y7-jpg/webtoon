@@ -1090,6 +1090,122 @@ function InquiriesTab() {
   );
 }
 
+/* ── 신고 관리 (댓글 단위) ─────────────────────── */
+const REPORT_FILTERS = [
+  { value: 'open', label: '처리 대기' },
+  { value: 'resolved', label: '숨김 처리' },
+  { value: 'dismissed', label: '무시' },
+  { value: 'all', label: '전체' },
+];
+const REPORT_STATUS_LABEL = { open: '대기', resolved: '숨김', dismissed: '무시' };
+
+function ReportsTab() {
+  const [filter, setFilter] = useState('open');
+  const [rows, setRows] = useState(null);
+  const [busyId, setBusyId] = useState(null);
+
+  const load = useCallback(() => {
+    setRows(null);
+    api.get('/admin/reports', { params: { status: filter } })
+      .then(({ data }) => setRows(data))
+      .catch(err => { console.error(err); setRows([]); });
+  }, [filter]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const resolve = async (row, action) => {
+    if (action === 'delete' && !window.confirm('이 댓글을 숨길까요? 뷰어에서 "삭제된 댓글"로 바뀝니다.')) return;
+    setBusyId(row.comment_id);
+    try {
+      await api.post(`/admin/reports/${row.comment_id}/resolve`, { action });
+      load();
+    } catch (err) {
+      alert('처리 실패: ' + (err.response?.data?.detail || err.message));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-bold text-white">댓글 신고</h2>
+        <div className="flex gap-1">
+          {REPORT_FILTERS.map(f => (
+            <button
+              key={f.value}
+              onClick={() => setFilter(f.value)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                filter === f.value ? 'bg-cyan-500/20 text-cyan-300' : 'text-gray-400 hover:bg-white/5'
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {rows === null ? (
+        <p className="text-gray-500 text-sm">불러오는 중…</p>
+      ) : rows.length === 0 ? (
+        <p className="text-gray-500 text-sm py-12 text-center bg-[#1a1a2e] rounded-xl border border-white/10">신고가 없습니다</p>
+      ) : (
+        <div className="space-y-3">
+          {rows.map(row => (
+            <div key={row.comment_id} className="bg-[#1a1a2e] border border-white/10 rounded-xl p-4 flex gap-4">
+              <div className="flex-1 min-w-0 space-y-2">
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <span className="px-2 py-0.5 rounded bg-red-500/20 text-red-300 font-bold">신고 {row.count}</span>
+                  {Object.entries(row.reasons).map(([reason, n]) => (
+                    <span key={reason} className="px-2 py-0.5 rounded bg-white/5 text-gray-300">{reason} {n}</span>
+                  ))}
+                  <span className="text-gray-500">{REPORT_STATUS_LABEL[row.status] || row.status}</span>
+                  {row.comment_status !== 'visible' && (
+                    <span className="text-gray-500">· 댓글 {row.comment_status === 'hidden' ? '숨김됨' : '삭제됨'}</span>
+                  )}
+                </div>
+                <p className={`text-sm whitespace-pre-wrap break-words ${row.comment_status === 'visible' ? 'text-white' : 'text-gray-500 line-through'}`}>
+                  {row.body}
+                </p>
+                <div className="text-xs text-gray-500 flex flex-wrap gap-x-3">
+                  <span>작성자: {row.writer.nickname || '(닉네임 없음)'} #{row.writer.id}{row.writer.email ? ` · ${row.writer.email}` : ''}</span>
+                  <span>
+                    작품: {row.episode.title || `ep${row.episode.id}`}
+                    {row.episode.share_token && (
+                      <a href={`/WEBTOON/view/${row.episode.share_token}#comment-${row.comment_id}`} target="_blank" rel="noreferrer" className="ml-1 text-cyan-400 hover:underline">보기</a>
+                    )}
+                  </span>
+                  <span>최근 신고: {row.last_reported_at ? new Date(`${row.last_reported_at}Z`).toLocaleString('ko-KR') : '-'}</span>
+                </div>
+              </div>
+              {row.status === 'open' && (
+                <div className="flex flex-col gap-2 shrink-0">
+                  {row.comment_status === 'visible' && (
+                    <button
+                      onClick={() => resolve(row, 'delete')}
+                      disabled={busyId === row.comment_id}
+                      className="px-4 py-1.5 rounded-lg text-xs font-bold bg-red-500/20 text-red-300 hover:bg-red-500/30 disabled:opacity-50"
+                    >
+                      숨기기
+                    </button>
+                  )}
+                  <button
+                    onClick={() => resolve(row, 'dismiss')}
+                    disabled={busyId === row.comment_id}
+                    className="px-4 py-1.5 rounded-lg text-xs font-bold bg-white/5 text-gray-300 hover:bg-white/10 disabled:opacity-50"
+                  >
+                    무시
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── 메뉴 항목 ────────────────────────────────── */
 const NAV_ITEMS = [
   { to: '/admin', label: '대시보드', end: true },
@@ -1098,6 +1214,7 @@ const NAV_ITEMS = [
   { to: '/admin/notices', label: '공지' },
   { to: '/admin/products', label: '상품' },
   { to: '/admin/inquiries', label: '문의' },
+  { to: '/admin/reports', label: '신고' },
 ];
 
 /* ── 메인 레이아웃 ────────────────────────────── */
@@ -1154,6 +1271,7 @@ export default function AdminPage() {
           <Route path="notices" element={<NoticesTab />} />
           <Route path="products" element={<ProductsTab />} />
           <Route path="inquiries" element={<InquiriesTab />} />
+          <Route path="reports" element={<ReportsTab />} />
         </Routes>
       </main>
     </div>

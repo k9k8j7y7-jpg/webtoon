@@ -81,6 +81,7 @@ class Episode(Base):
     is_public = Column(Boolean, nullable=False, default=False, server_default="0")
     published_at = Column(DateTime, nullable=True)  # 최초 공개 시각 (재공개 시 갱신 안 함)
     featured = Column(Boolean, nullable=False, default=False, server_default="0")
+    comment_count = Column(Integer, nullable=False, default=0, server_default="0")  # step31, visible 댓글+답글 수
     deleted_at = Column(DateTime, nullable=True)
 
     project = relationship("Project", back_populates="episodes")

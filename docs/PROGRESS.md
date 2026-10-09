@@ -1,6 +1,14 @@
 # 진행 상태 추적
 
-## 현재: 구독·알림 1b 배포 — 도도 확인 대기 (2026-10-09)
+## 현재: 구독·알림 2단계 — step31 운영 적용·백엔드+프론트 배포, 도도 확인 대기 (2026-10-09)
+- 프론트: 뷰어 CommentSection(답글 펼침·작가 배지·삭제/차단/신고 모달·닉네임 모달·#comment-{id} 앵커), 설정 "차단한 사용자", /admin/reports 신고 탭
+
+## (이전 기록) 2단계 리허설 단계
+- step31: episodes.comment_count, comments(soft 삭제 visible/deleted/hidden), comment_reports, user_blocks
+- 백엔드 `app/comments/` 작성·테스트 DB 시나리오 통과(미배포). **주의: Episode 모델에 comment_count가 추가돼 step31 적용 전 projects/models.py 배포 금지**
+- 남은 2단계: 운영 적용 → 배포 → 프론트(뷰어 댓글 영역·관리자 신고 탭) → 도도 확인
+
+## 이전: 구독·알림 1b 완료 (2026-10-09, 4114cae·538110d)
 - 1a 커밋 599e963. 1b: 랜딩 "/" 회원도 공개 홈(대시보드는 /my), 구독 API·버튼, /subscriptions, notify()/notify_followers()(최초 공개 1회), 문의 답변 notify, /notifications·🔔 알림센터(PC 드롭다운·모바일 전체 화면)
 - project_t_test에 step29·30 적용됨(1b 시나리오 검증용, 시드 정리 완료)
 - 4단계 CLAUDE.md 반영 필요: "비로그인 루트=랜딩/로그인=대시보드" → "/" 상시 랜딩, 대시보드 /my

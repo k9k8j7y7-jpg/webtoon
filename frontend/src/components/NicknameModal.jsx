@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 
 // [공개하기] 시점에 닉네임이 없으면 띄우는 모달. 저장 성공 시 onSaved(me) 호출
 // body로 portal — glass-card(backdrop-filter) 안에서는 fixed가 카드 기준으로 잡혀 잘린다
-export default function NicknameModal({ onClose, onSaved }) {
+export default function NicknameModal({ onClose, onSaved, confirmLabel = '저장하고 공개', description }) {
   const { user, updateUser } = useAuth();
   const [nickname, setNickname] = useState(user?.nickname || '');
   const [saving, setSaving] = useState(false);
@@ -36,7 +36,7 @@ export default function NicknameModal({ onClose, onSaved }) {
           </button>
         </div>
         <p className="text-xs text-gray-500 dark:text-gray-400 mb-4 break-keep">
-          공개한 작품과 작가 페이지에 이 이름이 보여요. 나중에 설정에서 바꿀 수 있어요.
+          {description || '공개한 작품과 작가 페이지에 이 이름이 보여요. 나중에 설정에서 바꿀 수 있어요.'}
         </p>
         <input
           autoFocus
@@ -61,7 +61,7 @@ export default function NicknameModal({ onClose, onSaved }) {
             disabled={saving || !nickname.trim()}
             className="neon-btn flex-1 h-10 !rounded-full text-sm disabled:opacity-50"
           >
-            {saving ? '저장 중…' : '저장하고 공개'}
+            {saving ? '저장 중…' : confirmLabel}
           </button>
         </div>
       </div>

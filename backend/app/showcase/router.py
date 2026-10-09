@@ -138,6 +138,8 @@ def get_viewer_data(
         "title": episode.title or project.title,
         "episode_no": episode.episode_no,
         "author": author_payload(author),
+        "episode_id": episode.id,  # 댓글 API용
+        "comment_count": episode.comment_count,
         "is_me": is_me,
         "is_subscribed": is_subscribed,
         "is_public": bool(episode.is_public),

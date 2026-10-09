@@ -9,6 +9,7 @@ import PngBubbleLayer from '../components/PngBubbleLayer';
 import { PAGE_FORMATS } from '../utils/pageFormats';
 import AuthorLink from '../components/AuthorLink';
 import SubscribeButton from '../components/SubscribeButton';
+import CommentSection from '../components/CommentSection';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
 
@@ -237,6 +238,9 @@ export default function ViewerPage() {
           </button>
         </div>
       </div>
+
+      {/* 댓글 */}
+      {data.episode_id && <CommentSection episodeId={data.episode_id} />}
 
       {/* CTA 푸터 */}
       <footer className="py-12 sm:py-16 text-center border-t border-white/10">

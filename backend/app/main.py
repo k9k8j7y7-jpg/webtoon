@@ -25,6 +25,7 @@ from app.admin.router import router as admin_router
 from app.products.router import router as products_router
 from app.inquiries.router import router as inquiries_router
 from app.social.router import router as social_router
+from app.comments.router import router as comments_router
 
 settings = get_settings()
 
@@ -66,6 +67,7 @@ app.include_router(admin_router, prefix=settings.API_V1_PREFIX)
 app.include_router(products_router, prefix=settings.API_V1_PREFIX)
 app.include_router(inquiries_router, prefix=settings.API_V1_PREFIX)
 app.include_router(social_router, prefix=settings.API_V1_PREFIX)
+app.include_router(comments_router, prefix=settings.API_V1_PREFIX)
 
 
 import os
