@@ -43,7 +43,7 @@ def get_admin_stats(
     total_revenue = int(row)
 
     today_views = db.query(func.coalesce(func.sum(Episode.view_count), 0)).filter(
-        Episode.showcase == True
+        Episode.is_public == True
     ).scalar()
 
     return {
@@ -82,7 +82,8 @@ def list_all_episodes(
             "project_title": proj.title,
             "gate_status": ep.gate_status,
             "is_ad": bool((ep.gate_status or {}).get("is_ad")),
-            "showcase": bool(ep.showcase),
+            "featured": bool(ep.featured),
+            "is_public": bool(ep.is_public),
             "showcase_category": ep.showcase_category,
             "share_token": ep.share_token,
             "view_count": ep.view_count,
@@ -111,8 +112,8 @@ class TitleUpdateRequest(BaseModel):
     title: str
 
 
-class ShowcaseToggleRequest(BaseModel):
-    showcase: bool
+class FeaturedToggleRequest(BaseModel):
+    featured: bool
     showcase_category: str | None = None
 
 
@@ -141,44 +142,46 @@ def update_episode_title(
     return {"id": episode.id, "title": episode.title}
 
 
-@router.post("/episodes/{episode_id}/showcase")
-def toggle_showcase(
+@router.post("/episodes/{episode_id}/featured")
+def toggle_featured(
     episode_id: int,
-    req: ShowcaseToggleRequest,
+    req: FeaturedToggleRequest,
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    """에피소드 showcase 노출 토글 + 카테고리 설정."""
+    """랜딩 추천(featured) 토글 + 카테고리 설정.
+    추천은 공개가 전제 — 켜면 is_public도 켠다(published_at 비었으면 채움 → 이후 최초 공개 알림 없음).
+    끌 때는 featured만 내리고 작가 공개(is_public)는 유지."""
     episode = db.query(Episode).filter(
         Episode.id == episode_id, Episode.deleted_at == None
     ).first()
     if not episode:
         raise HTTPException(status_code=404, detail="Episode not found")
 
-    # 카테고리 검증
     valid_categories = {"short", "series", "ad"}
-    if req.showcase and req.showcase_category and req.showcase_category not in valid_categories:
+    if req.featured and req.showcase_category and req.showcase_category not in valid_categories:
         raise HTTPException(status_code=400, detail=f"Invalid category: {req.showcase_category}")
 
-    episode.showcase = req.showcase
+    episode.featured = req.featured
+    episode.showcase = req.featured  # 레거시 미러 (step30 롤백 대비)
 
-    if req.showcase:
-        # 광고 에피소드면 카테고리 기본값 "ad"
+    if req.featured:
         default_cat = "ad" if (episode.gate_status or {}).get("is_ad") else "short"
-        episode.showcase_category = req.showcase_category or default_cat
-        # share_token 없으면 자동 생성
+        episode.showcase_category = req.showcase_category or episode.showcase_category or default_cat
+        episode.is_public = True
+        if not episode.published_at:
+            episode.published_at = datetime.utcnow()
         if not episode.share_token:
             episode.share_token = str(uuid.uuid4())
-    else:
-        # 노출 해제 시 카테고리는 유지 (재노출 시 편의), share_token도 유지
-        pass
+    # 해제 시 카테고리·share_token 유지 (재노출 편의)
 
     db.commit()
     db.refresh(episode)
 
     return {
         "id": episode.id,
-        "showcase": bool(episode.showcase),
+        "featured": bool(episode.featured),
+        "is_public": bool(episode.is_public),
         "showcase_category": episode.showcase_category,
         "share_token": episode.share_token,
     }

@@ -1,6 +1,6 @@
 import hashlib
 import time
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -9,6 +9,7 @@ from app.users.models import User
 from app.projects.models import Episode, Project, ShowcaseLike
 from app.storyboard.models import Cut
 from app.products.models import Product
+from app.social.service import author_payload, default_category, first_cut_image
 
 router = APIRouter(prefix="/showcase", tags=["showcase"])
 
@@ -49,34 +50,35 @@ def _record_view(episode_id: int, fp: str, db: Session) -> None:
 # ── 갤러리 목록 ──────────────────────────────────────────────
 
 @router.get("/episodes")
-def list_showcase_episodes(db: Session = Depends(get_db)):
-    """공개 갤러리용 showcase 에피소드 목록 (카테고리별 그룹)."""
-    episodes = (
-        db.query(Episode, Project)
+def list_showcase_episodes(
+    scope: str = Query("featured", pattern="^(featured|all)$"),
+    db: Session = Depends(get_db),
+):
+    """공개 갤러리 목록 (카테고리별 그룹).
+    scope=featured(기본, 랜딩) → 관리자 추천작 / scope=all(갤러리 전체) → 작가 공개작 전부."""
+    q = (
+        db.query(Episode, Project, User)
         .join(Project, Episode.project_id == Project.id)
-        .filter(Episode.showcase == True, Episode.deleted_at == None)
-        .order_by(Episode.id.desc())
-        .all()
+        .join(User, Project.user_id == User.id)
+        .filter(Episode.is_public == True, Episode.deleted_at == None, Project.deleted_at == None)
     )
+    if scope == "featured":
+        q = q.filter(Episode.featured == True)
+        q = q.order_by(Episode.id.desc())
+    else:
+        q = q.order_by(Episode.published_at.desc(), Episode.id.desc())
 
     result = {"short": [], "series": [], "ad": []}
-    for ep, proj in episodes:
-        first_cut = (
-            db.query(Cut)
-            .filter(Cut.episode_id == ep.id, Cut.image_url != None)
-            .order_by(Cut.cut_number)
-            .first()
-        )
-        cat = ep.showcase_category or "short"
-        if cat not in result:
-            result[cat] = []
-        result[cat].append({
+    for ep, proj, author in q.all():
+        cat = ep.showcase_category or default_category(ep)
+        result.setdefault(cat, []).append({
             "share_token": ep.share_token,
             "title": ep.title or proj.title,
             "genre": proj.genre,
-            "thumbnail_url": first_cut.image_url if first_cut else None,
+            "thumbnail_url": first_cut_image(db, ep.id),
             "view_count": ep.view_count,
             "like_count": ep.like_count,
+            "author": author_payload(author),
         })
 
     return result
@@ -91,7 +93,7 @@ def get_viewer_data(
     db: Session = Depends(get_db),
     current_user: User | None = Depends(get_optional_user),
 ):
-    """공개 뷰어 데이터 — showcase=true이면 누구나, 아니면 소유자만."""
+    """공개 뷰어 데이터 — is_public이면 누구나, 아니면 소유자만."""
     episode = db.query(Episode).filter(
         Episode.share_token == share_token,
         Episode.deleted_at == None,
@@ -101,8 +103,8 @@ def get_viewer_data(
 
     project = db.query(Project).filter(Project.id == episode.project_id).first()
 
-    # 접근 제어: showcase가 아니면 소유자만
-    if not episode.showcase:
+    # 접근 제어: 공개(is_public)가 아니면 소유자만
+    if not episode.is_public:
         if current_user is None or current_user.id != project.user_id:
             raise HTTPException(status_code=403, detail="Access denied")
 
@@ -122,9 +124,13 @@ def get_viewer_data(
     ep_products = db.query(Product).filter(Product.episode_id == episode.id).all()
 
     from app.workflow.gate import get_page_format
+    author = db.query(User).filter(User.id == project.user_id).first()
+
     return {
         "title": episode.title or project.title,
         "episode_no": episode.episode_no,
+        "author": author_payload(author),
+        "is_public": bool(episode.is_public),
         "view_count": episode.view_count,
         "like_count": episode.like_count,
         "page_format": get_page_format(episode.gate_status or {}),
@@ -159,7 +165,7 @@ def toggle_like(
     """좋아요 토글 (비로그인 포함). fingerprint 기반 중복 방지."""
     episode = db.query(Episode).filter(
         Episode.share_token == share_token,
-        Episode.showcase == True,
+        Episode.is_public == True,
         Episode.deleted_at == None,
     ).first()
     if not episode:
@@ -203,7 +209,7 @@ def get_like_status(
     """현재 클라이언트의 좋아요 여부 + 총 수."""
     episode = db.query(Episode).filter(
         Episode.share_token == share_token,
-        Episode.showcase == True,
+        Episode.is_public == True,
         Episode.deleted_at == None,
     ).first()
     if not episode:

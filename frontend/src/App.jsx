@@ -19,6 +19,8 @@ import AdminPage from './pages/AdminPage';
 import InquiryListPage from './pages/InquiryListPage';
 import InquiryNewPage from './pages/InquiryNewPage';
 import InquiryDetailPage from './pages/InquiryDetailPage';
+import SettingsPage from './pages/SettingsPage';
+import AuthorPage from './pages/AuthorPage';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -42,6 +44,7 @@ function AppRoutes() {
       <Route path="/terms" element={<TermsPage />} />
       <Route path="/faq" element={<FaqPage />} />
       <Route path="/view/:shareToken" element={<ViewerPage />} />
+      <Route path="/u/:nickname" element={<AuthorPage />} />
       <Route path="/admin/*" element={<AdminPage />} />
 
       <Route path="/" element={user ? <ProtectedRoute><Layout /></ProtectedRoute> : <LandingPage />}>
@@ -53,6 +56,7 @@ function AppRoutes() {
         <Route path="/projects/:projectId/episodes/:episodeId/workflow" element={<WorkflowPage />} />
         <Route path="/projects/:projectId/series/:seriesId" element={<SeriesPage />} />
         <Route path="/packets" element={<PacketsPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
         <Route path="/inquiries" element={<InquiryListPage />} />
         <Route path="/inquiries/new" element={<InquiryNewPage />} />
         <Route path="/inquiries/:inquiryId" element={<InquiryDetailPage />} />

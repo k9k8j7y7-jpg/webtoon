@@ -15,6 +15,7 @@ import { exportAsPNGZip, exportAsVertical, exportAsInstagram, exportAsA4Single, 
 import useGateLoad from '../../hooks/useGateLoad';
 import { GateSkeleton, GateLoadError } from '../GateLoadFallback';
 import { PAGE_FORMATS } from '../../utils/pageFormats';
+import PublishBar from '../PublishBar';
 
 // ── 그리드 컷 카드: 이미지 + SVG 말풍선 오버레이 ──
 // 에피소드 비율 "9:16" → CSS aspect-ratio "9 / 16" (미설정 = 기존 에피소드 1:1)
@@ -557,6 +558,8 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
   return (
     <div className="space-y-4">
       {job && <JobProgress job={job} label="이미지 생성" />}
+
+      {hasImages && <PublishBar projectId={projectId} episodeId={episodeId} />}
 
       <div className="glass-card p-4 sm:p-6">
         {/* 모바일: 제목 / 생성 버튼 / 내보내기 4개를 세로로 쌓음 (가로 배치 시 제목이 폭 0으로 눌려 글자 단위로 꺾이던 문제) */}

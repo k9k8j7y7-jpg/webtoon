@@ -12,6 +12,10 @@ class User(Base):
     provider_uid = Column(String(255), nullable=False)
     email = Column(String(255), nullable=True)
     display_name = Column(String(100), nullable=True)
+    # 작가 프로필 (step30) — 공개 화면에는 display_name(OAuth 실명) 대신 nickname만 노출
+    nickname = Column(String(20), nullable=True, unique=True)
+    bio = Column(String(100), nullable=True)
+    avatar_path = Column(String(500), nullable=True)
     created_at = Column(DateTime, nullable=False, server_default=func.now())
     is_admin = Column(Boolean, nullable=False, default=False, server_default="0")
     updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())

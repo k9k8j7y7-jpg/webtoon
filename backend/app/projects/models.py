@@ -76,6 +76,11 @@ class Episode(Base):
     share_token = Column(VARCHAR(36), nullable=True, unique=True, index=True)
     view_count = Column(Integer, nullable=False, default=0, server_default="0")
     like_count = Column(Integer, nullable=False, default=0, server_default="0")
+    # step30: is_public = 작가 공개(뷰어·작가 페이지·갤러리 전체), featured = 관리자 랜딩 추천.
+    # showcase는 레거시 — featured와 같은 값으로 미러링(롤백 대비)
+    is_public = Column(Boolean, nullable=False, default=False, server_default="0")
+    published_at = Column(DateTime, nullable=True)  # 최초 공개 시각 (재공개 시 갱신 안 함)
+    featured = Column(Boolean, nullable=False, default=False, server_default="0")
     deleted_at = Column(DateTime, nullable=True)
 
     project = relationship("Project", back_populates="episodes")

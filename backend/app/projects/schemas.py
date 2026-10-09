@@ -49,5 +49,9 @@ class EpisodeResponse(BaseModel):
     gate_status: dict
     series_id: int | None = None
     created_at: datetime
+    # 작가 공개 상태 (step30) — 게이트5 [공개하기] 버튼용
+    is_public: bool = False
+    published_at: datetime | None = None
+    share_token: str | None = None
 
     model_config = {"from_attributes": True}

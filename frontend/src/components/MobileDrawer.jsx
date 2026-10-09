@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { X, Home, Palette, Image, Package, Bell, HelpCircle, MessageSquare, FileText, Shield, Sun, Moon, LogOut } from 'lucide-react';
+import { X, Home, Palette, Image, Package, Bell, HelpCircle, MessageSquare, FileText, Shield, Sun, Moon, LogOut, Settings } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 
 export default function MobileDrawer({ open, onClose, user, packets, onLogout }) {
@@ -79,6 +79,7 @@ export default function MobileDrawer({ open, onClose, user, packets, onLogout })
               <SectionLabel>계정</SectionLabel>
               <MenuItem to="/packets" icon={Package} label="패킷 충전" badge={packets?.balance != null ? `${packets.balance}패킷` : null} />
               <MenuItem to="/inquiries" icon={Bell} label="알림" />
+              <MenuItem to="/settings" icon={Settings} label="설정" badge={user.nickname ? null : '닉네임 없음'} />
 
               <SectionLabel>도움말</SectionLabel>
               <MenuItem to="/faq" icon={HelpCircle} label="FAQ" />

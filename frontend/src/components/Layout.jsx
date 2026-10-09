@@ -1,6 +1,6 @@
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { LogOut, Sparkles, Package, Bell, HelpCircle, Menu, Sun, Moon, MessageSquare, FileText } from 'lucide-react';
+import { LogOut, Sparkles, Package, Bell, HelpCircle, Menu, Sun, Moon, MessageSquare, FileText, Settings } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../api/client';
 import NoticeBar from './NoticeBar';
@@ -126,8 +126,11 @@ export default function Layout() {
               )}
             </Link>
 
-            {/* PC: 프로필 + 로그아웃 */}
-            <span className="hidden md:inline text-sm font-bold text-gray-600 dark:text-gray-300 whitespace-nowrap">{user?.display_name || user?.email}</span>
+            {/* PC: 프로필(→ 설정) + 로그아웃 */}
+            <Link to="/settings" className="hidden sm:flex items-center gap-1 text-sm font-bold text-gray-600 dark:text-gray-300 whitespace-nowrap hover:text-comic-orange no-underline" title="설정">
+              <Settings size={16} className="text-gray-400 shrink-0" />
+              <span className="hidden md:inline">{user?.nickname || user?.display_name || user?.email}</span>
+            </Link>
             <button onClick={handleLogout} className="hidden sm:block p-1.5 text-gray-400 hover:text-comic-orange rounded transition-colors shrink-0" title="로그아웃">
               <LogOut size={18} />
             </button>

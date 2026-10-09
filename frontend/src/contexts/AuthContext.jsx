@@ -32,8 +32,11 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
+  // 프로필(닉네임·아바타) 저장 후 응답(/me 형태)으로 바로 갱신
+  const updateUser = (data) => setUser(data);
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

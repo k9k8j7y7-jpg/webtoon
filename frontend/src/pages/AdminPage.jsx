@@ -102,11 +102,11 @@ function GalleryTab() {
   }, [fetchEpisodes]);
 
   const handleToggle = async (ep) => {
-    const newShowcase = !ep.showcase;
+    const newFeatured = !ep.featured;
     try {
-      const { data } = await api.post(`/admin/episodes/${ep.id}/showcase`, {
-        showcase: newShowcase,
-        showcase_category: newShowcase ? (ep.showcase_category || null) : ep.showcase_category,
+      const { data } = await api.post(`/admin/episodes/${ep.id}/featured`, {
+        featured: newFeatured,
+        showcase_category: newFeatured ? (ep.showcase_category || null) : ep.showcase_category,
       });
       setEpisodes(prev => prev.map(e => e.id === ep.id ? { ...e, ...data } : e));
     } catch (err) {
@@ -116,8 +116,8 @@ function GalleryTab() {
 
   const handleCategoryChange = async (ep, category) => {
     try {
-      const { data } = await api.post(`/admin/episodes/${ep.id}/showcase`, {
-        showcase: ep.showcase,
+      const { data } = await api.post(`/admin/episodes/${ep.id}/featured`, {
+        featured: ep.featured,
         showcase_category: category,
       });
       setEpisodes(prev => prev.map(e => e.id === ep.id ? { ...e, ...data } : e));
@@ -182,7 +182,7 @@ function GalleryTab() {
               <th className="text-left px-4 py-3 font-medium">제목</th>
               <th className="text-left px-4 py-3 font-medium">프로젝트</th>
               <th className="text-left px-4 py-3 font-medium">게이트</th>
-              <th className="text-center px-4 py-3 font-medium">노출</th>
+              <th className="text-center px-4 py-3 font-medium">랜딩 추천</th>
               <th className="text-left px-4 py-3 font-medium">카테고리</th>
               <th className="text-right px-4 py-3 font-medium">조회</th>
               <th className="text-right px-4 py-3 font-medium">좋아요</th>
@@ -217,21 +217,24 @@ function GalleryTab() {
                   <button
                     onClick={() => handleToggle(ep)}
                     className={`w-10 h-5 rounded-full relative transition-colors ${
-                      ep.showcase ? 'bg-cyan-500' : 'bg-gray-700'
+                      ep.featured ? 'bg-cyan-500' : 'bg-gray-700'
                     }`}
                   >
                     <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                      ep.showcase ? 'left-5' : 'left-0.5'
+                      ep.featured ? 'left-5' : 'left-0.5'
                     }`} />
                   </button>
+                  <div className={`text-[10px] mt-0.5 ${ep.is_public ? 'text-emerald-400' : 'text-gray-600'}`}>
+                    {ep.is_public ? '작가 공개' : '비공개'}
+                  </div>
                 </td>
                 <td className="px-4 py-3">
                   <select
                     value={ep.showcase_category || 'short'}
                     onChange={e => handleCategoryChange(ep, e.target.value)}
-                    disabled={!ep.showcase}
+                    disabled={!ep.featured}
                     className={`bg-transparent border rounded px-2 py-1 text-xs focus:outline-none ${
-                      ep.showcase
+                      ep.featured
                         ? 'border-white/20 text-gray-300 hover:border-cyan-500/50'
                         : 'border-white/5 text-gray-600 cursor-not-allowed'
                     }`}

@@ -3,9 +3,12 @@ import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Menu } from 'lucide-react';
 import MobileDrawer from '../components/MobileDrawer';
+import AuthorLink from '../components/AuthorLink';
+import { CATEGORY_LABELS } from '../utils/resolveUrl';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
 const CATEGORY_MAP = { '단편': 'short', '연작': 'series', '광고·홍보': 'ad' };
+const GALLERY_TABS = ['전체', '단편', '연작', '광고·홍보'];
 
 function resolveUrl(path) {
   if (!path) return '';
@@ -28,6 +31,7 @@ export default function LandingPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('단편');
   const [galleryData, setGalleryData] = useState({ short: [], series: [], ad: [] });
+  const [allWorks, setAllWorks] = useState(null); // '전체' 탭 = 작가 공개작 전부(scope=all), 처음 열 때 로드
   const [products, setProducts] = useState([]);
 
   useEffect(() => {
@@ -45,7 +49,20 @@ export default function LandingPage() {
       .catch(() => {});
   }, []);
 
-  const filteredWebtoons = galleryData[CATEGORY_MAP[activeTab]] || [];
+  useEffect(() => {
+    if (activeTab !== '전체' || allWorks) return;
+    axios.get(`${API_BASE}/api/v1/showcase/episodes`, { params: { scope: 'all' } })
+      .then(res => setAllWorks(
+        Object.entries(res.data)
+          .flatMap(([cat, list]) => list.map(t => ({ ...t, category: cat })))
+      ))
+      .catch(() => setAllWorks([]));
+  }, [activeTab, allWorks]);
+
+  // 전체 탭: 서버가 공개순으로 준 카테고리 그룹을 합친 것 (그룹 내 순서 유지)
+  const filteredWebtoons = activeTab === '전체'
+    ? (allWorks || [])
+    : (galleryData[CATEGORY_MAP[activeTab]] || []).map(t => ({ ...t, category: CATEGORY_MAP[activeTab] }));
 
   const scrollToSection = (id) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
@@ -121,12 +138,12 @@ export default function LandingPage() {
         <section id="gallery" className="max-w-7xl mx-auto px-6 py-20 relative z-10">
           <div className="text-center mb-12">
             <h3 className="text-3xl font-bold mb-4">갤러리</h3>
-            <div className="flex justify-center gap-3 overflow-x-auto pb-2 scrollbar-hide">
-              {['단편', '연작', '광고·홍보'].map(tab => (
+            <div className="flex justify-start sm:justify-center gap-2 sm:gap-3 overflow-x-auto pb-2 scrollbar-hide">
+              {GALLERY_TABS.map(tab => (
                 <button 
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`px-6 py-2 rounded-full whitespace-nowrap transition-all duration-300 font-medium ${
+                  className={`px-4 sm:px-6 py-2 rounded-full whitespace-nowrap shrink-0 transition-all duration-300 font-medium ${
                     activeTab === tab 
                       ? 'bg-gradient-to-r from-purple-500 to-cyan-500 text-white shadow-lg shadow-cyan-500/25 border border-transparent' 
                       : 'bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 border border-white/10'
@@ -162,14 +179,15 @@ export default function LandingPage() {
                     <div className="flex justify-between items-start gap-2">
                       <h3 className="text-lg font-bold text-white truncate leading-tight">{toon.title}</h3>
                       <span className="shrink-0 px-2 py-1 bg-white/10 rounded-md text-[10px] text-cyan-300 border border-white/10 font-semibold whitespace-nowrap">
-                        {activeTab}
+                        {CATEGORY_LABELS[toon.category] || activeTab}
                       </span>
                     </div>
-                    <div className="flex items-center gap-3 text-sm text-gray-400 font-medium">
-                      <span className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-3 text-sm text-gray-400 font-medium min-w-0">
+                      <AuthorLink author={toon.author} size={20} className="flex-1 text-gray-300" />
+                      <span className="flex items-center gap-1.5 shrink-0">
                         <span className="text-red-400 text-xs">❤️</span> {toon.like_count || 0}
                       </span>
-                      <span className="flex items-center gap-1.5">
+                      <span className="flex items-center gap-1.5 shrink-0">
                         <span className="text-gray-300 text-xs">👁</span> {toon.view_count || 0}
                       </span>
                     </div>

@@ -7,6 +7,7 @@ import EffectLayer from '../components/EffectLayer';
 import ProductLayer from '../components/ProductLayer';
 import PngBubbleLayer from '../components/PngBubbleLayer';
 import { PAGE_FORMATS } from '../utils/pageFormats';
+import AuthorLink from '../components/AuthorLink';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
 
@@ -131,6 +132,11 @@ export default function ViewerPage() {
           <h1 className="text-sm font-medium text-gray-300 truncate max-w-[60%]">{data.title}</h1>
         </div>
       </header>
+
+      {/* 작가 줄 — 닉네임 → 작가 페이지 (1b에서 [구독] 버튼 자리) */}
+      <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between gap-3 text-sm">
+        <AuthorLink author={data.author} size={28} className="font-bold text-gray-200" />
+      </div>
 
       {/* 컷 표시 — 형식에 따라 세로 스크롤 또는 페이지 단위 */}
       {(() => {
