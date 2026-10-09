@@ -1,6 +1,6 @@
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { LogOut, Sparkles, Package, Bell, HelpCircle, Menu, Sun, Moon, MessageSquare, FileText, Settings } from 'lucide-react';
+import { LogOut, Sparkles, Package, HelpCircle, Menu, Sun, Moon, MessageSquare, FileText, Settings, Users } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../api/client';
 import NoticeBar from './NoticeBar';
@@ -122,6 +122,12 @@ export default function Layout() {
                 </div>
               )}
             </div>
+
+            {/* PC: 내 구독 (모바일은 ☰ 드로어) */}
+            <Link to="/subscriptions" className="hidden sm:flex items-center gap-1 text-sm font-bold text-gray-500 dark:text-gray-400 whitespace-nowrap hover:text-comic-orange transition-colors no-underline shrink-0" title="내 구독">
+              <Users size={16} className="shrink-0" />
+              <span className="hidden md:inline">내 구독</span>
+            </Link>
 
             {/* 🔔 알림센터 */}
             <NotificationBell unreadCount={unreadCount} />
