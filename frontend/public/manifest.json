@@ -1,0 +1,17 @@
+{
+  "id": "/WEBTOON/",
+  "name": "EziToon",
+  "short_name": "EziToon",
+  "description": "사진 몇 장이면, 우리 이야기가 웹툰이 된다",
+  "lang": "ko",
+  "start_url": "/WEBTOON/",
+  "scope": "/WEBTOON/",
+  "display": "standalone",
+  "theme_color": "#0A0F1D",
+  "background_color": "#0A0F1D",
+  "icons": [
+    { "src": "/WEBTOON/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/WEBTOON/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/WEBTOON/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

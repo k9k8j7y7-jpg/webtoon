@@ -2,7 +2,7 @@
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -131,6 +131,7 @@ class CommentCreate(BaseModel):
 def create_comment(
     episode_id: int,
     req: CommentCreate,
+    background: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -169,11 +170,11 @@ def create_comment(
         if proj.user_id != current_user.id:
             notify(db, proj.user_id, "comment",
                    title=f"{current_user.nickname}님이 '{title}'에 댓글을 남겼어요",
-                   body=snippet, link=link, actor_id=current_user.id)
+                   body=snippet, link=link, actor_id=current_user.id, background=background)
     elif parent.user_id != current_user.id:
         notify(db, parent.user_id, "reply",
                title=f"{current_user.nickname}님이 내 댓글에 답글을 남겼어요",
-               body=snippet, link=link, actor_id=current_user.id)
+               body=snippet, link=link, actor_id=current_user.id, background=background)
 
     db.commit()
     db.refresh(comment)

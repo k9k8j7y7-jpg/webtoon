@@ -28,8 +28,8 @@ export default function Layout() {
     return () => document.removeEventListener('pointerdown', handler);
   }, [helpOpen]);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate('/login');
   };
 

@@ -26,6 +26,7 @@ from app.products.router import router as products_router
 from app.inquiries.router import router as inquiries_router
 from app.social.router import router as social_router
 from app.comments.router import router as comments_router
+from app.push.router import router as push_router
 
 settings = get_settings()
 
@@ -68,6 +69,7 @@ app.include_router(products_router, prefix=settings.API_V1_PREFIX)
 app.include_router(inquiries_router, prefix=settings.API_V1_PREFIX)
 app.include_router(social_router, prefix=settings.API_V1_PREFIX)
 app.include_router(comments_router, prefix=settings.API_V1_PREFIX)
+app.include_router(push_router, prefix=settings.API_V1_PREFIX)
 
 
 import os
@@ -96,6 +98,8 @@ if os.path.isdir(FRONTEND_DIR):
         file_path = os.path.join(FRONTEND_DIR, path)
         if os.path.isfile(file_path) and not path.endswith("index.html"):
             headers = {"Cache-Control": "public, max-age=31536000, immutable"} if path.startswith("assets/") else None
+            if path == "sw.js":  # 서비스워커는 항상 재검증 — 배포 즉시 새 버전 적용
+                headers = {"Cache-Control": "no-cache"}
             return StarletteFileResponse(file_path, headers=headers)
         # SPA fallback — index.html은 매번 재검증(no-cache). 캐시 헤더가 없으면 브라우저가 배포 전
         # index.html(→ 옛 번들)을 휴리스틱 캐시로 계속 써서 새 라우팅이 안 보인다(2026-10-09 로고→/my)

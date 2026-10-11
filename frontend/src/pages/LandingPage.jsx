@@ -123,7 +123,7 @@ export default function LandingPage() {
         user={user}
         packets={packets}
         unreadCount={unreadCount}
-        onLogout={() => { logout(); navigate('/'); }}
+        onLogout={async () => { await logout(); navigate('/'); }}
       />
 
       <main>

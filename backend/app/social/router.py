@@ -4,7 +4,7 @@ import logging
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -57,6 +57,7 @@ def _publish_state(episode: Episode) -> dict:
 @router.post("/episodes/{episode_id}/publish")
 def publish_episode(
     episode_id: int,
+    background: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -85,7 +86,7 @@ def publish_episode(
     notified = 0
     if first_publish:
         title = episode.title or db.query(Project.title).filter(Project.id == episode.project_id).scalar() or ""
-        notified = notify_followers(db, current_user, episode, title)
+        notified = notify_followers(db, current_user, episode, title, background=background)
 
     db.commit()
     db.refresh(episode)

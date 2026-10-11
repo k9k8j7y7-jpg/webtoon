@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import api from '../api/client';
+import { unsubscribeOnLogout } from '../utils/push';
 
 const AuthContext = createContext(null);
 
@@ -27,7 +28,9 @@ export function AuthProvider({ children }) {
     });
   };
 
-  const logout = () => {
+  // 이 기기의 웹푸시 구독을 먼저 지운다(토큰 필요) — 호출부는 await 후 이동
+  const logout = async () => {
+    await unsubscribeOnLogout();
     localStorage.removeItem('token');
     setUser(null);
   };

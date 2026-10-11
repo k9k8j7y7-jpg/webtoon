@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -217,6 +217,7 @@ async def get_inquiry_detail(
 async def add_message(
     inquiry_id: int,
     body: dict,
+    background: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -252,6 +253,7 @@ async def add_message(
                 body=inquiry.title,
                 link=f"/inquiries/{inquiry_id}",
                 actor_id=current_user.id,
+                background=background,
             )
 
     db.commit()

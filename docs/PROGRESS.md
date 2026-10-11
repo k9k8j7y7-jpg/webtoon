@@ -1,5 +1,17 @@
 # 진행 상태 추적
 
+## 현재: 구독·알림 3단계(웹푸시+PWA) — step32 운영 적용·백엔드/프론트 배포 완료, 실기기 확인 대기 (2026-10-11)
+- 운영: step32 적용(회원 4명 notify_prefs 전부 true), 서버 venv pywebpush 2.5.0, 서버 .env VAPID 3줄(로컬과 해시 일치, 백업 .env.bak.20261011), /push/public-key enabled
+- 프론트: main.jsx SW 등록, utils/push.js, 알림센터 PushToggleCard(토글·거부/미지원 안내·iOS 비-standalone 설치 안내), 설정 "알림 설정" 카드(#notify), ToggleSwitch 공용
+- 헤드리스 확인: SW 활성·manifest 링크·iOS 안내 카드·설정 스위치 4개. 실제 구독(토글 ON)→푸시 수신은 실기기에서만 확인 가능
+
+## (이전 기록) 3단계 리허설
+- step32: push_subscriptions(endpoint UNIQUE, user FK CASCADE) + users.notify_prefs JSON NOT NULL DEFAULT 4종 true. 테스트 DB up→down→재-up 통과, 기존 행 기본값 채움 확인. 백업 `~/backups/project_t_before_step32_20261011_140527.sql`
+- 백엔드 `app/push/`(models·service·router): GET /push/public-key, POST·DELETE /push/subscribe, GET·PUT /me/notify-prefs. notify()/notify_followers()에 `background` 인자 → 응답 후 send_push(prefs 체크, 404/410 구독 삭제). 테스트 DB 시나리오 22항목 통과
+- **주의: User 모델에 notify_prefs 추가 → step32 적용 전 백엔드 배포 금지.** 서버 .env VAPID 3줄은 config.py(VAPID 필드) 없이 들어가면 재시작 시 기동 실패(extra_forbidden)
+- PWA: public/manifest.json·sw.js(캐시 없음)·icons/(Sparkles 그라데이션 192·512·apple 180)·index.html 링크. SW 등록·구독 UI·설정 토글은 다음 단계
+- 배포 순서: step32 운영 적용 → 서버 venv `pip install "pywebpush==2.*"` → 서버 .env VAPID 3줄 → 백엔드 파일 scp → 프론트 빌드 배포
+
 ## 현재: 구독·알림 2단계 — step31 운영 적용·백엔드+프론트 배포, 도도 확인 대기 (2026-10-09)
 - 프론트: 뷰어 CommentSection(답글 펼침·작가 배지·삭제/차단/신고 모달·닉네임 모달·#comment-{id} 앵커), 설정 "차단한 사용자", /admin/reports 신고 탭
 

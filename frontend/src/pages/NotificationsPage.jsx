@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import api from '../api/client';
 import NotificationList, { refreshUnread } from '../components/NotificationList';
 import { GateSkeleton, GateLoadError } from '../components/GateLoadFallback';
+import PushToggleCard from '../components/PushToggleCard';
 
 // 알림센터 전체 화면 (모바일 🔔·☰ "알림"·PC 드롭다운 "전체 보기")
 export default function NotificationsPage() {
@@ -38,6 +39,7 @@ export default function NotificationsPage() {
           모두 읽음
         </button>
       </div>
+      <PushToggleCard />
       {error ? (
         <GateLoadError message={error} onRetry={load} />
       ) : items === null ? (

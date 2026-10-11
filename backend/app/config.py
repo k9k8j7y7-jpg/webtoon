@@ -63,6 +63,11 @@ class Settings(BaseSettings):
     TOSS_CLIENT_KEY: str = ""
     TOSS_SECRET_KEY: str = ""
 
+    # Web Push (VAPID) — 비어 있으면 푸시 발송을 건너뜀(알림센터 기록은 그대로)
+    VAPID_PUBLIC: str = ""
+    VAPID_PRIVATE: str = ""
+    VAPID_SUBJECT: str = ""
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",

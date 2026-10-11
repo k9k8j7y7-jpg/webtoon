@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Camera, ExternalLink, Save } from 'lucide-react';
 import api from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import { Avatar } from '../components/AuthorLink';
+import ToggleSwitch from '../components/ToggleSwitch';
 
 export default function SettingsPage() {
   const { user, updateUser } = useAuth();
@@ -112,6 +113,8 @@ export default function SettingsPage() {
         </button>
       </section>
 
+      <NotifyPrefs />
+
       <BlockedUsers />
 
       <section className="glass-card p-4 sm:p-6">
@@ -122,6 +125,71 @@ export default function SettingsPage() {
         <p className="mt-1 text-[11px] text-gray-400">로그인 계정 이름·이메일은 다른 사람에게 보이지 않아요.</p>
       </section>
     </div>
+  );
+}
+
+// 알림 종류별 폰 푸시 on/off (PUT /me/notify-prefs). 알림센터 기록은 설정과 무관하게 항상 남는다
+const NOTIFY_KINDS = [
+  { key: 'new_episode', label: '새 화', desc: '구독한 작가가 새 웹툰을 공개했을 때' },
+  { key: 'comment', label: '댓글', desc: '내 작품에 댓글이 달렸을 때' },
+  { key: 'reply', label: '답글', desc: '내 댓글에 답글이 달렸을 때' },
+  { key: 'inquiry', label: '문의 답변', desc: '문의에 답변이 달렸을 때' },
+];
+
+function NotifyPrefs() {
+  const location = useLocation();
+  const [prefs, setPrefs] = useState(null);
+  const [error, setError] = useState('');
+  const ref = useRef(null);
+
+  useEffect(() => {
+    api.get('/me/notify-prefs')
+      .then(({ data }) => setPrefs(data))
+      .catch((err) => setError(err.response?.data?.detail || '불러오지 못했어요'));
+  }, []);
+
+  // 알림센터 "종류 고르기"(/settings#notify)로 들어오면 이 카드로 스크롤
+  useEffect(() => {
+    if (location.hash === '#notify' && prefs) ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [location.hash, prefs]);
+
+  const change = async (key, value) => {
+    const prev = prefs;
+    setPrefs({ ...prefs, [key]: value });
+    try {
+      const { data } = await api.put('/me/notify-prefs', { [key]: value });
+      setPrefs(data);
+    } catch (err) {
+      setPrefs(prev);
+      alert(err.response?.data?.detail || '저장하지 못했어요');
+    }
+  };
+
+  return (
+    <section id="notify" ref={ref} className="glass-card p-4 sm:p-6 scroll-mt-20">
+      <h2 className="text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">알림 설정</h2>
+      <p className="text-[11px] text-gray-400 mb-3 break-keep">
+        폰으로 받을 알림 종류를 골라요. 꺼도 알림센터(🔔)에는 그대로 남아요.{' '}
+        <Link to="/notifications" className="text-cyan-600 dark:text-cyan-400 font-bold no-underline">이 기기에서 알림 켜기</Link>
+      </p>
+      {error ? (
+        <p className="text-xs font-bold text-red-500">{error}</p>
+      ) : prefs === null ? (
+        <p className="text-xs text-gray-400">불러오는 중…</p>
+      ) : (
+        <ul className="divide-y divide-border dark:divide-night-border">
+          {NOTIFY_KINDS.map((k) => (
+            <li key={k.key} className="flex items-center gap-3 py-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-gray-700 dark:text-gray-200">{k.label}</p>
+                <p className="text-[11px] text-gray-400 break-keep">{k.desc}</p>
+              </div>
+              <ToggleSwitch checked={Boolean(prefs[k.key])} onChange={(v) => change(k.key, v)} label={`${k.label} 알림`} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

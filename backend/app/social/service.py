@@ -4,11 +4,13 @@ import logging
 import re
 import unicodedata
 
+from fastapi import BackgroundTasks
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.projects.models import Episode
-from app.social.models import Notification
+from app.push.service import send_push
+from app.social.models import AuthorSubscription, Notification
 from app.storyboard.models import Cut
 from app.users.models import User
 
@@ -41,6 +43,7 @@ def author_payload(user: User | None) -> dict:
 # ── 알림 단일 진입점 ─────────────────────────────────────────
 # 모든 알림(새 화·댓글·답글·문의 답변)은 notify()/notify_followers()로만 만든다.
 # commit은 호출부 트랜잭션에 맡긴다(알림만 남고 본 작업이 롤백되는 일 방지).
+# background를 넘기면 응답 후(= commit 후) 웹푸시 발송 — 설정(notify_prefs) 체크는 send_push가 한다.
 
 def notify(
     db: Session,
@@ -50,30 +53,40 @@ def notify(
     body: str | None = None,
     link: str | None = None,
     actor_id: int | None = None,
+    background: BackgroundTasks | None = None,
 ) -> None:
     db.add(Notification(
         user_id=user_id, type=type, title=title[:200],
         body=(body or None) and body[:500], link=link, actor_id=actor_id,
     ))
+    if background is not None:
+        background.add_task(send_push, [user_id], type, title[:200], body and body[:500], link)
 
 
-def notify_followers(db: Session, author: User, episode: Episode, title: str) -> int:
+def notify_followers(
+    db: Session, author: User, episode: Episode, title: str,
+    background: BackgroundTasks | None = None,
+) -> int:
     """작가 구독자 전원에게 새 화 알림 — INSERT … SELECT 한 번(구독자 수와 무관하게 단일 쿼리)."""
     nickname = author.nickname or "작가"
+    push_title = f"{nickname} 작가의 새 웹툰"
+    push_body = f"'{title}'"[:500]
+    push_link = f"/view/{episode.share_token}"
     result = db.execute(
         text(
             "INSERT INTO notifications (user_id, type, title, body, link, actor_id) "
             "SELECT follower_id, 'new_episode', :title, :body, :link, :actor "
             "FROM author_subscriptions WHERE author_id = :actor"
         ),
-        {
-            "title": f"{nickname} 작가의 새 웹툰",
-            "body": f"'{title}'"[:500],
-            "link": f"/view/{episode.share_token}",
-            "actor": author.id,
-        },
+        {"title": push_title, "body": push_body, "link": push_link, "actor": author.id},
     )
     count = result.rowcount or 0
+    if background is not None and count:
+        follower_ids = [
+            fid for (fid,) in db.query(AuthorSubscription.follower_id)
+            .filter(AuthorSubscription.author_id == author.id).all()
+        ]
+        background.add_task(send_push, follower_ids, "new_episode", push_title, push_body, push_link)
     logger.info("notify_followers author=%s ep=%s count=%s", author.id, episode.id, count)
     return count
 
