@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { X, Home, Palette, Image, Package, Bell, HelpCircle, MessageSquare, FileText, Shield, Sun, Moon, LogOut, Settings, Users, Inbox } from 'lucide-react';
+import { X, Home, Palette, Image, Package, Bell, HelpCircle, MessageSquare, FileText, Shield, Sun, Moon, LogOut, Settings, Users, Inbox, ShieldCheck, UserCircle } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 
 export default function MobileDrawer({ open, onClose, user, packets, unreadCount = 0, onLogout }) {
@@ -80,6 +80,7 @@ export default function MobileDrawer({ open, onClose, user, packets, unreadCount
               <SectionLabel>계정</SectionLabel>
               <MenuItem to="/notifications" icon={Bell} label="알림" badge={unreadCount > 0 ? `${unreadCount}` : null} />
               <MenuItem to="/packets" icon={Package} label="패킷 충전" badge={packets?.balance != null ? `${packets.balance}패킷` : null} />
+              <MenuItem to={user.nickname ? `/u/${encodeURIComponent(user.nickname)}` : '/settings'} icon={UserCircle} label="내 작가 페이지" />
               <MenuItem to="/settings" icon={Settings} label="설정" badge={user.nickname ? null : '닉네임 없음'} />
 
               <SectionLabel>도움말</SectionLabel>
@@ -103,6 +104,15 @@ export default function MobileDrawer({ open, onClose, user, packets, unreadCount
 
         {/* 하단 */}
         <div className="border-t border-border dark:border-night-border p-4 space-y-2 shrink-0">
+          {user?.is_admin && (
+            <Link
+              to="/admin"
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-cyan-600 dark:text-cyan-400 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors no-underline"
+            >
+              <ShieldCheck size={18} />
+              관리자
+            </Link>
+          )}
           <button
             onClick={toggleTheme}
             className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors"

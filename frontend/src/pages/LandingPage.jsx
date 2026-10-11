@@ -4,6 +4,8 @@ import axios from 'axios';
 import { Menu } from 'lucide-react';
 import MobileDrawer from '../components/MobileDrawer';
 import AuthorLink from '../components/AuthorLink';
+import NotificationBell from '../components/NotificationBell';
+import useHeaderCounts from '../hooks/useHeaderCounts';
 import { useAuth } from '../contexts/AuthContext';
 import { CATEGORY_LABELS } from '../utils/resolveUrl';
 
@@ -32,6 +34,8 @@ export default function LandingPage() {
   const { user, logout } = useAuth();
   // 회원도 랜딩을 공개 홈으로 쓴다 — 시작 버튼은 회원이면 내 작품(/my)으로
   const startPath = user ? '/my' : '/login';
+  // 회원 ☰·🔔 — 앱 헤더와 같은 패킷·알림 카운트
+  const { packets, unreadCount } = useHeaderCounts(user);
   const [scrolled, setScrolled] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('단편');
@@ -103,9 +107,13 @@ export default function LandingPage() {
               <button onClick={() => scrollToSection('faq')} className="hover:text-white transition-colors">FAQ</button>
             </nav>
           </div>
-          <button onClick={() => navigate(startPath)} className="px-5 sm:px-6 py-2.5 bg-white/5 border border-white/10 hover:bg-white/10 rounded-full text-sm font-medium transition-colors whitespace-nowrap">
-            {user ? '내 작품' : '시작하기'}
-          </button>
+          <div className="flex items-center gap-3">
+            {/* 회원: 🔔 알림 (앱 헤더와 동일 — PC 드롭다운 / 모바일 /notifications) */}
+            {user && <NotificationBell unreadCount={unreadCount} />}
+            <button onClick={() => navigate(startPath)} className="px-5 sm:px-6 py-2.5 bg-white/5 border border-white/10 hover:bg-white/10 rounded-full text-sm font-medium transition-colors whitespace-nowrap">
+              {user ? '내 작품' : '시작하기'}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -113,7 +121,8 @@ export default function LandingPage() {
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         user={user}
-        packets={null}
+        packets={packets}
+        unreadCount={unreadCount}
         onLogout={() => { logout(); navigate('/'); }}
       />
 

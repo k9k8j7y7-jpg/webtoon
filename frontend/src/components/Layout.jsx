@@ -1,8 +1,8 @@
-import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
+import { Outlet, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { LogOut, Sparkles, Package, HelpCircle, Menu, Sun, Moon, MessageSquare, FileText, Settings, Users } from 'lucide-react';
-import { useState, useEffect, useCallback, useRef } from 'react';
-import api from '../api/client';
+import { LogOut, Sparkles, Package, HelpCircle, Menu, Sun, Moon, MessageSquare, FileText, UserCircle, Users } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import useHeaderCounts from '../hooks/useHeaderCounts';
 import NoticeBar from './NoticeBar';
 import MobileDrawer from './MobileDrawer';
 import NotificationBell from './NotificationBell';
@@ -11,45 +11,14 @@ import { useTheme } from '../contexts/ThemeContext';
 export default function Layout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
-  const [packets, setPackets] = useState(null);
   const { theme, toggleTheme } = useTheme();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const helpRef = useRef(null);
-  const [unreadCount, setUnreadCount] = useState(0);
-
-  const refreshPackets = useCallback(() => {
-    if (user) {
-      api.get('/me/packets').then(({ data }) => setPackets(data)).catch(() => {});
-    }
-  }, [user]);
-
-  useEffect(() => {
-    refreshPackets();
-    const handler = () => refreshPackets();
-    window.addEventListener('packets:refresh', handler);
-    return () => window.removeEventListener('packets:refresh', handler);
-  }, [refreshPackets]);
-
-  // 안 읽은 알림 수(새 화·문의 답변 등 알림센터 통합) — 라우트 이동·포커스 복귀·읽음 처리 시 갱신
-  const refreshUnread = useCallback(() => {
-    if (user) {
-      api.get('/notifications/unread-count').then(({ data }) => setUnreadCount(data.unread_count || 0)).catch(() => {});
-    }
-  }, [user]);
-
-  useEffect(() => { refreshUnread(); }, [refreshUnread, location.pathname]);
-
-  useEffect(() => {
-    const onFocus = () => refreshUnread();
-    window.addEventListener('focus', onFocus);
-    window.addEventListener('notifications:refresh', onFocus);
-    return () => {
-      window.removeEventListener('focus', onFocus);
-      window.removeEventListener('notifications:refresh', onFocus);
-    };
-  }, [refreshUnread]);
+  // 패킷 잔량 + 안 읽은 알림 수 (랜딩 헤더와 공용 훅)
+  const { packets, unreadCount } = useHeaderCounts(user);
+  // 이름 클릭 → 내 작가 페이지 (닉네임 없으면 설정에서 먼저 정하도록)
+  const profilePath = user?.nickname ? `/u/${encodeURIComponent(user.nickname)}` : '/settings';
 
   // ? 드롭다운 바깥 클릭 닫기
   useEffect(() => {
@@ -132,9 +101,9 @@ export default function Layout() {
             {/* 🔔 알림센터 */}
             <NotificationBell unreadCount={unreadCount} />
 
-            {/* PC: 프로필(→ 설정) + 로그아웃 */}
-            <Link to="/settings" className="hidden sm:flex items-center gap-1 text-sm font-bold text-gray-600 dark:text-gray-300 whitespace-nowrap hover:text-comic-orange no-underline" title="설정">
-              <Settings size={16} className="text-gray-400 shrink-0" />
+            {/* PC: 프로필(→ 내 작가 페이지, 설정은 [프로필 편집]·☰) + 로그아웃 */}
+            <Link to={profilePath} className="hidden sm:flex items-center gap-1 text-sm font-bold text-gray-600 dark:text-gray-300 whitespace-nowrap hover:text-comic-orange no-underline" title={user?.nickname ? '내 작가 페이지' : '설정 (닉네임 없음)'}>
+              <UserCircle size={16} className="text-gray-400 shrink-0" />
               <span className="hidden md:inline">{user?.nickname || user?.display_name || user?.email}</span>
             </Link>
             <button onClick={handleLogout} className="hidden sm:block p-1.5 text-gray-400 hover:text-comic-orange rounded transition-colors shrink-0" title="로그아웃">
