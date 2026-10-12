@@ -55,12 +55,14 @@ def notify(
     actor_id: int | None = None,
     background: BackgroundTasks | None = None,
 ) -> None:
-    db.add(Notification(
+    n = Notification(
         user_id=user_id, type=type, title=title[:200],
         body=(body or None) and body[:500], link=link, actor_id=actor_id,
-    ))
+    )
+    db.add(n)
+    db.flush()  # id 확보 — 푸시 payload에 notification_id 포함
     if background is not None:
-        background.add_task(send_push, [user_id], type, title[:200], body and body[:500], link)
+        background.add_task(send_push, [user_id], type, title[:200], body and body[:500], link, n.id)
 
 
 def notify_followers(

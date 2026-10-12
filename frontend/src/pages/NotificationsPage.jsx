@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import api from '../api/client';
 import NotificationList, { refreshUnread } from '../components/NotificationList';
 import { GateSkeleton, GateLoadError } from '../components/GateLoadFallback';
@@ -10,14 +10,27 @@ export default function NotificationsPage() {
   const [unread, setUnread] = useState(0);
   const [error, setError] = useState('');
 
-  const load = () => {
+  const load = useCallback(() => {
     setError('');
     api.get('/notifications', { params: { limit: 100 } })
       .then(({ data }) => { setItems(data.items); setUnread(data.unread_count); })
       .catch((err) => setError(err.response?.data?.detail || '알림을 불러오지 못했어요'));
-  };
+  }, []);
 
-  useEffect(load, []);
+  useEffect(load, [load]);
+
+  // unread 증가·탭 복귀·포커스 시 목록 자동 갱신
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') load(); };
+    window.addEventListener('notifications:list-refresh', load);
+    window.addEventListener('focus', load);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('notifications:list-refresh', load);
+      window.removeEventListener('focus', load);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [load]);
 
   const readAll = async () => {
     await api.post('/notifications/read-all').catch(() => {});

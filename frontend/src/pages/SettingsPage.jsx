@@ -5,6 +5,7 @@ import api from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import { Avatar } from '../components/AuthorLink';
 import ToggleSwitch from '../components/ToggleSwitch';
+import PushToggleCard from '../components/PushToggleCard';
 
 export default function SettingsPage() {
   const { user, updateUser } = useAuth();
@@ -166,11 +167,12 @@ function NotifyPrefs() {
   };
 
   return (
-    <section id="notify" ref={ref} className="glass-card p-4 sm:p-6 scroll-mt-20">
-      <h2 className="text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">알림 설정</h2>
+    <section id="notify" ref={ref} className="scroll-mt-20 space-y-3">
+      <PushToggleCard />
+      <div className="glass-card p-4 sm:p-6">
+      <h2 className="text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">알림 종류</h2>
       <p className="text-[11px] text-gray-400 mb-3 break-keep">
-        폰으로 받을 알림 종류를 골라요. 꺼도 알림센터(🔔)에는 그대로 남아요.{' '}
-        <Link to="/notifications" className="text-cyan-600 dark:text-cyan-400 font-bold no-underline">이 기기에서 알림 켜기</Link>
+        폰으로 받을 알림 종류를 골라요. 꺼도 알림센터(🔔)에는 그대로 남아요.
       </p>
       {error ? (
         <p className="text-xs font-bold text-red-500">{error}</p>
@@ -189,6 +191,7 @@ function NotifyPrefs() {
           ))}
         </ul>
       )}
+      </div>
     </section>
   );
 }

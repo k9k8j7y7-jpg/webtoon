@@ -21,14 +21,26 @@ self.addEventListener('push', (event) => {
       body: data.body || '',
       icon: data.icon || DEFAULT_ICON,
       badge: DEFAULT_ICON,
-      data: { link: data.link || DEFAULT_LINK },
+      data: { link: data.link || DEFAULT_LINK, notification_id: data.notification_id || null },
     }),
   );
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const target = new URL(event.notification.data?.link || DEFAULT_LINK, self.location.origin).href;
+  let link = event.notification.data?.link || DEFAULT_LINK;
+  const nId = event.notification.data?.notification_id;
+  if (nId) {
+    // ?n={id}를 해시 앞에 삽입 — 프론트가 읽음 처리 후 제거
+    const hashIdx = link.indexOf('#');
+    const sep = link.includes('?') ? '&' : '?';
+    if (hashIdx >= 0) {
+      link = link.substring(0, hashIdx) + sep + 'n=' + nId + link.substring(hashIdx);
+    } else {
+      link = link + sep + 'n=' + nId;
+    }
+  }
+  const target = new URL(link, self.location.origin).href;
   event.waitUntil((async () => {
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     // 같은 주소의 창이 있으면 포커스, 아니면 앱 창 하나를 그 주소로 이동, 없으면 새 창

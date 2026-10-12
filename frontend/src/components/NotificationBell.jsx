@@ -18,6 +18,25 @@ export default function NotificationBell({ unreadCount }) {
     return () => document.removeEventListener('pointerdown', handler);
   }, [open]);
 
+  // 드롭다운 열려 있을 때 새 알림·탭 복귀 시 자동 갱신
+  useEffect(() => {
+    if (!open) return;
+    const reload = () => {
+      api.get('/notifications', { params: { limit: 20 } })
+        .then(({ data }) => setItems(data.items))
+        .catch(() => {});
+    };
+    const onVisible = () => { if (document.visibilityState === 'visible') reload(); };
+    window.addEventListener('notifications:list-refresh', reload);
+    window.addEventListener('focus', reload);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('notifications:list-refresh', reload);
+      window.removeEventListener('focus', reload);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [open]);
+
   const handleBell = () => {
     if (window.matchMedia('(max-width: 639px)').matches) {
       navigate('/notifications');

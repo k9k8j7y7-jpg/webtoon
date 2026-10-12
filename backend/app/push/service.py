@@ -40,19 +40,22 @@ def merged_prefs(user: User) -> dict:
     return prefs
 
 
-def send_push(user_ids: list[int], type: str, title: str, body: str | None, link: str | None) -> None:
+def send_push(user_ids: list[int], type: str, title: str, body: str | None, link: str | None, notification_id: int | None = None) -> None:
     """user_ids의 모든 구독 기기로 발송. 설정에서 끈 사용자는 건너뛰고, 만료(404/410) 구독은 삭제."""
     if not user_ids or not push_enabled():
         return
     settings = get_settings()
     pref_key = PREF_KEY_BY_TYPE.get(type)
-    payload = json.dumps({
+    payload_dict = {
         "title": title,
         "body": body or "",
         "icon": PUSH_ICON,
         "link": f"{APP_BASE}{link}" if link and link.startswith("/") else (link or f"{APP_BASE}/"),
         "tag": type,
-    }, ensure_ascii=False)
+    }
+    if notification_id is not None:
+        payload_dict["notification_id"] = notification_id
+    payload = json.dumps(payload_dict, ensure_ascii=False)
 
     db = SessionLocal()
     sent = skipped = removed = failed = 0

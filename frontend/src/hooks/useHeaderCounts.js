@@ -1,13 +1,15 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import api from '../api/client';
 
 // 헤더 공용 — 패킷 잔량 + 안 읽은 알림 수 (앱 Layout·랜딩 공용)
 // 알림: 라우트 이동·포커스 복귀·'notifications:refresh' 시 갱신 / 패킷: 'packets:refresh' 시 갱신
+// unread가 증가하면 'notifications:list-refresh' 발행 → 목록 자동 갱신
 export default function useHeaderCounts(user) {
   const location = useLocation();
   const [packets, setPackets] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const prevUnread = useRef(0);
 
   const refreshPackets = useCallback(() => {
     if (user) {
@@ -26,7 +28,14 @@ export default function useHeaderCounts(user) {
 
   const refreshUnread = useCallback(() => {
     if (user) {
-      api.get('/notifications/unread-count').then(({ data }) => setUnreadCount(data.unread_count || 0)).catch(() => {});
+      api.get('/notifications/unread-count').then(({ data }) => {
+        const next = data.unread_count || 0;
+        setUnreadCount((prev) => {
+          if (next > prev) window.dispatchEvent(new Event('notifications:list-refresh'));
+          prevUnread.current = next;
+          return next;
+        });
+      }).catch(() => {});
     } else {
       setUnreadCount(0);
     }

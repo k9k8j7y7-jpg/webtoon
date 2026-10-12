@@ -1,5 +1,7 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useSearchParams } from 'react-router-dom';
+import { useEffect } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import api from './api/client';
 import { ThemeProvider } from './contexts/ThemeContext';
 import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
@@ -32,8 +34,23 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
+// 푸시 알림 탭 → ?n={notification_id} → 자동 읽음 처리 후 쿼리만 제거(해시 유지)
+function useAutoReadNotification() {
+  const [params, setParams] = useSearchParams();
+  const { user } = useAuth();
+  useEffect(() => {
+    const nId = params.get('n');
+    if (!nId || !user) return;
+    api.post(`/notifications/${nId}/read`).then(() => {
+      window.dispatchEvent(new Event('notifications:refresh'));
+    }).catch(() => {});
+    setParams((prev) => { prev.delete('n'); return prev; }, { replace: true });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+}
+
 function AppRoutes() {
   const { user, loading } = useAuth();
+  useAutoReadNotification();
 
   if (loading) return null;
 
