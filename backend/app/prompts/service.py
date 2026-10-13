@@ -68,6 +68,7 @@ def build_cut_prompt(
     aspect_ratio: str = "9:16",
     product_desc: str = "",
     has_photo_real_char: bool = False,
+    extra_prompt: str = "",
 ) -> str:
     """컷 명세로부터 이미지 생성 프롬프트를 조립한다.
 
@@ -204,6 +205,10 @@ def build_cut_prompt(
     action = cut_spec.get("action")
     if action:
         parts.append(f"Scene: {action}")
+
+    # ── 3.3. 연출 효과 (drama.py에서 생성된 extra_prompt) ──
+    if extra_prompt:
+        parts.append(extra_prompt.strip())
 
     # ── 3.5. 제품 (광고 에피소드) ──
     if product_desc:

@@ -111,6 +111,15 @@ async def regenerate_cut(
                     char["pose"] = body.params["pose"]
             cut.spec = spec
 
+        # 연출 강도 덮어쓰기 (모드 무관하게 params.drama_level 있으면 저장)
+        if "drama_level" in body.params:
+            from app.prompts.drama import VALID_LEVELS
+            dl = body.params["drama_level"]
+            if dl in VALID_LEVELS:
+                spec = dict(cut.spec)
+                spec["drama_level"] = dl
+                cut.spec = spec
+
     # 재생성에 필요한 정보를 미리 추출
     regen_seed = body.seed if body and body.seed else None
     regen_episode_id = cut.episode_id
@@ -146,6 +155,24 @@ async def regenerate_cut(
     run_job_in_background(background_tasks, job.job_id, _regen())
 
     return {"job_id": job.job_id, "packets_will_charge": 1}
+
+
+@router.delete("/cuts/{cut_id}/drama-level")
+async def clear_drama_level(
+    cut_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """컷의 연출 강도 덮어쓰기를 제거한다 (에피소드 기본값으로 되돌리기)."""
+    cut = db.query(Cut).filter(Cut.cut_id == cut_id).first()
+    if not cut:
+        raise HTTPException(status_code=404, detail="Cut not found")
+    spec = dict(cut.spec)
+    if "drama_level" in spec:
+        del spec["drama_level"]
+        cut.spec = spec
+        db.commit()
+    return {"ok": True}
 
 
 @router.put("/cuts/{cut_id}/dialogue")

@@ -1047,6 +1047,9 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
         )}
       </div>
 
+      {/* 연출 강도 */}
+      <DramaLevelSelector projectId={projectId} episodeId={episodeId} gateStatus={gateStatus} onRefresh={onRefresh} />
+
       {/* 캐릭터 */}
       {skippedInfo && (
         <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl text-sm text-blue-700 dark:text-blue-400 mb-3">
@@ -1822,6 +1825,64 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── 연출 강도 선택 ──
+const DRAMA_LEVELS = [
+  { value: 'light', label: '담백', desc: '효과 없이 깔끔' },
+  { value: 'normal', label: '보통', desc: '감정에 맞는 효과 2~3개' },
+  { value: 'strong', label: '과장', desc: '집중선·과장 포즈까지' },
+];
+
+function DramaLevelSelector({ projectId, episodeId, gateStatus, onRefresh }) {
+  const isAd = gateStatus?.is_ad ?? false;
+  const current = gateStatus?.drama_level || (isAd ? 'light' : 'normal');
+  const [saving, setSaving] = useState(false);
+
+  const set = async (level) => {
+    if (saving || level === current) return;
+    setSaving(true);
+    try {
+      await api.post(`/projects/${projectId}/episodes/${episodeId}/drama-level`, { drama_level: level });
+      await onRefresh();
+    } catch (err) {
+      alert(err.response?.data?.detail || '저장하지 못했어요');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="glass-card p-6">
+      <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2 mb-1">
+        <Sparkles size={20} className="text-amber-500" />
+        연출 강도
+      </h2>
+      <p className="text-xs text-gray-500 dark:text-gray-400 mb-4 break-keep">
+        감정·행동에 맞는 만화 효과(반짝이·집중선·땀방울 등)를 모델이 직접 그려요
+      </p>
+      <div className="flex gap-2">
+        {DRAMA_LEVELS.map(({ value, label, desc }) => {
+          const selected = current === value;
+          return (
+            <button
+              key={value}
+              onClick={() => set(value)}
+              disabled={saving}
+              className={`flex-1 flex flex-col items-center gap-1 px-3 py-3 rounded-xl text-sm font-bold border-2 transition-all
+                ${selected
+                  ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-500 text-amber-600 dark:text-amber-400'
+                  : 'bg-white dark:bg-zinc-800 border-border dark:border-zinc-700 text-gray-500 dark:text-gray-400 hover:border-amber-400 dark:hover:border-amber-500'}
+                ${saving ? 'opacity-60' : 'cursor-pointer'}`}
+            >
+              <span>{label}</span>
+              <span className="text-[10px] font-normal text-gray-400 dark:text-gray-500 break-keep">{desc}</span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

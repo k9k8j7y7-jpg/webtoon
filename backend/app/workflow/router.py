@@ -167,6 +167,38 @@ async def set_page_format(
     }
 
 
+class DramaLevelRequest(BaseModel):
+    drama_level: str  # "light" | "normal" | "strong"
+
+
+@router.post("/projects/{project_id}/episodes/{episode_id}/drama-level")
+async def set_drama_level(
+    project_id: int,
+    episode_id: int,
+    body: DramaLevelRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """에피소드 연출 강도 설정."""
+    from app.prompts.drama import VALID_LEVELS
+    if body.drama_level not in VALID_LEVELS:
+        raise HTTPException(status_code=400, detail=f"drama_level must be one of {VALID_LEVELS}")
+
+    episode = _get_episode_for_user(db, project_id, episode_id, current_user.id)
+
+    new_gs = {**episode.gate_status}
+    new_gs["drama_level"] = body.drama_level
+    episode.gate_status = new_gs
+
+    db.commit()
+    db.refresh(episode)
+
+    return {
+        "drama_level": body.drama_level,
+        "gate_status": episode.gate_status,
+    }
+
+
 class RevertRequest(BaseModel):
     target_gate: int
 

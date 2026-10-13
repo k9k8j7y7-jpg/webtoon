@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import api, { pollJob } from '../../api/client';
 import JobProgress from '../JobProgress';
 import BubbleOverlay, { BubbleMiniIcon, STYLE_ORDER, STYLE_LABELS } from '../BubbleOverlay';
 import { resolveBubbleStyle } from '../../utils/bubbleMapping';
-import { Image, RefreshCw, RotateCcw, Download, Check, AlertTriangle, MessageSquare, Save, X, ZoomIn, ChevronLeft, ChevronRight, Pencil, SlidersHorizontal, ExternalLink, LayoutGrid } from 'lucide-react';
+import { Image, RefreshCw, RotateCcw, Download, Check, AlertTriangle, MessageSquare, Save, X, ZoomIn, ChevronLeft, ChevronRight, ChevronDown, Pencil, SlidersHorizontal, ExternalLink, LayoutGrid } from 'lucide-react';
 import CutEditor from '../CutEditor';
 import SfxLayer from '../SfxLayer';
 import EffectLayer from '../EffectLayer';
@@ -255,11 +256,13 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
     }
   };
 
-  const handleRegenerate = async (cutId) => {
+  const handleRegenerate = async (cutId, dramaLevel) => {
     setError('');
     setPartialResult(null);
     try {
-      const { data } = await api.post(`/cuts/${cutId}/regenerate`, { mode: 'reseed' });
+      const body = { mode: 'reseed' };
+      if (dramaLevel) body.params = { drama_level: dramaLevel };
+      const { data } = await api.post(`/cuts/${cutId}/regenerate`, body);
       setJob({ job_id: data.job_id, status: 'processing', progress: { done: 0, total: 1 } });
       await pollJob(data.job_id, setJob);
       setJob(null);
@@ -276,6 +279,13 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
         setError('생성이 잠시 지연되고 있어요. 다시 시도해 주세요. (패킷은 차감되지 않았습니다)');
       }
     }
+  };
+
+  const handleClearDramaOverride = async (cutId) => {
+    try {
+      await api.delete(`/cuts/${cutId}/drama-level`);
+      await loadCuts();
+    } catch { /* ignore */ }
   };
 
   const handleRevert = async (cutId) => {
@@ -577,6 +587,9 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                 >
                   <Image size={12} /> {pendingCuts.length}컷 생성 ({pendingCuts.length}패킷)
                 </button>
+                <span className="text-[10px] text-gray-400 dark:text-gray-500">
+                  연출: {DRAMA_LABELS[gateStatus?.drama_level || (gateStatus?.is_ad ? 'light' : 'normal')]}
+                </span>
                 {gateStatus?.has_photo_real_char && (
                   <span className="text-[10px] font-bold text-blue-500 dark:text-blue-400">
                     실사 캐릭터 포함 — 컷당 약 30~40초
@@ -794,22 +807,29 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
               )}
 
               <div className="p-2">
-                <div className="text-[11px] font-bold text-gray-500 dark:text-gray-400 mb-1.5">
-                  {shotLabel[cut.shot] || cut.shot} · {cut.characters?.map(c => getCharName(c)).join(', ')}
+                <div className="text-[11px] font-bold text-gray-500 dark:text-gray-400 mb-1.5 flex items-center gap-1">
+                  <span className="truncate">{shotLabel[cut.shot] || cut.shot} · {cut.characters?.map(c => getCharName(c)).join(', ')}</span>
                   {cut.characters?.some(c => isUnknownChar(c)) && (
-                    <span className="text-amber-500 ml-1" title={`알 수 없는 캐릭터: ${cut.characters.filter(c => isUnknownChar(c)).map(c => typeof c === 'string' ? c : c.character_id).join(', ')}`}>⚠</span>
+                    <span className="text-amber-500 shrink-0" title={`알 수 없는 캐릭터: ${cut.characters.filter(c => isUnknownChar(c)).map(c => typeof c === 'string' ? c : c.character_id).join(', ')}`}>⚠</span>
+                  )}
+                  {cut.drama_level && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (window.confirm('에피소드 기본값으로 되돌릴까요?\n(이미지는 재생성하지 않아요)')) handleClearDramaOverride(cut.cut_id);
+                      }}
+                      title="에피소드 기본값으로 되돌리기"
+                      className="ml-auto shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors"
+                    >
+                      {DRAMA_LABELS[cut.drama_level] || cut.drama_level}
+                    </button>
                   )}
                 </div>
                 {cut.image_url && (
                   <div className="flex gap-1">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleRegenerate(cut.cut_id); }}
-                      disabled={!!job}
-                      title="재생성 (1패킷)"
-                      className="flex items-center gap-0.5 h-8 px-2 py-1 bg-comic-blue/10 text-comic-blue rounded-full font-bold shadow-sm hover:bg-comic-blue/20 text-[10px] disabled:opacity-50 transition-colors"
-                    >
-                      <RefreshCw size={11} /> <span className="hidden min-[400px]:inline">재생성</span>
-                    </button>
+                    <RegenDropdown cutId={cut.cut_id} cutSpec={cut} disabled={!!job}
+                      onRegenerate={handleRegenerate}
+                      epDramaLevel={gateStatus?.drama_level || (gateStatus?.is_ad ? 'light' : 'normal')} />
                     <button
                       onClick={(e) => { e.stopPropagation(); handleRevert(cut.cut_id); }}
                       title="되돌리기"
@@ -1331,6 +1351,116 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
           onClose={() => setExportModal(null)}
         />
       )}
+    </div>
+  );
+}
+
+// ── 재생성 드롭다운 (연출 강도 선택) ──
+const DRAMA_LABELS = { light: '담백', normal: '보통', strong: '과장' };
+const DRAMA_DESC = { light: '효과 없이 깔끔', normal: '감정 효과 2~3개', strong: '집중선·과장까지' };
+
+function RegenDropdown({ cutId, cutSpec, disabled, onRegenerate, epDramaLevel }) {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef(null);
+  const [pos, setPos] = useState(null);
+  const cutDrama = cutSpec?.drama_level;
+  const isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches;
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e) => {
+      // portal 안 클릭은 무시 — data-drama-menu로 구분
+      if (e.target.closest?.('[data-drama-menu]')) return;
+      setOpen(false);
+    };
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('pointerdown', close);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('pointerdown', close); document.removeEventListener('keydown', onKey); };
+  }, [open]);
+
+  const handleOpen = (e) => {
+    e.stopPropagation();
+    if (btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      setPos({ left: r.left, top: r.bottom + 4 });
+    }
+    setOpen(!open);
+  };
+
+  const menu = open ? createPortal(
+    isMobile ? (
+      // 모바일: 바텀시트
+      <div data-drama-menu className="fixed inset-0 z-[60] flex items-end justify-center bg-black/50" onPointerDown={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
+        <div className="w-full max-w-md bg-white dark:bg-night-card rounded-t-2xl shadow-2xl p-4 pb-6 space-y-1" onPointerDown={(e) => e.stopPropagation()}>
+          <p className="text-xs font-bold text-gray-400 mb-2 px-1">연출 강도 재생성 (1패킷)</p>
+          {['light', 'normal', 'strong'].map((level) => {
+            const current = cutDrama || epDramaLevel;
+            return (
+              <button
+                key={level}
+                onClick={() => { setOpen(false); onRegenerate(cutId, level); }}
+                className={`flex items-center justify-between w-full px-4 py-3 rounded-xl text-sm font-bold transition-colors ${
+                  current === level ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5'
+                }`}
+              >
+                <div>
+                  <span>{DRAMA_LABELS[level]}</span>
+                  <span className="ml-2 text-xs font-normal text-gray-400">{DRAMA_DESC[level]}</span>
+                </div>
+                {current === level && <Check size={14} className="text-amber-500 shrink-0" />}
+              </button>
+            );
+          })}
+          <button onClick={() => setOpen(false)} className="w-full mt-2 h-11 rounded-xl text-sm font-bold bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300">닫기</button>
+        </div>
+      </div>
+    ) : (
+      // PC: fixed 팝오버
+      <div data-drama-menu className="fixed z-[60] w-40 bg-white dark:bg-night-card border border-border dark:border-night-border rounded-xl shadow-xl overflow-hidden"
+        style={{ left: pos?.left ?? 0, top: pos?.top ?? 0 }}
+        onPointerDown={(e) => e.stopPropagation()}
+      >
+        <p className="px-3 pt-2 pb-1 text-[10px] font-bold text-gray-400">연출 강도 재생성</p>
+        {['light', 'normal', 'strong'].map((level) => {
+          const current = cutDrama || epDramaLevel;
+          return (
+            <button
+              key={level}
+              onClick={() => { setOpen(false); onRegenerate(cutId, level); }}
+              className="flex items-center justify-between w-full px-3 py-2 text-xs font-bold text-left hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
+            >
+              <span className="text-gray-700 dark:text-gray-200">{DRAMA_LABELS[level]}</span>
+              {current === level && <Check size={12} className="text-amber-500" />}
+            </button>
+          );
+        })}
+      </div>
+    ),
+    document.body
+  ) : null;
+
+  return (
+    <div className="relative">
+      <div className="flex">
+        <button
+          onClick={(e) => { e.stopPropagation(); onRegenerate(cutId); }}
+          disabled={disabled}
+          title="재생성 (1패킷)"
+          className="flex items-center gap-0.5 h-8 px-2 py-1 bg-comic-blue/10 text-comic-blue rounded-l-full font-bold shadow-sm hover:bg-comic-blue/20 text-[10px] disabled:opacity-50 transition-colors"
+        >
+          <RefreshCw size={11} /> <span className="hidden min-[400px]:inline">재생성</span>
+        </button>
+        <button
+          ref={btnRef}
+          onClick={handleOpen}
+          disabled={disabled}
+          className="flex items-center h-8 px-1.5 bg-comic-blue/10 text-comic-blue rounded-r-full font-bold shadow-sm hover:bg-comic-blue/20 text-[10px] disabled:opacity-50 transition-colors border-l border-comic-blue/20"
+        >
+          <ChevronDown size={11} />
+        </button>
+      </div>
+      {menu}
     </div>
   );
 }

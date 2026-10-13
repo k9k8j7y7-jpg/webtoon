@@ -362,6 +362,25 @@ async def generate_cut_image(
             f"(현재 비율: {ep_aspect_ratio})"
         )
 
+    # 4.7. 연출 강도 (drama.py)
+    from app.prompts.drama import resolve_level, normalize_emotion, build_drama_prompt
+    drama_level = resolve_level(episode.gate_status, spec)
+    # 첫 번째 캐릭터의 감정 기준(2인 이상이면 대표 감정)
+    first_emotion = ""
+    for ch in spec.get("characters", []):
+        e = ch.get("emotion", "")
+        if e and e != "neutral":
+            first_emotion = e
+            break
+    if not first_emotion:
+        first_emotion = spec.get("characters", [{}])[0].get("emotion", "neutral") if spec.get("characters") else "neutral"
+    drama_category, drama_motions = normalize_emotion(first_emotion, spec.get("action", ""))
+    # 흑백 스타일 판별
+    is_bw = "monochrome" in style_prompt.lower() or "black and white" in style_prompt.lower()
+    drama_extra = build_drama_prompt(drama_level, drama_category, drama_motions, is_photo_real=use_gpt, is_bw=is_bw)
+    if drama_extra:
+        logger.info("Cut %s drama: level=%s category=%s motions=%s", cut.cut_id, drama_level, drama_category, drama_motions)
+
     # 5. 프롬프트 조립 (Prompt Engine)
     prompt = build_cut_prompt(
         cut_spec=spec,
@@ -374,6 +393,7 @@ async def generate_cut_image(
         aspect_ratio=ep_aspect_ratio,
         product_desc=product_desc,
         has_photo_real_char=use_gpt,
+        extra_prompt=drama_extra,
     )
 
     # 6. 이미지 생성 (레퍼런스 주입 + 앵커링!)
