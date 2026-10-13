@@ -202,6 +202,7 @@ WEBTOON/
 - [x] B 형식/레이아웃 0~4단계 (완료 2026-10-02, 형식 정의·백엔드 비율 강제·콘티 가이드·게이트3 형식 카드·게이트4 페이지 배지·페이지 합성 composePageGrid·게이트5 미리보기·뷰어 페이지 표시·내보내기 page_format 분기)
 - [x] F 실사 캐릭터 1~4단계 (완료 2026-10-05, step28·GPT 분기·게이트3 시트 UX·웹툰 세계 프롬프트·참조 번호 수정·콘티 자동 보강·약관 초상권)
 - [x] 문의 게시판 0~4단계 (완료 2026-10-07, step29·inquiries API·사용자 작성/목록/상세·관리자 탭·모바일 드로어·? 드롭다운·로고 링크·로그인 복귀·🔔 미읽음·admin 전용 상세 엔드포인트)
+- [x] 내레이션 박스 1~2단계 (완료 2026-10-13, box/bar bubble_style·BubbleOverlay+Pillow 렌더·CutEditor 이동/폭/토글/일괄·RENDERER_VERSION v3)
 - [ ] **다음:** E 오픈 준비 1 셀프 청소
 - [ ] 모바일 레이아웃 1차 (`docs/지시서-모바일레이아웃-1차.md`, 0단계 조사부터) → 2차(랜딩·게이트1~3·편집기)
 - [ ] C 이미지 모델 선택 (에피소드 단위 모델 잠금, openai_image.py 어댑터)
@@ -215,6 +216,7 @@ WEBTOON/
 - **git 안전:** (1) 테스트 통과마다 커밋 (2) 큰 구조 변경 전 커밋 (3) `git checkout`/`git reset` 등 파괴적 명령 전 사용자 확인
 - **BubbleOverlay 상수:** `CHAR_WIDTH=0.93`(기본, pretendard), `REF_WIDTH=800`, `LINE_HEIGHT_RATIO=1.45`, `BASE_FONT_SIZE=14`, `BASE_PADDING_X=14`, `BASE_PADDING_Y=10`. 폰트별 charWidth는 FONT_CATALOG 참조. `bubbleSpec.json`의 `charWidth: 0.72` 사용 금지
 - **말풍선 렌더러 수정 시:** `composition/service.py`의 `RENDERER_VERSION` 올리고, `frontend/src/utils/bubbleSpec.json` + `backend/app/composition/bubble_spec.json` 동시 업데이트
+- **내레이션 박스:** `dialogue[].type:"narration"` + `bubble_style:"box"`(기본, 신규) | `"bar"`(레거시·옵션). 렌더 5곳(BubbleOverlay 프론트 4곳 + Pillow `compose_dialogue_on_image`) 동시 수정 + `RENDERER_VERSION`. box = 흰 배경·검은 테두리·검은 글씨, bar = 전폭 검은 반투명 띠·흰 글씨. 기존 작품(`bubble_style` 없음)은 bar로 해석 — **자동 변환 금지**. 새 narration은 `_apply_narration_box_default()`가 box + 대각선 layout 부여. 편집기에서 [→ 박스 / → 띠] 개별 전환, [전체 박스로/띠로] 일괄 전환
 - **텍스트 렌더 이원 모드:** 화면=`<foreignObject>` / export=SVG `<text>/<tspan>` (`renderMode='svg-text'`). 수정 시 두 모드 동시 수정 + `node scripts/bubble-shot.mjs` 비교 판정 통과 필수
 - **편집기 오버레이:** 편집기 오버레이 레이어는 루트에 pointer-events none, 실제 조작 요소에만 all. 레이어 추가 시 아래 레이어 선택 회귀 테스트 필수(일반 말풍선·효과음·효과·제품)
 - **편집기 입력:** Pointer 이벤트(`onPointerDown/pointermove/pointerup`)로 통일. 선택은 `pointerdown` 즉시. **`onClick` 핸들러 금지** — 터치에서 pointerdown→click 버블링으로 선택이 해제됨. 컷 영역 `touch-action: none`(300ms 탭 지연 제거)·하단 패널 `touch-action: pan-y`(스크롤 유지). `DRAG_THRESHOLD` = mouse 5px / touch 12px. 실기기 검증 필수
