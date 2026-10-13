@@ -24,6 +24,14 @@ export function computeInitialLayouts(dialogue) {
     if (item.bubble_layout) return { ...item };
 
     if (item.type === 'narration') {
+      // box 스타일: 대각선 배치 (n=0 왼쪽 위, n=1 오른쪽 아래, n≥2 아래로)
+      if (item.bubble_style === 'box') {
+        const narrIdx = dialogue.slice(0, idx).filter(d => d.type === 'narration' && d.bubble_style === 'box' && !d.bubble_layout).length;
+        if (narrIdx === 0) return { ...item, bubble_layout: { x: 0.04, y: 0.04, width: 0.44, tail_direction: 'none' } };
+        if (narrIdx === 1) return { ...item, bubble_layout: { x: 0.52, y: 0.70, width: 0.44, tail_direction: 'none' } };
+        return { ...item, bubble_layout: { x: 0.04, y: 0.04 + narrIdx * 0.14, width: 0.44, tail_direction: 'none' } };
+      }
+      // bar(기존): 전폭 하단
       return { ...item, bubble_layout: { x: 0.0, y: 0.82, width: 1.0, tail_direction: 'none' } };
     }
 

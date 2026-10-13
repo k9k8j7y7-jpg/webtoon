@@ -33,6 +33,15 @@ const BUBBLE_CONFIGS = {
     isCaption: true,
     fontSize: 0.9,
   },
+  box: {
+    fill: '#ffffff',
+    stroke: '#1a1a1a',
+    strokeWidthRatio: 0.003, // 이미지 폭 기준 0.3%, 최소 1.5px
+    textColor: '#1a1a1a',
+    isNarrationBox: true,
+    position: 'top',
+    fontSize: 0.9,
+  },
   thought: {
     fill: 'rgba(255,255,255,0.78)',
     stroke: '#969696',
@@ -135,7 +144,7 @@ const BUBBLE_CONFIGS = {
 };
 
 // ── 꼬리 없는 스타일 목록 ──
-export const NO_TAIL_STYLES = ['narration', 'shout', 'angry', 'surprised'];
+export const NO_TAIL_STYLES = ['narration', 'box', 'shout', 'angry', 'surprised'];
 
 // ── 하드코딩 상수 (bubbleSpec.json 사용 금지 — 0.72 charWidth가 버그 원인) ──
 export const CHAR_WIDTH = 0.93;
@@ -689,6 +698,15 @@ export function computeSingleBubbleGeo(style, text, bubbleX, bubbleY, bubbleW, m
   const textBlockW = longestLine * fontSize * cw;
   const textBlockH = lines.length * lineHeight;
 
+  // box 스타일: 커스텀 패딩(글자 크기 × 0.6)으로 직접 계산
+  if (cfg.isNarrationBox) {
+    const boxPad = fontSize * 0.6;
+    const needW = fixedWidth ? bubbleW : Math.min(bubbleW, Math.max(60 * s, textBlockW + boxPad * 2));
+    const needH = Math.max(textBlockH + boxPad * 2, minHeightPx || 0);
+    const bx = bubbleX + (bubbleW - needW) / 2;
+    return { bx, by: bubbleY, needW, needH, style, cfg, shiftX: 0, shiftY: 0 };
+  }
+
   const { needW, needH } = computeBubbleSize(cfg, textBlockW, textBlockH, bubbleW, fixedWidth, minHeightPx, padX, padY, s);
 
   const bx = bubbleX + (bubbleW - needW) / 2;
@@ -738,6 +756,58 @@ export function SingleBubble({
 
   // ── 텍스트 오프셋 계산 (caption/non-caption 공통) ──
   const { shiftX, shiftY } = computeTextShift(cfg, rxE, ryE, needW, needH, textBlockW, textBlockH, padX, padY, textOffsetX, textOffsetY);
+
+  // ── 내레이션 박스 — 흰 배경·검은 테두리·검은 글씨, 꼬리 없음 ──
+  if (cfg.isNarrationBox) {
+    const boxSw = Math.max(1.5, (cfg.strokeWidthRatio || 0.003) * (viewW || REF_WIDTH));
+    const boxPad = fontSize * 0.6;
+    const boxTextW = longestLine * fontSize * cw;
+    const boxTextH = lines.length * lineHeight;
+    const boxW = fixedWidth ? needW : Math.min(bubbleW, Math.max(60 * s, boxTextW + boxPad * 2));
+    const boxH = Math.max(boxTextH + boxPad * 2, bubbleH || 0);
+    const boxX = bubbleX + (bubbleW - boxW) / 2;
+    const boxY = bubbleY;
+    elements.push(
+      <rect key="shape" x={boxX} y={boxY} width={boxW} height={boxH}
+        rx={0} ry={0} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={boxSw} />
+    );
+    const textCX = boxX + boxW / 2;
+    const textSY = boxY + (boxH - boxTextH) / 2;
+    if (renderMode === 'svg-text') {
+      elements.push(
+        <text key="text" textAnchor="middle" fill={cfg.textColor}
+          fontSize={fontSize} fontFamily={fontEntry.family}
+          fontWeight={400} letterSpacing="0.02em">
+          {lines.map((line, i) => (
+            <tspan key={i} x={textCX}
+              y={textSY + i * lineHeight + lineHeight * 0.72}>{line}</tspan>
+          ))}
+        </text>
+      );
+    } else {
+      elements.push(
+        <foreignObject key="text" x={boxX} y={textSY}
+          width={boxW} height={boxTextH}>
+          <div xmlns="http://www.w3.org/1999/xhtml"
+            style={{
+              width: '100%',
+              color: cfg.textColor,
+              fontSize: `${fontSize}px`,
+              lineHeight: `${lineHeight}px`,
+              fontFamily: fontEntry.family,
+              fontWeight: 400,
+              textAlign: 'center',
+              whiteSpace: 'nowrap',
+              overflow: 'visible',
+              letterSpacing: '0.02em',
+            }}>
+            {lines.map((line, i) => <div key={i}>{line}</div>)}
+          </div>
+        </foreignObject>
+      );
+    }
+    return <g>{elements}</g>;
+  }
 
   // ── 자막 (나레이션) — 전폭, 각진 사각형, 꼬리 없음 ──
   if (cfg.isCaption) {
@@ -905,7 +975,7 @@ export function SingleBubble({
 // ── 미니 말풍선 아이콘 (팔레트용, 32x28 SVG) ──
 
 const STYLE_LABELS = {
-  round: '라운드', narration: '나레이션', thought: '생각', whisper: '속삭임',
+  round: '라운드', narration: '나레이션', box: '내레이션 박스', thought: '생각', whisper: '속삭임',
   shout: '외침', angry: '화남', happy: '기쁨', sad: '슬픔',
   surprised: '놀람', shy: '부끄', flustered: '당황', realize: '깨달음',
 };
@@ -933,6 +1003,9 @@ export function BubbleMiniIcon({ styleKey, size = 32, selected = false, onClick 
     shape = <ellipse cx={mcx} cy={mcy} rx={mcx - pad} ry={mcy - pad}
       fill={cfg.fill} stroke={cfg.stroke} strokeWidth={1.5}
       strokeDasharray={cfg.strokeDash || 'none'} />;
+  } else if (cfg.isNarrationBox) {
+    shape = <rect x={pad} y={pad} width={w - pad * 2} height={h - pad * 2}
+      rx={0} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={1.5} />;
   } else if (cfg.isCaption) {
     shape = <rect x={pad} y={pad} width={w - pad * 2} height={h - pad * 2}
       rx={2} fill={cfg.fill} stroke={cfg.stroke || '#444'} strokeWidth={1} />;

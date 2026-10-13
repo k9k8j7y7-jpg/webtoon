@@ -87,7 +87,7 @@ function sfxHitBox(text, imgW, fontScale) {
 //  메인 컴포넌트
 // ──────────────────────────────────────────────────────────────
 
-export default function CutEditor({ cut, imageUrl, characters = [], charNameMap = {}, products = [], onClose, onSave, onPrev, onNext, cutIndex, totalCuts }) {
+export default function CutEditor({ cut, imageUrl, characters = [], charNameMap = {}, products = [], onClose, onSave, onPrev, onNext, cutIndex, totalCuts, onBatchNarrationStyle }) {
   const [mode, setMode] = useState('view');
   const [bubbles, setBubbles] = useState(() => (cut.dialogue || []).map(d => ({ ...d })));
   const [sfxItems, setSfxItems] = useState(() => (cut.sfx_items || []).map(s => ({ ...s })));
@@ -936,6 +936,37 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
               >
                 <Zap size={12} /> <span className="hidden sm:inline">효과음 추가</span><span className="sm:hidden">효과음</span>
               </button>
+              <button
+                onClick={() => {
+                  const narrCount = bubbles.filter(b => b.type === 'narration' && b.bubble_style === 'box').length;
+                  const layout = narrCount === 0
+                    ? { x: 0.04, y: 0.04, width: 0.44, tail_direction: 'none' }
+                    : narrCount === 1
+                      ? { x: 0.52, y: 0.70, width: 0.44, tail_direction: 'none' }
+                      : { x: 0.04, y: 0.04 + narrCount * 0.14, width: 0.44, tail_direction: 'none' };
+                  setBubbles(prev => [...prev, {
+                    order: prev.length + 1, type: 'narration', bubble_style: 'box',
+                    speaker: null, text: '', bubble_layout: layout,
+                  }]);
+                  setSelectedIdx(bubbles.length);
+                  setSelectedSfxIdx(null); setSelectedEffectIdx(null); setSelectedProductIdx(null); setSelectedPngbubbleIdx(null);
+                }}
+                className="flex items-center gap-1 px-2 sm:px-3 py-1.5 bg-zinc-600 hover:bg-zinc-500 text-white rounded-full text-[11px] sm:text-xs font-bold transition-colors shadow-sm"
+              >
+                <span className="hidden sm:inline">내레이션 추가</span><span className="sm:hidden">나레이션</span>
+              </button>
+              {onBatchNarrationStyle && (
+                <>
+                  <button
+                    onClick={() => { if (window.confirm('이 화의 모든 컷 내레이션을 박스로 바꿀까요?')) onBatchNarrationStyle('box'); }}
+                    className="hidden sm:flex items-center gap-1 px-2 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 rounded-full text-[11px] font-bold transition-colors shadow-sm"
+                  >전체 박스로</button>
+                  <button
+                    onClick={() => { if (window.confirm('이 화의 모든 컷 내레이션을 띠로 바꿀까요?')) onBatchNarrationStyle('bar'); }}
+                    className="hidden sm:flex items-center gap-1 px-2 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 rounded-full text-[11px] font-bold transition-colors shadow-sm"
+                  >전체 띠로</button>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -1155,6 +1186,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
 
                 const isSelected = selectedIdx === i;
                 const isNarration = b.type === 'narration';
+                const isBarNarration = isNarration && style === 'narration'; // bar(전폭 띠) — 리사이즈 잠금
 
                 return (
                   <g key={i}>
@@ -1191,7 +1223,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                       style={{ pointerEvents: 'none' }}>
                       {i + 1}
                     </text>
-                    {isSelected && !isNarration && (
+                    {isSelected && !isBarNarration && (
                       <g onPointerDown={e => { e.preventDefault(); e.stopPropagation(); handleResizePointerDown(e, i); }}
                         style={{ cursor: 'ew-resize', pointerEvents: 'all' }}>
                         <circle cx={gx+gw+1} cy={gy+gh/2} r={14} fill="#7c3aed" opacity={0.9} />
@@ -1381,8 +1413,32 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                   selectedBubble.type === 'thought'   ? 'bg-purple-900/50 text-purple-300' :
                                                         'bg-blue-900/40 text-blue-300'
                 }`}>
-                  {selectedBubble.type === 'narration' ? '나레이션' : selectedBubble.type === 'thought' ? '독백' : '대사'}
+                  {selectedBubble.type === 'narration'
+                    ? (selectedBubble.bubble_style === 'box' ? '박스' : '띠')
+                    : selectedBubble.type === 'thought' ? '독백' : '대사'}
                 </span>
+                {selectedBubble.type === 'narration' && (
+                  <button
+                    onClick={() => {
+                      const isBox = selectedBubble.bubble_style === 'box';
+                      const updates = { bubble_style: isBox ? 'bar' : 'box' };
+                      if (!isBox) {
+                        // 띠→박스: 대각선 기본 layout
+                        const narrIdx = bubbles.slice(0, selectedIdx).filter(b => b.type === 'narration' && b.bubble_style === 'box').length;
+                        updates.bubble_layout = narrIdx === 0
+                          ? { x: 0.04, y: 0.04, width: 0.44, tail_direction: 'none' }
+                          : { x: 0.52, y: 0.70, width: 0.44, tail_direction: 'none' };
+                      } else {
+                        // 박스→띠: 전폭 하단
+                        updates.bubble_layout = { x: 0.0, y: 0.82, width: 1.0, tail_direction: 'none' };
+                      }
+                      updateBubble(selectedIdx, updates);
+                    }}
+                    className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-zinc-700 text-zinc-300 hover:bg-zinc-600 transition-colors"
+                  >
+                    {selectedBubble.bubble_style === 'box' ? '→ 띠' : '→ 박스'}
+                  </button>
+                )}
                 <button
                   onClick={() => handleDeleteBubble(selectedIdx)}
                   className="ml-auto flex items-center gap-1 text-xs font-bold text-red-400 hover:text-red-300 transition-colors"
@@ -1412,8 +1468,8 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                   </div>
                 </div>
 
-                {/* 최소 높이 슬라이더 (나레이션 제외) */}
-                {selectedBubble.type !== 'narration' && (
+                {/* 최소 높이 슬라이더 (bar 나레이션 제외) */}
+                {(selectedBubble.type !== 'narration' || selectedBubble.bubble_style === 'box') && (
                   <div className="shrink-0">
                     <p className="text-[10px] text-zinc-500 font-bold mb-1">
                       최소 높이 {Math.round((selectedBubble.bubble_layout?.min_height || 0) * 100)}%
@@ -1459,8 +1515,8 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                   </div>
                 )}
 
-                {/* 너비 슬라이더 (나레이션 제외) */}
-                {selectedBubble.type !== 'narration' && (
+                {/* 너비 슬라이더 (bar 나레이션 제외) */}
+                {(selectedBubble.type !== 'narration' || selectedBubble.bubble_style === 'box') && (
                   <div className="shrink-0">
                     <p className="text-[10px] text-zinc-500 font-bold mb-1">
                       너비 {Math.round((selectedBubble.bubble_layout?.width || 0.5) * 100)}%

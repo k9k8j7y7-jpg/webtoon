@@ -125,6 +125,23 @@ async def readjust_storyboard(
     return json.loads(text)
 
 
+def _apply_narration_box_default(dialogue: list[dict]) -> list[dict]:
+    """새로 생성된 narration 항목에 bubble_style='box' + 대각선 기본 layout을 부여한다."""
+    narr_idx = 0
+    for item in dialogue:
+        if item.get("type") == "narration" and not item.get("bubble_style"):
+            item["bubble_style"] = "box"
+            if not item.get("bubble_layout"):
+                if narr_idx == 0:
+                    item["bubble_layout"] = {"x": 0.04, "y": 0.04, "width": 0.44, "tail_direction": "none"}
+                elif narr_idx == 1:
+                    item["bubble_layout"] = {"x": 0.52, "y": 0.70, "width": 0.44, "tail_direction": "none"}
+                else:
+                    item["bubble_layout"] = {"x": 0.04, "y": 0.04 + narr_idx * 0.14, "width": 0.44, "tail_direction": "none"}
+            narr_idx += 1
+    return dialogue
+
+
 def _detect_product_in_cut(cut_data: dict, product_names: list[str]) -> bool:
     """컷의 지문·대사에서 제품 언급 여부를 판단한다."""
     if not product_names:
@@ -221,7 +238,7 @@ def create_cuts_from_script(
                 "location_id": cut_data.get("location_id"),
                 "shot": cut_data.get("shot", "full"),
                 "action": cut_data.get("action", ""),
-                "dialogue": cut_data.get("dialogue", []),
+                "dialogue": _apply_narration_box_default(cut_data.get("dialogue", [])),
                 "emphasis": cut_data.get("emphasis", "normal"),
                 "transition": cut_data.get("transition"),
                 "has_product": has_product,

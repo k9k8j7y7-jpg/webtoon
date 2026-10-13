@@ -29,6 +29,7 @@ export const VALID_STYLES = [
   'round', 'narration', 'thought', 'whisper',
   'shout', 'angry', 'happy', 'sad', 'surprised',
   'shy', 'flustered', 'realize',
+  'box', 'bar',
 ];
 
 /**
@@ -40,7 +41,8 @@ export const VALID_STYLES = [
 export function resolveBubbleStyle(dialogueItem, characters = []) {
   // 1. 사용자 수동 지정
   if (dialogueItem.bubble_style && VALID_STYLES.includes(dialogueItem.bubble_style)) {
-    return dialogueItem.bubble_style;
+    // "bar"는 기존 narration(검은 띠)과 동일
+    return dialogueItem.bubble_style === 'bar' ? 'narration' : dialogueItem.bubble_style;
   }
 
   const dtype = dialogueItem.type || 'speech';

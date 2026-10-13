@@ -22,7 +22,7 @@ from app.composition.bubble_mapping import resolve_bubble_style
 
 # ── 렌더러 버전 — 말풍선 모양·레이아웃 로직이 바뀔 때마다 올린다 ──
 # Export 시 stale 판정에 사용. 이 값이 다르면 composed_image_url을 재생성한다.
-RENDERER_VERSION = "v2-oval-2026-08"
+RENDERER_VERSION = "v3-box-2026-10"
 
 # ── 공유 스펙 로드 ──
 _SPEC_PATH = Path(__file__).parent / "bubble_spec.json"
@@ -86,6 +86,7 @@ def _wrap_text(text: str, font: ImageFont.FreeTypeFont, max_width: int) -> list[
 STYLE_FILL = {
     "round":     (255, 255, 255, 242),
     "narration": (0,   0,   0,   166),
+    "box":       (255, 255, 255, 255),
     "thought":   (255, 255, 255, 200),
     "whisper":   (255, 255, 255, 180),
     "shout":     (255, 255, 255, 242),
@@ -100,6 +101,7 @@ STYLE_FILL = {
 STYLE_STROKE = {
     "round":     (26,  26,  26),
     "narration": None,
+    "box":       (26,  26,  26),
     "thought":   (150, 150, 150),
     "whisper":   (140, 140, 140),
     "shout":     (30,  30,  30),
@@ -114,6 +116,7 @@ STYLE_STROKE = {
 TEXT_COLORS = {
     "round":     (26,  26,  26),
     "narration": (255, 255, 255),
+    "box":       (26,  26,  26),
     "thought":   (80,  80,  80),
     "whisper":   (120, 120, 120),
     "shout":     (20,  20,  20),
@@ -129,6 +132,7 @@ FONT_SIZE_MULT = {
     "shout": 1.15, "angry": 1.15,
     "whisper": 0.85,
     "narration": 0.90,
+    "box": 0.90,
 }
 
 # 스타일 분류
@@ -353,10 +357,15 @@ def _render_bubble_item(
 ) -> int:
     """단일 말풍선 + 텍스트를 그린다. bubble_layout 렌더링에 사용."""
     sp = _spec(style)
-    padding_x = sp["paddingX"]
-    padding_y = sp["paddingY"]
     font_mult  = FONT_SIZE_MULT.get(style, 1.0)
     font_size  = int(BASE_FONT_SIZE * font_mult)
+    # box 스타일: 패딩 = 글자 크기의 0.6배
+    if style == "box":
+        padding_x = int(font_size * 0.6)
+        padding_y = int(font_size * 0.6)
+    else:
+        padding_x = sp["paddingX"]
+        padding_y = sp["paddingY"]
 
     # 폰트 크기 배율 (bubble_layout에서 font_scale 지원)
     font_scale = item.get("bubble_layout", {}).get("font_scale", 1.0)
@@ -444,6 +453,12 @@ def _render_bubble_item(
 
     elif style == "narration":
         draw.rectangle([actual_bx, by, actual_bx + used_w, by + bubble_h], fill=fill)
+
+    elif style == "box":
+        # 흰 배경 + 검은 테두리 (이미지 폭 기준 0.3%, 최소 1.5px)
+        box_sw = max(2, int(img_w * 0.003))
+        draw.rectangle([actual_bx, by, actual_bx + used_w, by + bubble_h],
+                       fill=fill, outline=stroke, width=box_sw)
 
     elif style == "thought":
         draw.rounded_rectangle([actual_bx, by, actual_bx + used_w, by + bubble_h],

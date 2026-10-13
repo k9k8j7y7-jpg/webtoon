@@ -31,6 +31,7 @@ VALID_STYLES = {
     "round", "narration", "thought", "whisper",
     "shout", "angry", "happy", "sad", "surprised",
     "shy", "flustered", "realize",
+    "box", "bar",
 }
 
 
@@ -47,7 +48,8 @@ def resolve_bubble_style(dialogue_item: dict, cut_spec: dict | None = None) -> s
     # 1. 사용자 수동 지정이 있으면 그대로 사용
     user_style = dialogue_item.get("bubble_style")
     if user_style and user_style in VALID_STYLES:
-        return user_style
+        # "bar"는 기존 narration(검은 띠)과 동일
+        return "narration" if user_style == "bar" else user_style
 
     dtype = dialogue_item.get("type", "speech")
 

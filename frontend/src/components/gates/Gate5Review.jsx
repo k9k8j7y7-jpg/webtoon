@@ -1283,6 +1283,37 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
             onNext={hasNext ? () => setEditCutIndex(editCutIndex + 1) : null}
             cutIndex={editCutIndex + 1}
             totalCuts={cuts.length}
+            onBatchNarrationStyle={async (targetStyle) => {
+              for (const c of cuts) {
+                const dl = c.dialogue || [];
+                const hasNarration = dl.some(d => d.type === 'narration');
+                if (!hasNarration) continue;
+                let narrBoxIdx = 0;
+                const updated = dl.map(d => {
+                  if (d.type !== 'narration') return d;
+                  if (targetStyle === 'box') {
+                    if (d.bubble_style === 'box') { narrBoxIdx++; return d; } // 이미 box면 layout 유지
+                    const layout = narrBoxIdx === 0
+                      ? { x: 0.04, y: 0.04, width: 0.44, tail_direction: 'none' }
+                      : { x: 0.52, y: 0.70, width: 0.44, tail_direction: 'none' };
+                    narrBoxIdx++;
+                    return { ...d, bubble_style: 'box', bubble_layout: layout };
+                  } else {
+                    return { ...d, bubble_style: 'bar', bubble_layout: { x: 0.0, y: 0.82, width: 1.0, tail_direction: 'none' } };
+                  }
+                });
+                await api.put(`/cuts/${c.cut_id}/dialogue`, {
+                  dialogue: updated,
+                  sfx_items: c.sfx_items || [],
+                  effect_items: c.effect_items || [],
+                  product_items: c.product_items || [],
+                  pngbubble_items: c.pngbubble_items || [],
+                }).catch(() => {});
+              }
+              setCacheBuster(Date.now());
+              await loadCuts();
+              setEditCutIndex(editCutIndex); // 현재 컷 에디터 새로고침
+            }}
           />
         );
       })()}
