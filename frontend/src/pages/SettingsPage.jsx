@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Avatar } from '../components/AuthorLink';
 import ToggleSwitch from '../components/ToggleSwitch';
 import PushToggleCard from '../components/PushToggleCard';
+import InstallCard from '../components/InstallCard';
 
 export default function SettingsPage() {
   const { user, updateUser } = useAuth();
@@ -169,6 +170,7 @@ function NotifyPrefs() {
   return (
     <section id="notify" ref={ref} className="scroll-mt-20 space-y-3">
       <PushToggleCard />
+      <InstallCard />
       <div className="glass-card p-4 sm:p-6">
       <h2 className="text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">알림 종류</h2>
       <p className="text-[11px] text-gray-400 mb-3 break-keep">

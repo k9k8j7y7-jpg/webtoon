@@ -6,6 +6,7 @@ import api from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import { Avatar } from './AuthorLink';
 import NicknameModal from './NicknameModal';
+import { triggerPushNudge } from './PushNudgeBanner';
 import timeAgo from '../utils/timeAgo';
 
 // 뷰어 하단 댓글 영역 — 뷰어처럼 항상 다크 고정 색상
@@ -151,6 +152,7 @@ export default function CommentSection({ episodeId }) {
       setReplyTo(null);
       if (!parentId) setInputKey((k) => k + 1);
       await load();
+      setTimeout(triggerPushNudge, 300);
       return true;
     } catch (err) {
       const detail = err.response?.data?.detail;

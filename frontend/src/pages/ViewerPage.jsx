@@ -10,6 +10,7 @@ import { PAGE_FORMATS } from '../utils/pageFormats';
 import AuthorLink from '../components/AuthorLink';
 import SubscribeButton from '../components/SubscribeButton';
 import CommentSection from '../components/CommentSection';
+import PushNudgeBanner from '../components/PushNudgeBanner';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
 
@@ -251,6 +252,7 @@ export default function ViewerPage() {
         </Link>
         <p className="text-gray-600 text-sm mt-4">카카오 · 구글 · 네이버로 3초 가입</p>
       </footer>
+      <PushNudgeBanner />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import axios from 'axios';
 import { Settings } from 'lucide-react';
 import { Avatar } from '../components/AuthorLink';
 import SubscribeButton from '../components/SubscribeButton';
+import PushNudgeBanner from '../components/PushNudgeBanner';
 import resolveUrl, { CATEGORY_LABELS } from '../utils/resolveUrl';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
@@ -119,6 +120,7 @@ export default function AuthorPage() {
           </div>
         )}
       </section>
+      <PushNudgeBanner />
     </main>
   );
 }
