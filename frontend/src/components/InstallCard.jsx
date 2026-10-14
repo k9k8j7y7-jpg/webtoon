@@ -13,9 +13,23 @@ export default function InstallCard() {
   const [pushOn, setPushOn] = useState(false);
 
   useEffect(() => {
-    const handler = () => setPrompt(window.__deferredInstallPrompt || null);
-    window.addEventListener('install:prompt-ready', handler);
-    return () => window.removeEventListener('install:prompt-ready', handler);
+    // 마운트 시점 재확인 — useState 초기화 이후 이벤트가 끼어들었을 수 있음
+    if (window.__deferredInstallPrompt && !prompt) {
+      setPrompt(window.__deferredInstallPrompt);
+    }
+    const onReady = () => setPrompt(window.__deferredInstallPrompt || null);
+    const onInstalled = () => {
+      window.__deferredInstallPrompt = null;
+      setPrompt(null);
+      localStorage.setItem(DONE_KEY, '1');
+      setDismissed(true);
+    };
+    window.addEventListener('pwa:installable', onReady);
+    window.addEventListener('pwa:installed', onInstalled);
+    return () => {
+      window.removeEventListener('pwa:installable', onReady);
+      window.removeEventListener('pwa:installed', onInstalled);
+    };
   }, []);
 
   // 푸시 구독 상태 확인

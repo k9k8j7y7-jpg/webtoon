@@ -38,6 +38,11 @@ async function readyRegistration() {
   ]);
 }
 
+const PUSH_FLAG = 'push_enabled_here';
+export function setPushFlag() { localStorage.setItem(PUSH_FLAG, '1'); }
+export function clearPushFlag() { localStorage.removeItem(PUSH_FLAG); }
+export function hasPushFlag() { return localStorage.getItem(PUSH_FLAG) === '1'; }
+
 export class PushError extends Error {
   constructor(code) {
     super(code);
@@ -78,6 +83,7 @@ export async function subscribePush() {
   } catch {
     throw new PushError('server');
   }
+  setPushFlag();
   return sub;
 }
 
@@ -86,6 +92,7 @@ export async function unsubscribePush() {
   if (!sub) return;
   await api.delete('/push/subscribe', { data: { endpoint: sub.endpoint } }).catch(() => {});
   await sub.unsubscribe().catch(() => {});
+  clearPushFlag();
 }
 
 // 로그아웃 시 이 기기 구독 삭제(서버+브라우저) — 토큰을 지우기 전에 await할 것(DELETE에 인증 필요)
@@ -98,6 +105,7 @@ export async function unsubscribeOnLogout() {
     if (!sub) return;
     await api.delete('/push/subscribe', { data: { endpoint: sub.endpoint } }).catch(() => {});
     await sub.unsubscribe().catch(() => {});
+    clearPushFlag();
   })();
   await Promise.race([work, new Promise((resolve) => setTimeout(resolve, 3000))]).catch(() => {});
 }

@@ -1,6 +1,16 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+
+# app.* 로거(push/service 등 BackgroundTasks)가 uvicorn 로그에 출력되도록 핸들러 설정
+_app_logger = logging.getLogger("app")
+if not _app_logger.handlers:
+    _app_logger.setLevel(logging.INFO)
+    _h = logging.StreamHandler()
+    _h.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
+    _app_logger.addHandler(_h)
 
 from app.config import get_settings
 from app.auth.router import router as auth_router

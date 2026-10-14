@@ -33,6 +33,21 @@ export default function NotificationsPage() {
     };
   }, [load]);
 
+  // 페이지에 머무는 동안 30초 간격 unread 폴링 → 증가 시 목록 재조회
+  useEffect(() => {
+    let prev = unread;
+    const tid = setInterval(() => {
+      api.get('/notifications/unread-count')
+        .then(({ data }) => {
+          const next = data.unread_count || 0;
+          if (next > prev) load();
+          prev = next;
+        })
+        .catch(() => {});
+    }, 30_000);
+    return () => clearInterval(tid);
+  }, [load, unread]);
+
   const readAll = async () => {
     await api.post('/notifications/read-all').catch(() => {});
     setItems((prev) => prev?.map((n) => ({ ...n, is_read: true })) || prev);

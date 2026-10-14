@@ -35,17 +35,18 @@ function ProtectedRoute({ children }) {
 }
 
 // 푸시 알림 탭 → ?n={notification_id} → 자동 읽음 처리 후 쿼리만 제거(해시 유지)
+// user 로딩 완료 후 실행 — /view 등 비보호 라우트에서도 동작
 function useAutoReadNotification() {
   const [params, setParams] = useSearchParams();
   const { user } = useAuth();
+  const nId = params.get('n');
   useEffect(() => {
-    const nId = params.get('n');
     if (!nId || !user) return;
     api.post(`/notifications/${nId}/read`).then(() => {
       window.dispatchEvent(new Event('notifications:refresh'));
     }).catch(() => {});
     setParams((prev) => { prev.delete('n'); return prev; }, { replace: true });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, nId]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
 function AppRoutes() {

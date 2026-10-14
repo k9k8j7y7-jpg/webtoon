@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Smartphone, Share, PlusSquare, BellRing } from 'lucide-react';
 import ToggleSwitch from './ToggleSwitch';
 import {
-  getSubscription, needsIOSInstall, pushSupported, subscribePush, unsubscribePush, PushError, PUSH_ERROR_MESSAGES,
+  getSubscription, needsIOSInstall, pushSupported, subscribePush, unsubscribePush, PushError, PUSH_ERROR_MESSAGES, hasPushFlag,
 } from '../utils/push';
 
 // 알림센터 상단 — "폰으로 알림 받기" 토글. iOS Safari(홈 화면 추가 전)는 토글 대신 설치 안내
@@ -18,9 +18,23 @@ export default function PushToggleCard() {
   useEffect(() => {
     if (iosInstall || !supported) return;
     let cancelled = false;
-    getSubscription()
-      .then((sub) => { if (!cancelled) setOn(Boolean(sub) && Notification.permission === 'granted'); })
-      .catch(() => { if (!cancelled) setOn(false); });
+    (async () => {
+      try {
+        const sub = await getSubscription();
+        if (cancelled) return;
+        if (sub && Notification.permission === 'granted') {
+          setOn(true);
+        } else if (!sub && Notification.permission === 'granted' && hasPushFlag()) {
+          // WebAPK 등 새 SW 컨텍스트 — 이전에 켠 적 있으면 자동 재구독
+          await subscribePush();
+          if (!cancelled) setOn(true);
+        } else {
+          setOn(false);
+        }
+      } catch {
+        if (!cancelled) setOn(false);
+      }
+    })();
     return () => { cancelled = true; };
   }, [iosInstall, supported]);
 

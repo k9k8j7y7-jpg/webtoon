@@ -11,7 +11,11 @@ registerServiceWorker()
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault()
   window.__deferredInstallPrompt = e
-  window.dispatchEvent(new Event('install:prompt-ready'))
+  window.dispatchEvent(new Event('pwa:installable'))
+})
+window.addEventListener('appinstalled', () => {
+  window.__deferredInstallPrompt = null
+  window.dispatchEvent(new Event('pwa:installed'))
 })
 
 createRoot(document.getElementById('root')).render(
