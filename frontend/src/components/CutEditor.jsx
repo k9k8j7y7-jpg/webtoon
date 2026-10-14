@@ -22,7 +22,7 @@ import PNGBUBBLE_CATALOG from '../utils/pngBubbleCatalog';
 import { resolveBubbleStyle } from '../utils/bubbleMapping';
 import bubbleSpec from '../utils/bubbleSpec.json';
 import { getFontById, getFontsByUsage } from '../utils/fontCatalog';
-import { X, Save, Pencil, Eye, Info, Zap, Sparkles, MessageCircle, Trash2, ChevronLeft, ChevronRight, Image as ImageIcon } from 'lucide-react';
+import { X, Save, Pencil, Eye, Info, Zap, Sparkles, MessageCircle, AlignLeft, Trash2, ChevronLeft, ChevronRight, Image as ImageIcon } from 'lucide-react';
 import { computeInitialLayouts } from '../utils/bubbleLayout';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
@@ -87,8 +87,8 @@ function sfxHitBox(text, imgW, fontScale) {
 //  메인 컴포넌트
 // ──────────────────────────────────────────────────────────────
 
-export default function CutEditor({ cut, imageUrl, characters = [], charNameMap = {}, products = [], onClose, onSave, onPrev, onNext, cutIndex, totalCuts, onBatchNarrationStyle }) {
-  const [mode, setMode] = useState('view');
+export default function CutEditor({ cut, imageUrl, characters = [], charNameMap = {}, products = [], onClose, onSave, onPrev, onNext, cutIndex, totalCuts, onBatchNarrationStyle, initialMode = 'view' }) {
+  const [mode, setMode] = useState(initialMode);
   const [bubbles, setBubbles] = useState(() => (cut.dialogue || []).map(d => ({ ...d })));
   const [sfxItems, setSfxItems] = useState(() => (cut.sfx_items || []).map(s => ({ ...s })));
   const [effectItems, setEffectItems] = useState(() => (cut.effect_items || []).map(e => ({ ...e })));
@@ -865,6 +865,78 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
   const productMap = Object.fromEntries(products.map(p => [p.id, p]));
   const { w: imgW, h: imgH } = imgSizeState;
 
+  // ── 도구바 활성 상태 판정 & 핸들러 ──
+  const isEffectActive = showEffectPicker || selectedEffectIdx !== null;
+  const isBubbleActive = showPngbubblePicker || selectedPngbubbleIdx !== null || (selectedIdx !== null && selectedBubble?.type !== 'narration');
+  const isSfxActive = selectedSfxIdx !== null;
+  const isNarrActive = selectedIdx !== null && selectedBubble?.type === 'narration';
+  const isProductActive = showProductPicker || selectedProductIdx !== null;
+
+  const handleToggleEffect = () => {
+    setShowEffectPicker(p => !p);
+    setShowPngbubblePicker(false);
+    setShowProductPicker(false);
+    setSelectedIdx(null);
+    setSelectedSfxIdx(null);
+  };
+
+  const handleTogglePngbubble = () => {
+    setShowPngbubblePicker(p => !p);
+    setShowEffectPicker(false);
+    setShowProductPicker(false);
+    setSelectedIdx(null);
+    setSelectedSfxIdx(null);
+    setSelectedEffectIdx(null);
+  };
+
+  const handleAddSfxTool = () => {
+    handleAddSfx();
+    setShowEffectPicker(false);
+    setShowPngbubblePicker(false);
+    setShowProductPicker(false);
+  };
+
+  const handleAddNarrationTool = () => {
+    const narrCount = bubbles.filter(b => b.type === 'narration' && b.bubble_style === 'box').length;
+    const layout = narrCount === 0
+      ? { x: 0.04, y: 0.04, width: 0.44, tail_direction: 'none' }
+      : narrCount === 1
+        ? { x: 0.52, y: 0.70, width: 0.44, tail_direction: 'none' }
+        : { x: 0.04, y: 0.04 + narrCount * 0.14, width: 0.44, tail_direction: 'none' };
+    setBubbles(prev => [...prev, {
+      order: prev.length + 1, type: 'narration', bubble_style: 'box',
+      speaker: null, text: '', bubble_layout: layout,
+    }]);
+    setSelectedIdx(bubbles.length);
+    setSelectedSfxIdx(null);
+    setSelectedEffectIdx(null);
+    setSelectedProductIdx(null);
+    setSelectedPngbubbleIdx(null);
+    setShowEffectPicker(false);
+    setShowPngbubblePicker(false);
+    setShowProductPicker(false);
+  };
+
+  const handleToggleProduct = () => {
+    setShowProductPicker(p => !p);
+    setShowEffectPicker(false);
+    setShowPngbubblePicker(false);
+    setSelectedIdx(null);
+    setSelectedSfxIdx(null);
+    setSelectedEffectIdx(null);
+  };
+
+  const baseTools = [
+    { key: 'effect', label: '효과', icon: Sparkles, active: isEffectActive, onClick: handleToggleEffect },
+    { key: 'bubble', label: '말풍선', icon: MessageCircle, active: isBubbleActive, onClick: handleTogglePngbubble },
+    { key: 'sfx', label: '효과음', icon: Zap, active: isSfxActive, onClick: handleAddSfxTool },
+    { key: 'narration', label: '내레이션', icon: AlignLeft, active: isNarrActive, onClick: handleAddNarrationTool },
+  ];
+
+  const allToolItems = products.length > 0
+    ? [{ key: 'product', label: '제품', icon: ImageIcon, active: isProductActive, onClick: handleToggleProduct }, ...baseTools]
+    : baseTools;
+
   // ──────────────────────────────────────────────────────────────
   //  렌더링
   // ──────────────────────────────────────────────────────────────
@@ -875,137 +947,118 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
       style={{ height: '100dvh' }}
       onPointerDown={() => { setSelectedIdx(null); setSelectedSfxIdx(null); setSelectedEffectIdx(null); setSelectedProductIdx(null); setSelectedPngbubbleIdx(null); setOpenPalette(false); setShowEffectPicker(false); setShowProductPicker(false); setShowPngbubblePicker(false); }}
     >
-      {/* ── 상단 바 ── */}
+      {/* ── 1행: 상단 헤더 ── */}
       <div
-        className="flex items-center justify-between px-2 sm:px-4 py-2 sm:py-2.5 bg-zinc-900/90 border-b border-zinc-800 backdrop-blur-sm shrink-0 gap-1"
+        className="flex items-center justify-between px-3 sm:px-4 py-2 sm:py-2.5 bg-zinc-900/95 border-b border-zinc-800 backdrop-blur-md shrink-0 gap-2 z-10"
         onPointerDown={e => e.stopPropagation()}
       >
-        {/* 좌: 컷 번호 */}
+        {/* 좌: 컷 번호 + 모드 아이콘 */}
         <div className="flex items-center gap-1.5 shrink-0">
           <span className="text-white font-bold text-xs sm:text-sm whitespace-nowrap">
             #{cut.cut_number}
             {totalCuts > 0 && (
-              <span className="text-zinc-400 font-normal text-[10px] sm:text-xs ml-0.5">({cutIndex}/{totalCuts})</span>
+              <span className="text-zinc-400 font-normal text-[10px] sm:text-xs ml-1">({cutIndex}/{totalCuts})</span>
             )}
           </span>
           {mode === 'view' && (
-            <span className="text-[10px] sm:text-xs text-zinc-400 font-bold flex items-center gap-0.5">
-              <Eye size={11} /> <span className="hidden sm:inline">보기 모드</span>
+            <span className="text-[10px] sm:text-xs text-zinc-400 font-bold flex items-center gap-0.5 ml-1">
+              <Eye size={12} /> <span className="hidden sm:inline">보기 모드</span>
             </span>
           )}
           {mode === 'edit' && (
-            <span className="text-[10px] sm:text-xs text-purple-400 font-bold flex items-center gap-0.5">
-              <Pencil size={11} /> <span className="hidden sm:inline">편집 모드</span>
+            <span className="text-neon-from flex items-center ml-0.5" title="편집 모드">
+              <Pencil size={12} className="text-cyan-400" />
             </span>
           )}
         </div>
 
-        {/* 중: 도구 버튼 (모바일: 가로 스크롤) */}
-        {mode === 'edit' && (
-          <div className="flex-1 overflow-x-auto scrollbar-hide mx-1">
-            <div className="flex items-center gap-1.5 sm:gap-2 whitespace-nowrap">
-              {products.length > 0 && (
+        {/* 우: 보기 모드=[편집][X], 편집 모드=[취소][저장]만 (항상 한 줄에 다 보임) */}
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {mode === 'view' && (
+            <>
+              {cut.image_url && (
                 <button
-                  onClick={() => setShowProductPicker(p => !p)}
-                  className={`flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-full text-[11px] sm:text-xs font-bold transition-colors shadow-sm ${
-                    showProductPicker ? 'bg-amber-500 text-white' : 'bg-amber-600 hover:bg-amber-700 text-white'
-                  }`}
+                  onClick={enterEditMode}
+                  className="flex items-center gap-1 px-3 sm:px-4 py-1.5 bg-gradient-to-r from-neon-from to-neon-to hover:brightness-110 active:scale-95 text-white rounded-full text-xs sm:text-sm font-bold shadow-md shadow-neon-from/20 transition-all"
                 >
-                  <ImageIcon size={12} /> <span className="hidden sm:inline">제품 배치</span><span className="sm:hidden">제품</span>
+                  <Pencil size={13} /> 편집
                 </button>
               )}
               <button
-                onClick={() => setShowEffectPicker(p => !p)}
-                className={`flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-full text-[11px] sm:text-xs font-bold transition-colors shadow-sm ${
-                  showEffectPicker ? 'bg-cyan-500 text-white' : 'bg-cyan-600 hover:bg-cyan-700 text-white'
-                }`}
+                onClick={onClose}
+                className="p-1.5 text-zinc-400 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+                title="닫기"
               >
-                <Sparkles size={12} /> <span className="hidden sm:inline">배경효과</span><span className="sm:hidden">효과</span>
+                <X size={18} />
               </button>
-              <button
-                onClick={() => setShowPngbubblePicker(p => !p)}
-                className={`flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-full text-[11px] sm:text-xs font-bold transition-colors shadow-sm ${
-                  showPngbubblePicker ? 'bg-violet-500 text-white' : 'bg-violet-600 hover:bg-violet-700 text-white'
-                }`}
-              >
-                <MessageCircle size={12} /> <span className="hidden sm:inline">특수 말풍선</span><span className="sm:hidden">말풍선</span>
-              </button>
-              <button
-                onClick={handleAddSfx}
-                className="flex items-center gap-1 px-2 sm:px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-full text-[11px] sm:text-xs font-bold transition-colors shadow-sm"
-              >
-                <Zap size={12} /> <span className="hidden sm:inline">효과음 추가</span><span className="sm:hidden">효과음</span>
-              </button>
-              <button
-                onClick={() => {
-                  const narrCount = bubbles.filter(b => b.type === 'narration' && b.bubble_style === 'box').length;
-                  const layout = narrCount === 0
-                    ? { x: 0.04, y: 0.04, width: 0.44, tail_direction: 'none' }
-                    : narrCount === 1
-                      ? { x: 0.52, y: 0.70, width: 0.44, tail_direction: 'none' }
-                      : { x: 0.04, y: 0.04 + narrCount * 0.14, width: 0.44, tail_direction: 'none' };
-                  setBubbles(prev => [...prev, {
-                    order: prev.length + 1, type: 'narration', bubble_style: 'box',
-                    speaker: null, text: '', bubble_layout: layout,
-                  }]);
-                  setSelectedIdx(bubbles.length);
-                  setSelectedSfxIdx(null); setSelectedEffectIdx(null); setSelectedProductIdx(null); setSelectedPngbubbleIdx(null);
-                }}
-                className="flex items-center gap-1 px-2 sm:px-3 py-1.5 bg-zinc-600 hover:bg-zinc-500 text-white rounded-full text-[11px] sm:text-xs font-bold transition-colors shadow-sm"
-              >
-                <span className="hidden sm:inline">내레이션 추가</span><span className="sm:hidden">나레이션</span>
-              </button>
-              {onBatchNarrationStyle && (
-                <>
-                  <button
-                    onClick={() => { if (window.confirm('이 화의 모든 컷 내레이션을 박스로 바꿀까요?')) onBatchNarrationStyle('box'); }}
-                    className="hidden sm:flex items-center gap-1 px-2 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 rounded-full text-[11px] font-bold transition-colors shadow-sm"
-                  >전체 박스로</button>
-                  <button
-                    onClick={() => { if (window.confirm('이 화의 모든 컷 내레이션을 띠로 바꿀까요?')) onBatchNarrationStyle('bar'); }}
-                    className="hidden sm:flex items-center gap-1 px-2 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 rounded-full text-[11px] font-bold transition-colors shadow-sm"
-                  >전체 띠로</button>
-                </>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* 우: 편집/취소/저장/닫기 (항상 보임) */}
-        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-          {mode === 'view' && cut.image_url && (
-            <button
-              onClick={enterEditMode}
-              className="flex items-center gap-1 px-3 sm:px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-full text-xs sm:text-sm font-bold transition-colors shadow-sm"
-            >
-              <Pencil size={13} /> 편집
-            </button>
+            </>
           )}
+
           {mode === 'edit' && (
             <>
+              {/* 취소: 고스트 버튼 (테두리만) */}
               <button
                 onClick={cancelEdit}
-                className="px-2 sm:px-3 py-1.5 text-zinc-400 hover:text-white text-xs sm:text-sm font-bold transition-colors whitespace-nowrap"
+                className="px-2.5 sm:px-3 py-1.5 border border-zinc-700 hover:border-zinc-500 bg-transparent text-zinc-300 hover:text-white rounded-full text-xs sm:text-sm font-medium transition-colors whitespace-nowrap active:scale-95"
               >
                 취소
               </button>
+              {/* 저장: 네온 그라데이션 주버튼 */}
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="flex items-center gap-1 px-2.5 sm:px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-full text-xs sm:text-sm font-bold transition-colors shadow-sm disabled:opacity-50 whitespace-nowrap"
+                className="flex items-center gap-1 px-3 sm:px-4 py-1.5 bg-gradient-to-r from-neon-from to-neon-to hover:brightness-110 active:scale-95 text-white rounded-full text-xs sm:text-sm font-bold shadow-md shadow-neon-from/20 transition-all disabled:opacity-50 whitespace-nowrap"
               >
                 <Save size={13} /> {saving ? '저장…' : '저장'}
               </button>
             </>
           )}
-          <button
-            onClick={onClose}
-            className="p-1.5 text-zinc-400 hover:text-white hover:bg-white/10 rounded-full transition-colors"
-          >
-            <X size={18} />
-          </button>
         </div>
       </div>
+
+      {/* ── 2행: 도구 바 (편집 모드에서만 표시 - 폰 4개 균등 분할 그리드 / PC 한 줄 알약 칩) ── */}
+      {mode === 'edit' && (
+        <div
+          className="bg-zinc-950/90 border-b border-zinc-800/80 backdrop-blur-md shrink-0 z-10"
+          onPointerDown={e => e.stopPropagation()}
+        >
+          <div className="px-2 py-1.5 sm:px-3 sm:py-2">
+            <div className={`grid ${products.length > 0 ? 'grid-cols-5' : 'grid-cols-4'} sm:flex sm:items-center sm:overflow-x-auto sm:scrollbar-hide gap-1.5 sm:gap-2`}>
+              {allToolItems.map(tool => {
+                const Icon = tool.icon;
+                return (
+                  <button
+                    key={tool.key}
+                    onClick={tool.onClick}
+                    className={`flex flex-col sm:flex-row items-center justify-center py-1 px-1 sm:px-3.5 h-[40px] sm:h-9 rounded-xl sm:rounded-full transition-all active:scale-95 ${
+                      tool.active
+                        ? 'bg-gradient-to-r from-neon-from to-neon-to text-white shadow-[0_0_12px_rgba(168,85,247,0.35)] font-bold'
+                        : 'bg-zinc-800/80 hover:bg-zinc-700/80 text-zinc-300 hover:text-white border border-zinc-700/70'
+                    }`}
+                  >
+                    <Icon size={15} className={`sm:mr-1.5 ${tool.active ? 'text-white' : 'text-zinc-400'}`} />
+                    <span className="text-[10px] sm:text-xs leading-none sm:leading-normal mt-0.5 sm:mt-0 font-medium">
+                      {tool.label}
+                    </span>
+                  </button>
+                );
+              })}
+              {onBatchNarrationStyle && isNarrActive && (
+                <div className="hidden sm:flex items-center gap-1 ml-auto shrink-0 pl-2 border-l border-zinc-800">
+                  <button
+                    onClick={() => { if (window.confirm('이 화의 모든 컷 내레이션을 박스로 바꿀까요?')) onBatchNarrationStyle('box'); }}
+                    className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 border border-zinc-700/60 rounded-full text-[11px] font-medium transition-colors"
+                  >전체 박스로</button>
+                  <button
+                    onClick={() => { if (window.confirm('이 화의 모든 컷 내레이션을 띠로 바꿀까요?')) onBatchNarrationStyle('bar'); }}
+                    className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 border border-zinc-700/60 rounded-full text-[11px] font-medium transition-colors"
+                  >전체 띠로</button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── 이미지 영역 ── */}
       <div
@@ -1438,6 +1491,18 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                   >
                     {selectedBubble.bubble_style === 'box' ? '→ 띠' : '→ 박스'}
                   </button>
+                )}
+                {selectedBubble.type === 'narration' && onBatchNarrationStyle && (
+                  <div className="flex sm:hidden items-center gap-1 ml-1">
+                    <button
+                      onClick={() => { if (window.confirm('이 화의 모든 컷 내레이션을 박스로 바꿀까요?')) onBatchNarrationStyle('box'); }}
+                      className="px-2 py-0.5 bg-zinc-700 text-zinc-400 hover:text-zinc-200 rounded-full text-[10px] font-medium transition-colors"
+                    >전체 박스로</button>
+                    <button
+                      onClick={() => { if (window.confirm('이 화의 모든 컷 내레이션을 띠로 바꿀까요?')) onBatchNarrationStyle('bar'); }}
+                      className="px-2 py-0.5 bg-zinc-700 text-zinc-400 hover:text-zinc-200 rounded-full text-[10px] font-medium transition-colors"
+                    >전체 띠로</button>
+                  </div>
                 )}
                 <button
                   onClick={() => handleDeleteBubble(selectedIdx)}

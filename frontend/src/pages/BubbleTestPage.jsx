@@ -9,6 +9,7 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { SingleBubble, STYLE_ORDER, STYLE_LABELS } from '../components/BubbleOverlay';
+import CutEditor from '../components/CutEditor';
 
 const DIRECTIONS = ['down', 'up', 'left', 'right'];
 const FLIPS = [false, true];
@@ -32,6 +33,40 @@ export default function BubbleTestPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const initialStyle = searchParams.get('style') || 'round';
   const [style, setStyle] = useState(initialStyle);
+
+  const cuteditorParam = searchParams.get('cuteditor');
+  const modeParam = searchParams.get('mode') || 'edit';
+
+  if (cuteditorParam) {
+    const dummyCut = {
+      cut_id: 1,
+      cut_number: 1,
+      image_url: '/WEBTOON/bubbles/bubble_burst.png',
+      dialogue: [
+        {
+          order: 1,
+          type: 'dialogue',
+          text: '편집 모드 테스트 대사입니다.',
+          bubble_layout: { x: 0.15, y: 0.25, width: 0.5, tail_direction: 'down' }
+        }
+      ],
+      sfx_items: [],
+      effect_items: [],
+      product_items: [],
+      pngbubble_items: [],
+    };
+    return (
+      <CutEditor
+        cut={dummyCut}
+        imageUrl="/WEBTOON/bubbles/bubble_burst.png"
+        cutIndex={1}
+        totalCuts={8}
+        initialMode={modeParam}
+        onClose={() => window.history.back()}
+        onSave={() => alert('저장 테스트')}
+      />
+    );
+  }
 
   const handleStyleChange = (e) => {
     const v = e.target.value;
