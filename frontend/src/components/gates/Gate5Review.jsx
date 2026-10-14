@@ -333,7 +333,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
       } else if (format === 'vertical_single') {
         blob = await exportAsVertical(cuts, [], getUrl, opts);
       } else if (format === 'instagram_carousel') {
-        blob = await exportAsInstagram(cuts, [], getUrl, opts);
+        blob = await exportAsInstagram(cuts, [], getUrl, { ...opts, nickname: user?.nickname });
       } else if (format === 'a4_single') {
         blob = await exportAsA4Single(extraArg, [], getUrl, opts);
       } else if (format === 'a4_grid') {

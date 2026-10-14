@@ -471,11 +471,38 @@ export async function exportAsVertical(
 
 const INSTA_SIZE = 1080;
 
+const CREDIT_FONT_RATIO = 0.022;
+const CREDIT_MARGIN_RATIO = 0.02;
+
+function drawInstaCredit(canvas, imgRect, nickname) {
+  const ctx = canvas.getContext('2d');
+  const text = nickname ? `\u00A9 ${nickname} \u00B7 EziToon` : '\u00A9 EziToon';
+  const fontSize = Math.round(INSTA_SIZE * CREDIT_FONT_RATIO);
+  const margin = Math.round(INSTA_SIZE * CREDIT_MARGIN_RATIO);
+  ctx.font = `bold ${fontSize}px "Pretendard", "Noto Sans KR", sans-serif`;
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'bottom';
+  const cx = INSTA_SIZE - margin;
+  const cy = INSTA_SIZE - margin;
+  const onWhiteMargin = cy > imgRect.y + imgRect.h;
+  if (onWhiteMargin) {
+    ctx.fillStyle = '#000000';
+    ctx.fillText(text, cx, cy);
+  } else {
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+    ctx.lineWidth = Math.max(2, fontSize * 0.08);
+    ctx.lineJoin = 'round';
+    ctx.strokeText(text, cx, cy);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(text, cx, cy);
+  }
+}
+
 export async function exportAsInstagram(
   cuts,
   characters,
   getImageUrl,
-  { onProgress, signal, products, pageFormat } = {},
+  { onProgress, signal, products, pageFormat, nickname } = {},
 ) {
   const blobs = await processAllCuts(
     cuts,
@@ -492,6 +519,14 @@ export async function exportAsInstagram(
     // 인스타 크기로 composePageGrid — 2x2는 1080×1080, 3단은 1080×(비율에 따름)
     const pages = composePageGrid(canvases.filter(Boolean), pageFormat, INSTA_SIZE);
     canvases.forEach(c => { if (c) { c.width = 0; c.height = 0; } });
+
+    // 크레딧 추가 (nickname 옵션 있을 때)
+    if (nickname) {
+      for (const pg of pages) {
+        const imgRect = { x: 0, y: 0, w: pg.width, h: pg.height };
+        drawInstaCredit(pg, imgRect, nickname);
+      }
+    }
 
     if (pages.length === 1) {
       const result = await canvasToBlob(pages[0]);
@@ -532,6 +567,8 @@ export async function exportAsInstagram(
     ctx2.fillRect(0, 0, INSTA_SIZE, INSTA_SIZE);
     ctx2.drawImage(img, ox, oy, imgW, imgH);
     URL.revokeObjectURL(blobUrl);
+
+    if (nickname) drawInstaCredit(c, { x: ox, y: oy, w: imgW, h: imgH }, nickname);
 
     const pngBlob = await canvasToBlob(c);
     const name = `instagram_${String(cuts[i].cut_number).padStart(3, '0')}.png`;
