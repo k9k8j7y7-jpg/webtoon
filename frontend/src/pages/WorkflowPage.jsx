@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api, { pollJob } from '../api/client';
-import GateProgress from '../components/GateProgress';
+import StepHeader from '../components/StepHeader';
 import JobProgress from '../components/JobProgress';
 import Gate1Planning from '../components/gates/Gate1Planning';
 import Gate2Script from '../components/gates/Gate2Script';
@@ -140,18 +140,16 @@ export default function WorkflowPage() {
       )}
 
       <div className="mb-6">
-        <GateProgress gateStatus={gateStatus} onGateClick={handleGateClick} viewingGate={viewingGate} />
+        <StepHeader gateStatus={gateStatus} onGateClick={handleGateClick} viewingGate={viewingGate} />
       </div>
 
       {isViewingPrevious && (
         <div className="mb-4 bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-200 dark:border-amber-800 rounded-2xl px-4 sm:px-5 py-3">
-          {/* PC: 한 줄 flex / 모바일: 2줄 스택 */}
           <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300 text-sm font-bold mb-2 sm:mb-0 sm:float-left">
             <Eye size={16} />
-            게이트 {viewingGate} — {gateLabels[viewingGate]} (읽기 전용)
+            STEP {viewingGate} — {gateLabels[viewingGate]} (읽기 전용)
           </div>
           <div className="grid grid-cols-2 gap-2 sm:flex sm:float-right sm:gap-2">
-            {/* 연작 파생 Gate 1은 수정 불가 */}
             {!(viewingGate === 1 && gateStatus?.series_id) && (
               <button
                 onClick={handleRevertClick}

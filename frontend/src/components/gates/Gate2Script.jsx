@@ -171,7 +171,7 @@ export default function Gate2Script({ projectId, episodeId, onRefresh, readOnly 
           disabled={approving}
           className="flex items-center gap-1.5 px-5 py-2.5 bg-green-600 dark:bg-green-600 text-white rounded-full text-sm font-bold hover:bg-green-700 hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50"
         >
-          <Check size={14} /> {approving ? '승인 중...' : '대본 승인 → 다음 단계'}
+          <Check size={14} /> {approving ? '승인 중...' : '승인하고 STEP 3 자산 준비로 →'}
         </button>
       )}
     </div>
