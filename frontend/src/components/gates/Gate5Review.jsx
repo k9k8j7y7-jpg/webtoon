@@ -4,7 +4,7 @@ import api, { pollJob } from '../../api/client';
 import JobProgress from '../JobProgress';
 import BubbleOverlay, { BubbleMiniIcon, STYLE_ORDER, STYLE_LABELS } from '../BubbleOverlay';
 import { resolveBubbleStyle } from '../../utils/bubbleMapping';
-import { Image, RefreshCw, RotateCcw, Download, Check, AlertTriangle, MessageSquare, Save, X, ZoomIn, ChevronLeft, ChevronRight, ChevronDown, Pencil, SlidersHorizontal, ExternalLink, LayoutGrid } from 'lucide-react';
+import { Image, RefreshCw, RotateCcw, Download, Check, AlertTriangle, MessageSquare, Save, X, ZoomIn, ChevronLeft, ChevronRight, ChevronDown, Pencil, SlidersHorizontal, ExternalLink, LayoutGrid, Share2 } from 'lucide-react';
 import CutEditor from '../CutEditor';
 import SfxLayer from '../SfxLayer';
 import EffectLayer from '../EffectLayer';
@@ -17,6 +17,8 @@ import useGateLoad from '../../hooks/useGateLoad';
 import { GateSkeleton, GateLoadError } from '../GateLoadFallback';
 import { PAGE_FORMATS } from '../../utils/pageFormats';
 import PublishBar from '../PublishBar';
+import InstaShareModal from '../InstaShareModal';
+import { useAuth } from '../../contexts/AuthContext';
 
 // ── 그리드 컷 카드: 이미지 + SVG 말풍선 오버레이 ──
 // 에피소드 비율 "9:16" → CSS aspect-ratio "9 / 16" (미설정 = 기존 에피소드 1:1)
@@ -172,6 +174,9 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
   const [editCutIndex, setEditCutIndex] = useState(null); // CutEditor 편집 인덱스
   const [products, setProducts] = useState([]); // 광고 제품 목록
   const [pagePreview, setPagePreview] = useState(false); // 페이지 미리보기 토글
+  const [instaShareOpen, setInstaShareOpen] = useState(false);
+  const [epMeta, setEpMeta] = useState(null); // { title, is_public, share_token }
+  const { user } = useAuth();
 
   const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
 
@@ -193,9 +198,17 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
     } catch { /* 광고 아니면 404 — 무시 */ }
   };
 
+  const loadEpMeta = async () => {
+    try {
+      const { data } = await api.get(`/projects/${projectId}/episodes/${episodeId}`);
+      setEpMeta({ title: data.title, is_public: data.is_public, share_token: data.share_token });
+    } catch { /* PublishBar가 별도 호출하므로 실패해도 무관 */ }
+  };
+
   const loadAllData = async () => {
     await loadCuts();
     loadProducts(); // 광고 아니면 404 — 실패해도 무관
+    loadEpMeta();
   };
 
   const { loading: initialLoading, error: loadError, retry: retryLoad } = useGateLoad(loadAllData);
@@ -630,6 +643,13 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                   className="flex flex-1 sm:flex-none items-center justify-center gap-1 h-10 sm:h-auto px-2 sm:px-3 py-2 bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-gray-300 rounded-full text-xs font-bold whitespace-nowrap hover:bg-gray-200 dark:hover:bg-white/20 transition-colors shadow-sm disabled:opacity-50 dark:border dark:border-white/10"
                 >
                   <Download size={12} /> 인스타
+                </button>
+                <button
+                  onClick={() => setInstaShareOpen(true)}
+                  disabled={exporting}
+                  className="flex flex-1 sm:flex-none items-center justify-center gap-1 h-10 sm:h-auto px-2 sm:px-3 py-2 bg-gradient-to-r from-purple-500/20 to-pink-500/20 dark:from-purple-500/30 dark:to-pink-500/30 text-purple-700 dark:text-purple-300 rounded-full text-xs font-bold whitespace-nowrap hover:from-purple-500/30 hover:to-pink-500/30 dark:hover:from-purple-500/40 dark:hover:to-pink-500/40 transition-colors shadow-sm disabled:opacity-50 border border-purple-200 dark:border-purple-500/30"
+                >
+                  <Share2 size={12} /> 인스타 공유
                 </button>
                 <button
                   onClick={() => handleExport('png_cuts')}
@@ -1351,6 +1371,22 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
           onClose={() => setExportModal(null)}
         />
       )}
+
+      {/* 인스타 공유 모달 */}
+      <InstaShareModal
+        open={instaShareOpen}
+        onClose={() => setInstaShareOpen(false)}
+        cuts={cuts}
+        characters={[]}
+        getImageUrl={(cut) => imageUrl(cut.image_url)}
+        products={products}
+        pageFormat={(() => { const pf = gateStatus?.page_format || 'vertical'; return PAGE_FORMATS[pf]?.per_page ? PAGE_FORMATS[pf] : null; })()}
+        episodeTitle={epMeta?.title || ''}
+        nickname={user?.nickname || ''}
+        shareUrl={epMeta?.share_token ? `${window.location.origin}/WEBTOON/view/${epMeta.share_token}` : ''}
+        isPublic={epMeta?.is_public || false}
+        onZipDownload={() => { setInstaShareOpen(false); handleExport('instagram_carousel'); }}
+      />
     </div>
   );
 }
