@@ -206,6 +206,7 @@ WEBTOON/
 - [x] 연출 강도 1~2단계 (완료 2026-10-13, drama.py 감정 매핑·3단계 효과 프롬프트·gate_status.drama_level·spec.drama_level 컷 덮어쓰기·Gate3 세그먼트·Gate5 재생성 ▾ 드롭다운·배지·바텀시트)
 - [x] H 구독·알림 4단계 묶음 3 (완료 2026-10-14, CLAUDE.md 구독·알림 규칙·WebAPK 재구독·폴링·?n= 읽음·send_push 로그, mobile-check 작가·알림·댓글·설정, Terms 댓글 정책, 비회원 댓글 로그인 복귀 검증)
 - [x] 인스타 공유 1~3단계 (완료 2026-10-14, Web Share·캡션 복사·뷰어 링크 공유·컷별 토글·피드 안내·크레딧·CLAUDE.md·mobile-check)
+- [x] 단계 헤더 1~2단계 (완료 2026-10-14, StepHeader STEP N/5·단계 이동 메뉴 드롭다운/바텀시트·보기 모드·승인 문구 통일·CLAUDE.md·mobile-check)
 - [ ] **다음:** E 오픈 준비 1 셀프 청소
 - [ ] 모바일 레이아웃 1차 (`docs/지시서-모바일레이아웃-1차.md`, 0단계 조사부터) → 2차(랜딩·게이트1~3·편집기)
 - [ ] C 이미지 모델 선택 (에피소드 단위 모델 잠금, openai_image.py 어댑터)
@@ -225,6 +226,8 @@ WEBTOON/
 - **편집기 입력:** Pointer 이벤트(`onPointerDown/pointermove/pointerup`)로 통일. 선택은 `pointerdown` 즉시. **`onClick` 핸들러 금지** — 터치에서 pointerdown→click 버블링으로 선택이 해제됨. 컷 영역 `touch-action: none`(300ms 탭 지연 제거)·하단 패널 `touch-action: pan-y`(스크롤 유지). `DRAG_THRESHOLD` = mouse 5px / touch 12px. 실기기 검증 필수
 - **모바일 레이아웃:** 모바일 기준 640px 미만(`sm:` 경계). 카드 그리드는 모바일 1열, 게이트 스텝바는 가로 스크롤(현재 게이트 자동 가운데). 게이트5 썸네일 틀은 에피소드 `aspect_ratio`(미설정 1:1). 모바일 확인은 `node frontend/scripts/mobile-check.mjs <JWT>` 다크/라이트 × 375/412/1280 스크린샷(`frontend/scripts/mobile-check/`, gitignore)
 - **다크 테마:** class 방식(`darkMode: 'class'`), 모바일(640px 미만) 기본 다크 / PC 기본 라이트. 사용자 토글 `localStorage 'theme'`. 토큰 `night-bg`/`night-card`/`night-border`/`neon-from`/`neon-to`. 유틸 `.glass-card`(유리 카드)·`.neon-btn`(그라데이션 버튼)·`.neon-ring`(현재 게이트 강조). **새 컴포넌트는 `dark:` 클래스 필수.** 랜딩·뷰어는 항상 다크(변경 불필요)
+- **게이트 상단 = StepHeader:** `StepHeader.jsx`(`STEPS` 단일 상수 — n/key/name/desc). 현재 단계 STEP N/5 + 이름 + 설명 + 진행 바. [단계 이동] 메뉴는 **보기 이동만** 담당(`setViewingGate`), 수정은 각 게이트 [수정하기] → `POST revert`. `locked`는 비활성 + 이유 텍스트. 승인 버튼 문구 "승인하고 STEP N {이름}으로 →"(Gate4는 "콘티 승인 → 이미지 생성 시작" 유지)
+- **드롭다운·팝오버 원칙:** `createPortal(document.body)` + `position: fixed` + `z-[60]`(헤더 z-50 위). PC는 `getBoundingClientRect` 좌표 기준, 모바일(<640px `matchMedia`)은 바텀시트. **바깥 클릭 리스너(`document pointerdown`)는 `setTimeout(0)` 다음 틱에 등록** — 토글 버튼의 pointerdown과 같은 이벤트에서 열자마자 닫히는 충돌 방지. 메뉴 내부는 `data-*-menu` attr로 제외. RegenDropdown·StepHeader 모두 이 패턴
 - **게이트 초기 로드:** `useGateLoad` 훅 필수(`frontend/src/hooks/useGateLoad.js`) — 스켈레톤·자동 재시도 1회(1.5초)·실패 시 "다시 시도" 카드·언마운트 안전(cancelled). **`catch {}` 로 에러 삼키기 금지** — 실패 시 빈 화면 고착 원인. 게이트 컴포넌트 상단에 `if (loading) return <GateSkeleton />;` + `if (loadError) return <GateLoadError ... />;` 가드
 - **Gemini:** API 키 `.env`의 `GEMINI_API_KEY`. 이미지 모델 `.env`의 `IMAGE_MODEL` (현재 `gemini-3.1-flash-image`), 텍스트 모델 `gemini-2.5-flash`
 - **서버 .env 안전:** 서버 .env는 로컬과 다르다(GEMINI_API_KEY·SECRET_KEY·TOSS 키·IMAGE_MODEL 등 운영 전용 값). **절대 파일 통째로 scp 덮어쓰지 말 것.** 키 추가/변경은 서버에서 해당 줄만 `sed`/`echo >>` 로. 변경 전 `cp .env .env.bak.$(date +%Y%m%d)` 백업, 변경 후 `GEMINI_API_KEY` 등 기존 키 길이 확인. OAuth 키는 콘솔에서만 조회 가능, 서버 .env 백업은 날짜별 유지
