@@ -81,6 +81,7 @@ export default function TermsPage() {
             <li>계정 양도, 판매, 대여 행위</li>
           </ol>
           <p>위반 시 서비스는 사전 통지 후(긴급한 경우 사후 통지) 이용 제한, 콘텐츠 삭제, 계약 해지 등의 조치를 할 수 있습니다.</p>
+          <p>댓글·답글은 작품 감상과 소통을 위한 공간이며, 욕설·비하·광고·스팸·스포일러 등 부적절한 댓글은 신고에 의해 삭제되거나 작가가 차단할 수 있습니다.</p>
 
           <h2 className="text-lg font-bold text-ink-black dark:text-white">제9조 (서비스의 중단)</h2>
           <ol>

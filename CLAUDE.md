@@ -204,6 +204,7 @@ WEBTOON/
 - [x] 문의 게시판 0~4단계 (완료 2026-10-07, step29·inquiries API·사용자 작성/목록/상세·관리자 탭·모바일 드로어·? 드롭다운·로고 링크·로그인 복귀·🔔 미읽음·admin 전용 상세 엔드포인트)
 - [x] 내레이션 박스 1~2단계 (완료 2026-10-13, box/bar bubble_style·BubbleOverlay+Pillow 렌더·CutEditor 이동/폭/토글/일괄·RENDERER_VERSION v3)
 - [x] 연출 강도 1~2단계 (완료 2026-10-13, drama.py 감정 매핑·3단계 효과 프롬프트·gate_status.drama_level·spec.drama_level 컷 덮어쓰기·Gate3 세그먼트·Gate5 재생성 ▾ 드롭다운·배지·바텀시트)
+- [x] H 구독·알림 4단계 묶음 3 (완료 2026-10-14, CLAUDE.md 구독·알림 규칙·WebAPK 재구독·폴링·?n= 읽음·send_push 로그, mobile-check 작가·알림·댓글·설정, Terms 댓글 정책, 비회원 댓글 로그인 복귀 검증)
 - [ ] **다음:** E 오픈 준비 1 셀프 청소
 - [ ] 모바일 레이아웃 1차 (`docs/지시서-모바일레이아웃-1차.md`, 0단계 조사부터) → 2차(랜딩·게이트1~3·편집기)
 - [ ] C 이미지 모델 선택 (에피소드 단위 모델 잠금, openai_image.py 어댑터)
@@ -249,6 +250,8 @@ WEBTOON/
 - **작업 환경:** 저장소는 각 PC의 `C:\vibecoding\WEBTOON` (외장하드에 두지 않음). PC 이동 = 떠나기 전 커밋+push, 앉으면 git pull. 외장하드는 백업 전용. `.env`·SSH 키는 git 밖 — 각 PC에 한 번씩 수동 배치. 정적 에셋(`public/`)은 반드시 git 추적 — clone만으로 동일 환경
 
 - **문의 게시판:** `inquiries`·`inquiry_messages`(step29). 1:1 본인·관리자만 열람. 첨부는 storage 재사용(`inquiries/{id}/attachments/`). 상태 흐름 received→checking→answered→closed, 관리자 상태 변경은 POST(`/admin/inquiries/{id}/status`). 읽음은 사용자 엔드포인트(`GET /inquiries/{id}`)만 `user_read_at` 갱신 — 관리자 탭(`GET /admin/inquiries/{id}`)은 미접촉. 🔔 = `GET /inquiries/unread-count`(마운트·라우트 이동·window focus 갱신). 드로어 `MobileDrawer.jsx`(Layout·Landing 공용). 보호 경로 로그인 복귀 `sessionStorage('login_redirect')`. `<select>`·`<option>`은 명시 색상 필수(`dark:text-white` 상속 금지 — OS 기본 흰 배경에 흰 글자 안 보임). 리포트 집계는 카테고리×주·미답변·평균 답변 시간·👍 비율 쿼리 가능(화면은 오픈 후)
+
+- **구독·알림:** 구독 = `subscriptions`(작가 단위, step30), 알림 = `notifications` + `notify()` 단일 진입점(새 화·댓글·답글·문의 답변), 댓글 1단계 답글·신고·차단(step31), 웹푸시 = `push_subscriptions` + VAPID(`.env`) + `sw.js` 루트(scope `/WEBTOON/`), PWA `manifest.json`, 열람 공개·행동은 회원. WebAPK는 **별도 SW 컨텍스트**라 `push_enabled_here` localStorage 플래그로 자동 재구독(`PushToggleCard` useEffect — permission granted + 구독 null + 플래그 → `subscribePush()` 자동). 알림 목록(`NotificationsPage`)은 30초 간격 `/unread-count` 폴링 + 증가 시 재조회. `?n={notification_id}` 읽음은 `useAutoReadNotification`(deps `[user, nId]`) — user 로딩 완료 후 호출, `/view` 비보호 라우트에서도 동작. `send_push` 로그(`app.push.service`)는 `main.py`에서 `app` 로거 핸들러 설정. 비회원 댓글은 `[댓글을 쓰려면 로그인]` → `navigate('/login', { state: { from: pathname#comments } })` → LoginPage `sessionStorage('login_redirect')` → OAuth 복귀
 
 ## 배포 명령 참고
 
