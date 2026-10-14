@@ -207,6 +207,7 @@ WEBTOON/
 - [x] H 구독·알림 4단계 묶음 3 (완료 2026-10-14, CLAUDE.md 구독·알림 규칙·WebAPK 재구독·폴링·?n= 읽음·send_push 로그, mobile-check 작가·알림·댓글·설정, Terms 댓글 정책, 비회원 댓글 로그인 복귀 검증)
 - [x] 인스타 공유 1~3단계 (완료 2026-10-14, Web Share·캡션 복사·뷰어 링크 공유·컷별 토글·피드 안내·크레딧·CLAUDE.md·mobile-check)
 - [x] 단계 헤더 1~2단계 (완료 2026-10-14, StepHeader STEP N/5·단계 이동 메뉴 드롭다운/바텀시트·보기 모드·승인 문구 통일·CLAUDE.md·mobile-check)
+- [x] 편집기 툴바 B안 (완료 2026-10-14, Antigravity 협업, 헤더 분리·4분할 그리드·네온 칩·[전체 박스/띠] 내레이션 전용·회귀 PASS)
 - [ ] **다음:** E 오픈 준비 1 셀프 청소
 - [ ] 모바일 레이아웃 1차 (`docs/지시서-모바일레이아웃-1차.md`, 0단계 조사부터) → 2차(랜딩·게이트1~3·편집기)
 - [ ] C 이미지 모델 선택 (에피소드 단위 모델 잠금, openai_image.py 어댑터)
@@ -223,6 +224,8 @@ WEBTOON/
 - **내레이션 박스:** `dialogue[].type:"narration"` + `bubble_style:"box"`(기본, 신규) | `"bar"`(레거시·옵션). 렌더 5곳(BubbleOverlay 프론트 4곳 + Pillow `compose_dialogue_on_image`) 동시 수정 + `RENDERER_VERSION`. box = 흰 배경·검은 테두리·검은 글씨, bar = 전폭 검은 반투명 띠·흰 글씨. 기존 작품(`bubble_style` 없음)은 bar로 해석 — **자동 변환 금지**. 새 narration은 `_apply_narration_box_default()`가 box + 대각선 layout 부여. 편집기에서 [→ 박스 / → 띠] 개별 전환, [전체 박스로/띠로] 일괄 전환
 - **텍스트 렌더 이원 모드:** 화면=`<foreignObject>` / export=SVG `<text>/<tspan>` (`renderMode='svg-text'`). 수정 시 두 모드 동시 수정 + `node scripts/bubble-shot.mjs` 비교 판정 통과 필수
 - **편집기 오버레이:** 편집기 오버레이 레이어는 루트에 pointer-events none, 실제 조작 요소에만 all. 레이어 추가 시 아래 레이어 선택 회귀 테스트 필수(일반 말풍선·효과음·효과·제품)
+- **편집기 툴바:** B안 — 1행 헤더(컷 번호+모드 아이콘+보기=[편집][X]/편집=[취소][저장]), 2행 도구바(효과·말풍선·효과음·내레이션, 제품은 광고 시). 폰은 4분할 그리드(`grid-cols-4`), PC는 알약 버튼(`inline-flex`). [전체 박스로][전체 띠로]는 **내레이션 도구 선택 시에만** 표시(PC=툴바 오른쪽, 폰=하단 패널). `initialMode` prop으로 보기/편집 초기 모드
+- **Antigravity 협업 규칙:** Antigravity가 CutEditor 등 프론트 코드·빌드까지 작업, **배포·커밋은 Claude Code**가 담당(회귀 Playwright 확인 후). 작업 전 **ahead 0 필수**(push 충돌 방지). 브랜치 없이 master 직접 — 양쪽 동시 수정 금지
 - **편집기 입력:** Pointer 이벤트(`onPointerDown/pointermove/pointerup`)로 통일. 선택은 `pointerdown` 즉시. **`onClick` 핸들러 금지** — 터치에서 pointerdown→click 버블링으로 선택이 해제됨. 컷 영역 `touch-action: none`(300ms 탭 지연 제거)·하단 패널 `touch-action: pan-y`(스크롤 유지). `DRAG_THRESHOLD` = mouse 5px / touch 12px. 실기기 검증 필수
 - **모바일 레이아웃:** 모바일 기준 640px 미만(`sm:` 경계). 카드 그리드는 모바일 1열, 게이트 스텝바는 가로 스크롤(현재 게이트 자동 가운데). 게이트5 썸네일 틀은 에피소드 `aspect_ratio`(미설정 1:1). 모바일 확인은 `node frontend/scripts/mobile-check.mjs <JWT>` 다크/라이트 × 375/412/1280 스크린샷(`frontend/scripts/mobile-check/`, gitignore)
 - **다크 테마:** class 방식(`darkMode: 'class'`), 모바일(640px 미만) 기본 다크 / PC 기본 라이트. 사용자 토글 `localStorage 'theme'`. 토큰 `night-bg`/`night-card`/`night-border`/`neon-from`/`neon-to`. 유틸 `.glass-card`(유리 카드)·`.neon-btn`(그라데이션 버튼)·`.neon-ring`(현재 게이트 강조). **새 컴포넌트는 `dark:` 클래스 필수.** 랜딩·뷰어는 항상 다크(변경 불필요)
