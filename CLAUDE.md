@@ -238,7 +238,7 @@ WEBTOON/
 - **DB 마이그레이션:** `stepN.sql` + `stepN_down.sql` 쌍. 리허설 up→verify→down→재-up + mysqldump 백업 + 사용자 승인 필수. DB 덤프 .sql 커밋 금지 (stepN은 예외). 마이그레이션 백업은 데이터 포함(no-data 금지)
 - **운영 DB 데이터 변경 금지:** DDL뿐 아니라 단일 행 UPDATE/INSERT/DELETE도 예외 없음. SQL 텍스트 보고 → 도도 "실행해" 승인 → 실행 순서 필수. Python ORM 직접 실행도 동일
 - **마이그레이션 리허설:** 반드시 별도 DB(`project_t_test`)에서만 실행. 운영 DB에는 도도의 "실행해" 승인 후 단 1회 적용. 리허설·테스트 목적으로 운영 테이블에 DDL/DML 실행 금지. `project_t_test`가 없으면 리허설 전에 먼저 생성 (운영 스키마 복제, 데이터 불필요)
-- **페이지 형식:** `gate_status.page_format` (vertical/grid_2x2/strip_3). 단일 소스 `pageFormats.js`·`page_formats.py`. 형식이 `cell_ratio` 강제(2x2→1:1, 3단→16:9). 합성은 `composePageGrid`(프론트 Canvas). 내보내기는 `pageFormat` 분기 — vertical이면 현행 경로, 그 외면 페이지 단위. 템플릿 추가 = 정의 한 줄 + 콘티 가이드 문단
+- **페이지 형식:** `gate_status.page_format` 4종(vertical · single_page · grid_2x2 · strip_3). 단일 소스 `pageFormats.js`·`page_formats.py`. `cell_ratio`가 있으면 비율 강제(2x2→1:1, 3단→16:9), `single_page`는 `cell_ratio: null` = 비율 자유(이미지 실제 비율 사용). 합성은 `composePageGrid`(프론트 Canvas) — `per_page`가 null이면 세로 경로, 있으면 Grid 페이지. 내보내기는 `pageFormat` 분기 — vertical이면 현행 경로, 그 외면 페이지 단위. 템플릿 추가 = 정의 한 줄 + 콘티 가이드 문단. **API 테스트(page-format 변경)는 테스트 에피소드만 — 실제 작품 금지**(잠금 해제 에피소드도 형식 변경 시 내보내기 결과 바뀜)
 - **캐릭터 구조:** `episode_characters` JOIN이 표준 조회. link시 ref_key 대조, unlink 2단계(409+force), 삭제는 연결 0건만. 연결 캐릭터(`episode_id≠현재`)는 이미지 재생성 스킵. `characters.style`: 불일치 시 ⚠(차단 아님)
 - **캐릭터 ref_key:** 바이블/기획 시점 확정 (영문 snake_case). 시트·대본·컷 전부 이 키 기준. 불일치 시 Gate5 ⚠, 콘티 모달에서 제거/치환. 바이블 인물 이름 ≠ 시트 이름 가능 (ref_key 매칭)
 - **캐릭터 승계:** 게이트1 카드 값(`body.characters`)이 원본. AI 기획 결과의 gender/name/age는 카드 값으로 덮어씀. description은 카드 원문 맨 앞 + AI 보충 뒤(중복 문장 제거, `_dedupe_description`). 동물 키워드(강아지·고양이 등) 감지 시 gender "기타" 자동(카드에서 직접 바꾼 값은 유지). `/characters/link`가 대본 ref_key 자동 매핑
