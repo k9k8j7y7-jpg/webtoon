@@ -955,6 +955,11 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
                       <div className="flex-1 bg-current/20 rounded-[1px]" />
                     </div>
                   )}
+                  {key === 'single_page' && (
+                    <div className="w-9 h-9 border-2 border-current rounded-sm flex items-center justify-center p-[2px]">
+                      <div className="w-full h-full bg-current/20 rounded-[1px]" />
+                    </div>
+                  )}
                   {key === 'grid_2x2' && (
                     <div className="w-9 h-9 border-2 border-current rounded-sm grid grid-cols-2 grid-rows-2 gap-[2px] p-[2px]">
                       <div className="bg-current/20 rounded-[1px]" />
@@ -974,6 +979,9 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
                 <span className="text-xs leading-tight text-center">{fmt.label}</span>
                 {fmt.cell_ratio && (
                   <span className="text-[10px] text-gray-400 dark:text-gray-500 -mt-1">컷 {fmt.cell_ratio}</span>
+                )}
+                {key === 'single_page' && (
+                  <span className="text-[10px] text-gray-400 dark:text-gray-500 -mt-1">비율 자유</span>
                 )}
               </button>
             );

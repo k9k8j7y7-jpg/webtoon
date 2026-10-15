@@ -201,7 +201,8 @@ export default function ViewerPage() {
 
         // 2x2 · 3단: 페이지 단위 CSS Grid (만화 칸 스타일)
         const { cols, rows, per_page, frame: fr } = fmt;
-        const [rw, rh] = (fmt.cell_ratio || '1:1').split(':').map(Number);
+        const hasFixedRatio = !!fmt.cell_ratio;
+        const [rw, rh] = hasFixedRatio ? fmt.cell_ratio.split(':').map(Number) : [1, 1];
         const gapPct = ((fr?.gap_ratio || 0.025) * 100).toFixed(1);
         const marginPct = ((fr?.margin_ratio || 0.03) * 100).toFixed(1);
         const borderPx = Math.max(2, Math.round((fr?.border_px || 3) * 0.8));
@@ -232,7 +233,7 @@ export default function ViewerPage() {
                       return (
                         <div
                           key={slot}
-                          style={{ aspectRatio: `${rw} / ${rh}`, border: `${borderPx}px solid ${strokeColor}`, backgroundColor: '#fafafa' }}
+                          style={{ ...(hasFixedRatio ? { aspectRatio: `${rw} / ${rh}` } : {}), border: `${borderPx}px solid ${strokeColor}`, backgroundColor: '#fafafa' }}
                         />
                       );
                     }
@@ -240,7 +241,7 @@ export default function ViewerPage() {
                       <div
                         key={slot}
                         className="relative overflow-hidden"
-                        style={{ aspectRatio: `${rw} / ${rh}`, border: `${borderPx}px solid ${strokeColor}` }}
+                        style={{ ...(hasFixedRatio ? { aspectRatio: `${rw} / ${rh}` } : {}), border: `${borderPx}px solid ${strokeColor}` }}
                       >
                         <CutViewer cut={cut} products={data.products} />
                       </div>

@@ -775,16 +775,29 @@ export function composePageGrid(cutCanvases, format, pageWidth = 1080) {
   const innerW = pageWidth - margin * 2;
   const totalGapX = gap * (cols - 1);
   const cellW = Math.floor((innerW - totalGapX) / cols);
-  const [rw, rh] = (format.cell_ratio || '1:1').split(':').map(Number);
-  const cellH = Math.round(cellW * (rh / rw));
-  const totalGapY = gap * (rows - 1);
-  const innerH = rows * cellH + totalGapY;
-  const pageHeight = innerH + margin * 2;
+  // cell_ratio가 null이면 이미지 비율 그대로 (한 컷 페이지용)
+  const hasFixedRatio = !!format.cell_ratio;
+  const [rw, rh] = hasFixedRatio ? format.cell_ratio.split(':').map(Number) : [1, 1];
 
   const pages = [];
   const pageCount = Math.ceil(cutCanvases.length / per_page);
 
   for (let p = 0; p < pageCount; p++) {
+    const start = p * per_page;
+    const end = Math.min(start + per_page, cutCanvases.length);
+
+    // cell_ratio가 null이면 이 페이지 첫 번째 이미지의 실제 비율 사용
+    let cellH;
+    if (hasFixedRatio) {
+      cellH = Math.round(cellW * (rh / rw));
+    } else {
+      const firstSrc = cutCanvases[start];
+      cellH = firstSrc ? Math.round(cellW * (firstSrc.height / firstSrc.width)) : cellW;
+    }
+    const totalGapY = gap * (rows - 1);
+    const innerH = rows * cellH + totalGapY;
+    const pageHeight = innerH + margin * 2;
+
     const canvas = document.createElement('canvas');
     canvas.width = pageWidth;
     canvas.height = pageHeight;
@@ -801,9 +814,6 @@ export function composePageGrid(cutCanvases, format, pageWidth = 1080) {
       const half = borderW / 2;
       ctx.strokeRect(half, half, pageWidth - borderW, pageHeight - borderW);
     }
-
-    const start = p * per_page;
-    const end = Math.min(start + per_page, cutCanvases.length);
 
     for (let idx = start; idx < end; idx++) {
       const pos = idx - start;

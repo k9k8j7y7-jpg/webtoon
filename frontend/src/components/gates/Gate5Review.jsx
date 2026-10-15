@@ -731,7 +731,8 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
           const fmt = PAGE_FORMATS[pf];
           if (!fmt || !fmt.per_page) return null;
           const { cols, rows, per_page, frame: fr } = fmt;
-          const [rw, rh] = (fmt.cell_ratio || '1:1').split(':').map(Number);
+          const hasFixedRatio = !!fmt.cell_ratio;
+          const [rw, rh] = hasFixedRatio ? fmt.cell_ratio.split(':').map(Number) : [1, 1];
           const gapPct = ((fr?.gap_ratio || 0.025) * 100).toFixed(1);
           const marginPct = ((fr?.margin_ratio || 0.03) * 100).toFixed(1);
           const borderPx = Math.max(1, Math.round((fr?.border_px || 3) * 0.6));
@@ -764,7 +765,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                             <div
                               key={slot}
                               className="bg-gray-50"
-                              style={{ aspectRatio: `${rw} / ${rh}`, border: `${borderPx}px solid ${strokeColor}` }}
+                              style={{ ...(hasFixedRatio ? { aspectRatio: `${rw} / ${rh}` } : {}), border: `${borderPx}px solid ${strokeColor}` }}
                             />
                           );
                         }
@@ -773,7 +774,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                           <div
                             key={slot}
                             className="relative overflow-hidden cursor-pointer hover:ring-2 hover:ring-indigo-400 transition-all"
-                            style={{ aspectRatio: `${rw} / ${rh}`, border: `${borderPx}px solid ${strokeColor}` }}
+                            style={{ ...(hasFixedRatio ? { aspectRatio: `${rw} / ${rh}` } : {}), border: `${borderPx}px solid ${strokeColor}` }}
                             onClick={() => {
                               setPagePreview(false);
                               setTimeout(() => {

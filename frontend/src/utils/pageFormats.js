@@ -12,9 +12,10 @@
 const DEFAULT_FRAME = { border_px: 3, gap_ratio: 0.025, margin_ratio: 0.03, bg: '#ffffff', stroke: '#000000' };
 
 export const PAGE_FORMATS = {
-  vertical:  { label: '세로 웹툰', cols: 1, rows: null, cell_ratio: null,   per_page: null, page_ratio: null,  frame: null },
-  grid_2x2:  { label: '2x2 페이지', cols: 2, rows: 2,  cell_ratio: '1:1',  per_page: 4,    page_ratio: '1:1', frame: { ...DEFAULT_FRAME } },
-  strip_3:   { label: '3단 페이지', cols: 1, rows: 3,  cell_ratio: '16:9', per_page: 3,    page_ratio: '3:4', frame: { ...DEFAULT_FRAME } },
+  vertical:     { label: '세로 웹툰',    cols: 1, rows: null, cell_ratio: null,   per_page: null, page_ratio: null,  frame: null },
+  single_page:  { label: '한 컷 페이지', cols: 1, rows: 1,    cell_ratio: null,   per_page: 1,    page_ratio: null,  frame: { ...DEFAULT_FRAME, gap_ratio: 0 } },
+  grid_2x2:     { label: '2x2 페이지',   cols: 2, rows: 2,    cell_ratio: '1:1',  per_page: 4,    page_ratio: '1:1', frame: { ...DEFAULT_FRAME } },
+  strip_3:      { label: '3단 페이지',   cols: 1, rows: 3,    cell_ratio: '16:9', per_page: 3,    page_ratio: '3:4', frame: { ...DEFAULT_FRAME } },
 };
 
 export const FORMAT_KEYS = Object.keys(PAGE_FORMATS);
