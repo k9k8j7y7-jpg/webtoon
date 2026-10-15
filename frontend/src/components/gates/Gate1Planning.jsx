@@ -134,14 +134,14 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
         chars: (lastGen.characters || []).map(c => [
           (c.name || '').trim(), (c.description || '').trim(), c.gender || '', String(c.age ?? '').trim(),
         ]),
-        genre: lastGen.genre, mood: lastGen.mood, development: lastGen.development,
+        genre: lastGen.genre, mood: lastGen.mood,
         briefStory: lastGen.brief_story || {},
       }));
     }
     // 복원된 값의 서명을 기록 (초기 1회 저장 방지)
     if (draft) {
       lastSavedDraftSig.current = computeDraftSig(
-        draft.characters || [], draft.genre || null, draft.mood || null, draft.development || null,
+        draft.characters || [], draft.genre || null, draft.mood || null,
       );
     }
     // gateStatus가 로드되면 초기화 완료 (draft 유무와 무관)
@@ -150,24 +150,24 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
   }, [gateStatus]);
 
   // draft 서명 계산 (값 비교용, trim 적용)
-  const computeDraftSig = (chars, g, m, d) => JSON.stringify({
+  const computeDraftSig = (chars, g, m) => JSON.stringify({
     chars: chars.filter(c => (c.name || '').trim()).map(c => [
       (c.name || '').trim(), (c.description || '').trim(), c.gender || '', String(c.age ?? '').trim(),
     ]),
-    genre: g || null, mood: m || null, development: d || null,
+    genre: g || null, mood: m || null,
   });
 
   // planning_draft 서버 저장 (debounce 또는 즉시)
-  const saveDraftToServer = async (chars, g, m, d, source = 'chars', snapshot = false) => {
+  const saveDraftToServer = async (chars, g, m, source = 'chars', snapshot = false) => {
     if (readOnly) return;
-    const sig = computeDraftSig(chars, g, m, d);
+    const sig = computeDraftSig(chars, g, m);
     // 직전 저장값과 같으면 스킵
     if (!snapshot && sig === lastSavedDraftSig.current) return;
     setDraftSaveSource(source);
     setDraftSaveStatus('saving');
     try {
       await api.put(`/projects/${projectId}/episodes/${episodeId}/planning-draft`, {
-        genre: g, mood: m, development: d,
+        genre: g, mood: m, development,
         characters: chars.filter(c => (c.name || '').trim()),
         snapshot,
       });
@@ -179,10 +179,10 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
     }
   };
 
-  const scheduleDraftSave = (chars, g, m, d, source = 'chars') => {
+  const scheduleDraftSave = (chars, g, m, source = 'chars') => {
     if (readOnly || !draftInitialized.current) return;
     if (draftTimer.current) clearTimeout(draftTimer.current);
-    draftTimer.current = setTimeout(() => saveDraftToServer(chars, g, m, d, source), 800);
+    draftTimer.current = setTimeout(() => saveDraftToServer(chars, g, m, source), 800);
   };
 
   const loadPlanning = async () => {
@@ -415,8 +415,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
     // 새 값으로 즉시 저장 예약 (state 반영 전이므로 직접 계산)
     const g = axis === 'genre' ? newVal : genre;
     const m = axis === 'mood' ? newVal : mood;
-    const d = axis === 'development' ? newVal : development;
-    scheduleDraftSave(characters, g, m, d, 'axis');
+    scheduleDraftSave(characters, g, m, 'axis');
   };
 
   const handleSuggestCharacters = async () => {
@@ -436,7 +435,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
       }));
       setCharacters(mapped);
       setCharTouched(false);
-      saveDraftToServer(mapped, genre, mood, development);
+      saveDraftToServer(mapped, genre, mood);
       return;
     }
     setSuggesting(true);
@@ -448,7 +447,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
       const suggestedChars = data.characters || [];
       setCharacters(suggestedChars);
       setCharTouched(false); // 자동 생성이므로 touched 리셋
-      saveDraftToServer(suggestedChars, genre, mood, development);
+      saveDraftToServer(suggestedChars, genre, mood);
     } catch (err) {
       setError(err.response?.data?.detail || '캐릭터 제안에 실패했습니다.');
     } finally {
@@ -460,7 +459,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
     const next = [...characters, { name: '', description: '', gender: '남', age: '' }];
     setCharacters(next);
     setCharTouched(true);
-    saveDraftToServer(next, genre, mood, development);
+    saveDraftToServer(next, genre, mood);
   };
 
   const updateCharacter = (index, field, value) => {
@@ -468,7 +467,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
     updated[index] = { ...updated[index], [field]: value };
     setCharacters(updated);
     setCharTouched(true);
-    scheduleDraftSave(updated, genre, mood, development, 'chars');
+    scheduleDraftSave(updated, genre, mood, 'chars');
   };
 
   const removeCharacter = (index) => {
@@ -476,7 +475,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
     const next = characters.filter((_, i) => i !== index);
     setCharacters(next);
     setCharTouched(true);
-    saveDraftToServer(next, genre, mood, development);
+    saveDraftToServer(next, genre, mood);
     if (!name) return;
     // 같은 이름의 아이디어 정리 캐릭터도 삭제 (기획 생성 시 승계로 되살아나지 않게)
     const briefChars = ideaBrief?.characters || [];
@@ -502,14 +501,14 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
     return p?.synopsis || '';
   };
 
-  // 마지막 [기획 생성] 때의 입력(카드·3축·이야기 단락) — 이후 바뀌면 결과 카드에 재생성 안내
+  // 마지막 [기획 생성] 때의 입력(카드·장르·분위기·이야기 단락) — 이후 바뀌면 결과 카드에 재생성 안내
   const inputSig = useMemo(() => JSON.stringify({
     chars: characters.map((c) => [
       (c.name || '').trim(), (c.description || '').trim(), c.gender || '', String(c.age ?? '').trim(),
     ]),
-    genre, mood, development,
+    genre, mood,
     briefStory: ideaBrief?.story || {},
-  }), [characters, genre, mood, development, ideaBrief?.story]);
+  }), [characters, genre, mood, ideaBrief?.story]);
   const inputsChanged = lastGenSig !== null && lastGenSig !== inputSig;
 
   const handleGenerate = async () => {
@@ -536,8 +535,8 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
     setError('');
     try {
       const validChars = characters.filter((c) => c.name.trim());
-      const storyOptions = (genre || mood || development)
-        ? { genre, mood, development }
+      const storyOptions = (genre || mood)
+        ? { genre, mood }
         : undefined;
       const { data } = await api.post(`/projects/${projectId}/episodes/${episodeId}/planning`, {
         idea: ideaText.trim(),
@@ -859,7 +858,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                           onClick={() => { setOpenSection(openSection === key ? null : key); setShowCustomInput(null); setCustomDirection(''); }}
                           disabled={sectionLoading === key}
                           className="text-[10px] font-bold text-purple-500 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors disabled:opacity-50"
-                        >✨ 바꾸기</button>
+                        >✨ 다시 쓰기</button>
                       </div>
                     </div>
                     <textarea
@@ -882,37 +881,42 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                     )}
                     {/* 칩 줄 */}
                     {openSection === key && !sectionLoading && (
-                      <div className="mt-1.5 flex flex-nowrap sm:flex-wrap gap-1 items-center overflow-x-auto pb-1 -mb-1">
-                        {(SECTION_CHIPS[key] || []).map(chip => (
-                          <button
-                            key={chip.key}
-                            onClick={() => handleSectionRewrite(key, chip.key)}
-                            className="px-2.5 py-1 text-[11px] font-bold rounded-full border border-purple-300 dark:border-purple-600 text-purple-600 dark:text-purple-300 hover:bg-purple-500 hover:text-white dark:hover:bg-purple-600 transition-all whitespace-nowrap"
-                          >{chip.label}</button>
-                        ))}
-                        {showCustomInput !== key ? (
-                          <button
-                            onClick={() => setShowCustomInput(key)}
-                            className="px-2.5 py-1 text-[11px] font-bold rounded-full border border-dashed border-gray-300 dark:border-zinc-600 text-gray-500 dark:text-zinc-400 hover:border-purple-400 hover:text-purple-500 transition-all whitespace-nowrap"
-                          >직접 입력…</button>
-                        ) : (
-                          <div className="flex items-center gap-1 min-w-0 flex-1">
-                            <input
-                              type="text"
-                              value={customDirection}
-                              onChange={(e) => setCustomDirection(e.target.value)}
-                              onKeyDown={(e) => e.key === 'Enter' && customDirection.trim() && handleSectionRewrite(key, customDirection.trim())}
-                              placeholder="예: 엄마가 먼저 안아주게"
-                              autoFocus
-                              className="flex-1 min-w-0 px-2 py-1 text-[11px] font-bold border border-purple-300 dark:border-purple-600 bg-transparent rounded-full text-ink-black dark:text-white focus:outline-none focus:border-purple-500 placeholder-gray-400"
-                            />
+                      <div className="mt-1.5 space-y-1.5">
+                        <div className="text-[11px] font-medium text-gray-500 dark:text-zinc-400">
+                          어떻게 다시 쓸까요?
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 items-center">
+                          {(SECTION_CHIPS[key] || []).map(chip => (
                             <button
-                              onClick={() => customDirection.trim() && handleSectionRewrite(key, customDirection.trim())}
-                              disabled={!customDirection.trim()}
-                              className="px-2 py-1 text-[11px] font-bold text-white bg-purple-500 rounded-full hover:bg-purple-600 transition-colors disabled:opacity-50 whitespace-nowrap"
-                            >적용</button>
-                          </div>
-                        )}
+                              key={chip.key}
+                              onClick={() => handleSectionRewrite(key, chip.key)}
+                              className="inline-flex items-center justify-center h-8 px-2.5 text-[11px] font-bold rounded-full border border-purple-300 dark:border-purple-600 text-purple-600 dark:text-purple-300 hover:bg-purple-500 hover:text-white dark:hover:bg-purple-600 transition-all whitespace-nowrap"
+                            >{chip.label}</button>
+                          ))}
+                          {showCustomInput !== key ? (
+                            <button
+                              onClick={() => setShowCustomInput(key)}
+                              className="inline-flex items-center justify-center h-8 px-2.5 text-[11px] font-bold rounded-full border border-dashed border-gray-300 dark:border-zinc-600 text-gray-500 dark:text-zinc-400 hover:border-purple-400 hover:text-purple-500 transition-all whitespace-nowrap"
+                            >직접 입력…</button>
+                          ) : (
+                            <div className="flex items-center gap-1.5 min-w-0 w-full sm:w-auto">
+                              <input
+                                type="text"
+                                value={customDirection}
+                                onChange={(e) => setCustomDirection(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && customDirection.trim() && handleSectionRewrite(key, customDirection.trim())}
+                                placeholder="예: 엄마가 먼저 안아주게"
+                                autoFocus
+                                className="flex-1 sm:w-44 min-w-0 h-8 px-2.5 text-[11px] font-bold border border-purple-300 dark:border-purple-600 bg-transparent rounded-full text-ink-black dark:text-white focus:outline-none focus:border-purple-500 placeholder-gray-400"
+                              />
+                              <button
+                                onClick={() => customDirection.trim() && handleSectionRewrite(key, customDirection.trim())}
+                                disabled={!customDirection.trim()}
+                                className="inline-flex items-center justify-center h-8 px-3 text-[11px] font-bold text-white bg-purple-500 rounded-full hover:bg-purple-600 transition-colors disabled:opacity-50 whitespace-nowrap"
+                              >적용</button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -962,7 +966,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
         )}
       </div>
 
-      {/* 기존 게이트1 설정 (장르/분위기/전개/등장인물/기획 생성) */}
+      {/* 기존 게이트1 설정 (장르/분위기/등장인물/기획 생성) */}
       <div className="glass-card p-6">
         <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2 mb-4">
           <Lightbulb size={20} className="text-amber-500" />
@@ -1014,29 +1018,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
               </div>
             </div>
 
-            {/* 이야기 전개 */}
-            <div>
-              <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5">이야기 전개 <span className="font-normal text-gray-400">(선택)</span></label>
-              <div className="flex flex-wrap gap-1.5">
-                {DEVELOPMENT_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.key}
-                    type="button"
-                    onClick={() => toggleOption(development, setDevelopment, opt.key, setDevTouched, 'development')}
-                    className={`group flex flex-col items-start px-3 py-1.5 text-xs font-bold rounded-xl border-2 transition-all ${
-                      development === opt.key
-                        ? 'border-green-500 bg-green-500 text-white'
-                        : 'border-border dark:border-zinc-700 text-gray-600 dark:text-gray-400 hover:border-green-500/50'
-                    }`}
-                  >
-                    <span>{opt.label}</span>
-                    <span className={`text-[10px] font-normal mt-0.5 ${
-                      development === opt.key ? 'text-green-100' : 'text-gray-400 dark:text-zinc-500'
-                    }`}>{opt.desc}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
+            {/* 이야기 전개 칩 제거 — 단락 바꾸기(SECTION_CHIPS)로 대체 (2026-10-15) */}
             {/* 저장 상태 — 3축 영역 오른쪽 끝 */}
             {draftSaveStatus && draftSaveSource === 'axis' && (
               <div className="flex justify-end mt-1">
