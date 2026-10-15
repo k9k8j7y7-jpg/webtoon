@@ -71,9 +71,7 @@ def build_story_options_prompt(story_options: dict | None) -> str:
     if mood and mood in MOOD_FRAGMENTS:
         parts.append(MOOD_FRAGMENTS[mood])
 
-    development = story_options.get("development")
-    if development and development in DEVELOPMENT_FRAGMENTS:
-        parts.append(DEVELOPMENT_FRAGMENTS[development])
+    # development는 단락 바꾸기(SECTION_CHIPS)로 대체 — 기획 프롬프트 주입 제거 (2026-10-15)
 
     if not parts:
         return ""

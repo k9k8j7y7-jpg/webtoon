@@ -284,7 +284,6 @@ async def create_planning(
     gen_input = {
         "genre": so.get("genre") if so else None,
         "mood": so.get("mood") if so else None,
-        "development": so.get("development") if so else None,
         "characters": [c.model_dump() for c in body.characters] if body.characters else [],
         "brief_story": brief_story,
     }
