@@ -208,6 +208,7 @@ WEBTOON/
 - [x] 인스타 공유 1~3단계 (완료 2026-10-14, Web Share·캡션 복사·뷰어 링크 공유·컷별 토글·피드 안내·크레딧·CLAUDE.md·mobile-check)
 - [x] 단계 헤더 1~2단계 (완료 2026-10-14, StepHeader STEP N/5·단계 이동 메뉴 드롭다운/바텀시트·보기 모드·승인 문구 통일·CLAUDE.md·mobile-check)
 - [x] 편집기 툴바 B안 (완료 2026-10-14, Antigravity 협업, 헤더 분리·4분할 그리드·네온 칩·[전체 박스/띠] 내레이션 전용·회귀 PASS)
+- [x] 아이디어 정리 단락 바꾸기 1·2단계 (완료 2026-10-15, 도입·전개·전환·결말 개별 재생성·되돌리기 1단계·stale 보완·단락별 칩 세트, 0패킷)
 - [ ] **다음:** E 오픈 준비 1 셀프 청소
 - [ ] 모바일 레이아웃 1차 (`docs/지시서-모바일레이아웃-1차.md`, 0단계 조사부터) → 2차(랜딩·게이트1~3·편집기)
 - [ ] C 이미지 모델 선택 (에피소드 단위 모델 잠금, openai_image.py 어댑터)
@@ -242,6 +243,7 @@ WEBTOON/
 - **캐릭터 ref_key:** 바이블/기획 시점 확정 (영문 snake_case). 시트·대본·컷 전부 이 키 기준. 불일치 시 Gate5 ⚠, 콘티 모달에서 제거/치환. 바이블 인물 이름 ≠ 시트 이름 가능 (ref_key 매칭)
 - **캐릭터 승계:** 게이트1 카드 값(`body.characters`)이 원본. AI 기획 결과의 gender/name/age는 카드 값으로 덮어씀. description은 카드 원문 맨 앞 + AI 보충 뒤(중복 문장 제거, `_dedupe_description`). 동물 키워드(강아지·고양이 등) 감지 시 gender "기타" 자동(카드에서 직접 바꾼 값은 유지). `/characters/link`가 대본 ref_key 자동 매핑
 - **텍스트 AI 호출:** `AI_TOKENS_SHORT`(4096)/`MEDIUM`(8192)/`LONG`(16384) 상수만 사용. JSON 파싱은 `parse_ai_json()` 경유
+- **아이디어 정리 단락 바꾸기:** 같은 `POST .../idea-brief` 엔드포인트 + `target_section`(ki/seung/jeon/gyeol) · `direction`(칩 키 또는 직접 입력) → 단락 모드(0패킷). 방향→문구 매핑 `SECTION_DIRECTION_PROMPTS`(service.py, 한 곳). 되돌리기 1단계(프론트 state). stale 시그니처에 `briefStory` 포함 — 단락 변경 시 기획 재생성 배너 노출. 칩 세트는 `SECTION_CHIPS`(Gate1Planning.jsx, 단락별 배열)
 - **컷 프롬프트 한글 금지:** 외형은 appearance_en, 장소는 location_spec_en(영어)만 주입. 지문(action)에는 한국어 짧은 괄호 외형만. spec_en 없으면 한글 폴백(기존 에피소드 호환)
 - **연출 강도:** `app/prompts/drama.py` 단일 매핑 — `normalize_emotion()`(감정→8카테고리) + `build_drama_prompt()`(light/normal/strong). 에피소드 기본값 `gate_status.drama_level`(광고형 기본 light, 일반 기본 normal), 컷 덮어쓰기 `spec.drama_level`. 과장(strong)은 **보호 문구 필수**(집중선 외곽 30%, 얼굴·배경 가독성, 캐릭터 일관성), **효과음 글자 금지**(모든 단계). 효과 PNG 레이어는 보조(모델 효과와 별도). `build_cut_prompt`의 `extra_prompt` 인자로 주입, `generate_cut_image` 안에서 자동 경유. 감정 매핑 표는 drama.py 상단 dict(나중에 관리자 편집 가능하게)
 - **프론트 FormData 업로드:** `api.post(url, formData, { headers: { 'Content-Type': 'multipart/form-data' } })` 필수. 누락 시 422 + 흰 화면 (제품·장소 사진에서 2회 발생 이력)
