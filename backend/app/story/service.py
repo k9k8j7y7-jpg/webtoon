@@ -446,6 +446,35 @@ IDEA_BRIEF_AD_ADDON = """
 - 노골적 광고 문구 금지. 등장인물이 제품을 자연스럽게 사용하는 장면으로.
 """
 
+# ── 단락 바꾸기: 방향→프롬프트 문구 매핑 (한 곳) ──
+SECTION_DIRECTION_PROMPTS: dict[str, str] = {
+    "hook": "첫 문장부터 사건·궁금증으로 시작하라",
+    "calm": "감정선·일상 디테일 중심, 사건은 작게",
+    "dramatic": "갈등·긴장을 고조하고, 뚜렷한 사건을 넣어라",
+    "twist": "예상과 다른 방향으로 꺾되 앞 단락과 모순 없이",
+    "growth": "인물이 한 단계 성장하거나 상황이 뒤집히게",
+    "mystery": "의문·단서를 남겨라",
+    "happy_ending": "따뜻하게 해결되는 결말로",
+    "linger": "다 말하지 않고 여운을 남겨라",
+    "cliffhanger": "다음 화가 궁금해지는 끝맺음으로",
+    "shorter": "핵심만 남기고 절반 길이로 줄여라",
+    "conflict": "상황이 꼬이고 문제가 커지도록",
+    "comic": "유쾌한 사건·소동, 가벼운 웃음",
+    "crisis": "이야기에서 가장 큰 위기 순간",
+    "realization": "인물이 중요한 것을 알아차리는 순간",
+    "unexpected_help": "예상 못 한 인물·사건이 도움을 줌",
+    "warm": "서로를 보듬는 따뜻한 마무리",
+    "humor_ending": "웃음으로 끝나는 가벼운 결말",
+}
+
+SECTION_LABELS = {"ki": "도입", "seung": "전개", "jeon": "전환", "gyeol": "결말"}
+
+IDEA_BRIEF_SECTION_INSTRUCTION = """너는 웹툰 기획 어시스턴트야.
+4단락(도입·전개·전환·결말) 이야기 중 **지정된 단락 하나만** 다시 써야 한다.
+다른 단락은 절대 건드리지 마. 앞뒤 흐름·등장인물·톤과 어긋나지 않게.
+길이는 원래 단락과 비슷하게(더 짧게 지시면 절반).
+출력은 **해당 단락의 새 텍스트만**(JSON 아닌 순수 텍스트). 다른 텍스트(설명·주석) 넣지 마."""
+
 IDEA_BRIEF_REVISE_INSTRUCTION = f"""너는 웹툰 기획 어시스턴트야.
 사용자가 기존 기획 메모를 보고 수정 요청(hint)을 했다. 기존 메모를 기반으로 수정해줘.
 반드시 아래 JSON 형식으로만 응답해. 다른 텍스트는 절대 넣지 마.
@@ -518,8 +547,53 @@ async def generate_idea_brief(
     return result
 
 
-async def revise_idea_brief(existing_brief: dict, hint: str) -> dict:
-    """기존 idea_brief를 사용자 힌트로 재정리한다."""
+async def revise_idea_brief(
+    existing_brief: dict,
+    hint: str,
+    target_section: str | None = None,
+    direction: str | None = None,
+) -> dict:
+    """기존 idea_brief를 재정리한다.
+
+    target_section + direction이 모두 있으면 **단락 모드**: 해당 단락만 재생성.
+    그렇지 않으면 기존 전체 재정리(hint 기반).
+    """
+    # ── 단락 모드 ──
+    if target_section and direction and target_section in SECTION_LABELS:
+        story = existing_brief.get("story", {})
+        direction_text = SECTION_DIRECTION_PROMPTS.get(direction, direction)
+        section_label = SECTION_LABELS[target_section]
+
+        prompt = f"""## 전체 이야기
+도입: {story.get('ki', '')}
+전개: {story.get('seung', '')}
+전환: {story.get('jeon', '')}
+결말: {story.get('gyeol', '')}
+
+## 등장인물
+{json.dumps(existing_brief.get('characters', []), ensure_ascii=False)}
+
+## 톤
+{existing_brief.get('tone', '')}
+
+## 지시
+**{section_label}** 단락을 다음 방향으로 다시 써라: {direction_text}"""
+
+        text = await generate_text(
+            prompt=prompt,
+            system_instruction=IDEA_BRIEF_SECTION_INSTRUCTION,
+            temperature=0.7,
+            max_output_tokens=AI_TOKENS_SHORT,
+        )
+        new_text = text.strip().strip('"').strip("'").strip()
+
+        # 기존 brief 복사 후 해당 단락만 교체
+        result = {**existing_brief}
+        result["story"] = {**story, target_section: new_text}
+        result["generated_at"] = datetime.now(timezone.utc).isoformat()
+        return result
+
+    # ── 전체 재정리 모드 (기존) ──
     prompt = f"""## 기존 기획 메모
 {json.dumps(existing_brief, ensure_ascii=False, indent=2)}
 

@@ -34,6 +34,14 @@ const DEVELOPMENT_OPTIONS = [
 
 const SYNOPSIS_LABELS = [['ki', '도입'], ['seung', '전개'], ['jeon', '전환'], ['gyeol', '결말']];
 
+// 단락별 바꾸기 칩 세트
+const SECTION_CHIPS = {
+  ki:    [{ key: 'hook', label: '초반 후킹' }, { key: 'calm', label: '잔잔하게' }, { key: 'shorter', label: '더 짧게' }],
+  seung: [{ key: 'dramatic', label: '극적으로' }, { key: 'calm', label: '잔잔하게' }, { key: 'mystery', label: '미스터리·떡밥' }, { key: 'conflict', label: '갈등 키우기' }, { key: 'comic', label: '코믹하게' }],
+  jeon:  [{ key: 'dramatic', label: '극적으로' }, { key: 'twist', label: '반전 있게' }, { key: 'calm', label: '잔잔하게' }, { key: 'crisis', label: '위기 고조' }, { key: 'realization', label: '깨달음' }, { key: 'unexpected_help', label: '뜻밖의 도움' }],
+  gyeol: [{ key: 'twist', label: '반전 있게' }, { key: 'happy_ending', label: '해피엔딩' }, { key: 'linger', label: '여운 남게' }, { key: 'cliffhanger', label: '클리프행어' }, { key: 'growth', label: '성장·역전' }, { key: 'warm', label: '따뜻하게' }, { key: 'humor_ending', label: '유머로 마무리' }],
+};
+
 // 주격 조사 이/가 (받침 유무)
 const subjectJosa = (word) => {
   const w = word || '';
@@ -56,6 +64,14 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
   const [removedNames, setRemovedNames] = useState([]);
   // 마지막 기획 생성 시점 입력 서명 (null = 이 화면에서 아직 생성 안 함 → 안내 없음)
   const [lastGenSig, setLastGenSig] = useState(null);
+
+  // 단락 바꾸기 상태
+  const [openSection, setOpenSection] = useState(null);       // 칩 펼친 단락 키 (한 번에 하나)
+  const [sectionLoading, setSectionLoading] = useState(null);  // 재생성 중인 단락 키
+  const [sectionPrev, setSectionPrev] = useState({});          // 되돌리기용 이전 텍스트 {ki:'...', ...}
+  const [sectionHighlight, setSectionHighlight] = useState(null); // 방금 바뀐 단락 키 (1초 하이라이트)
+  const [customDirection, setCustomDirection] = useState('');  // 직접 입력 텍스트
+  const [showCustomInput, setShowCustomInput] = useState(null); // 직접 입력 표시 중인 단락 키
 
   const [characters, setCharacters] = useState([]);
   const [charTouched, setCharTouched] = useState(false); // 등장인물 user_touched
@@ -119,6 +135,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
           (c.name || '').trim(), (c.description || '').trim(), c.gender || '', String(c.age ?? '').trim(),
         ]),
         genre: lastGen.genre, mood: lastGen.mood, development: lastGen.development,
+        briefStory: lastGen.brief_story || {},
       }));
     }
     // 복원된 값의 서명을 기록 (초기 1회 저장 방지)
@@ -252,6 +269,45 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
     } finally {
       setRevising(false);
     }
+  };
+
+  // 단락 바꾸기 핸들러
+  const handleSectionRewrite = async (sectionKey, dir) => {
+    if (!ideaBrief?.story) return;
+    const prevText = ideaBrief.story[sectionKey] || '';
+    setSectionLoading(sectionKey);
+    setError('');
+    try {
+      const { data } = await api.post(`/projects/${projectId}/episodes/${episodeId}/idea-brief`, {
+        target_section: sectionKey,
+        direction: dir,
+      });
+      // 이전 텍스트 보관 (되돌리기용)
+      setSectionPrev(prev => ({ ...prev, [sectionKey]: prevText }));
+      setIdeaBrief(data);
+      // 하이라이트 1초
+      setSectionHighlight(sectionKey);
+      setTimeout(() => setSectionHighlight(h => h === sectionKey ? null : h), 1200);
+      // 칩 줄 닫기
+      setOpenSection(null);
+      setShowCustomInput(null);
+      setCustomDirection('');
+    } catch (err) {
+      setError(err.response?.data?.detail || '단락 바꾸기에 실패했습니다.');
+    } finally {
+      setSectionLoading(null);
+    }
+  };
+
+  // 되돌리기
+  const handleSectionUndo = (sectionKey) => {
+    const prev = sectionPrev[sectionKey];
+    if (!prev) return;
+    // 현재 값을 prev에 넣고 이전 값 복원
+    const current = ideaBrief?.story?.[sectionKey] || '';
+    setSectionPrev(p => ({ ...p, [sectionKey]: current }));
+    setIdeaBrief(b => ({ ...b, story: { ...(b?.story || {}), [sectionKey]: prev } }));
+    setBriefSaveStatus('dirty');
   };
 
   // blur 시 idea_brief 필드 저장 (자동)
@@ -446,13 +502,14 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
     return p?.synopsis || '';
   };
 
-  // 마지막 [기획 생성] 때의 입력(카드·3축) — 이후 바뀌면 결과 카드에 재생성 안내
+  // 마지막 [기획 생성] 때의 입력(카드·3축·이야기 단락) — 이후 바뀌면 결과 카드에 재생성 안내
   const inputSig = useMemo(() => JSON.stringify({
     chars: characters.map((c) => [
       (c.name || '').trim(), (c.description || '').trim(), c.gender || '', String(c.age ?? '').trim(),
     ]),
     genre, mood, development,
-  }), [characters, genre, mood, development]);
+    briefStory: ideaBrief?.story || {},
+  }), [characters, genre, mood, development, ideaBrief?.story]);
   const inputsChanged = lastGenSig !== null && lastGenSig !== inputSig;
 
   const handleGenerate = async () => {
@@ -498,7 +555,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
 
   const handleApprove = async () => {
     if (inputsChanged
-      && !window.confirm('등장인물/설정이 마지막 기획 생성 이후 바뀌었어요. 바뀐 내용은 반영되지 않은 채로 승인할까요?')) return;
+      && !window.confirm('아이디어가 마지막 기획 생성 이후 바뀌었어요. 바뀐 내용은 반영되지 않은 채로 승인할까요?')) return;
     setApproving(true);
     try {
       await api.post(`/projects/${projectId}/episodes/${episodeId}/planning/approve`, { auto_advance: false });
@@ -783,20 +840,81 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
               ))}
             </div>
 
-            {/* 이야기 기승전결 */}
+            {/* 이야기 기승전결 + 단락 바꾸기 */}
             <div>
               <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">이야기</label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {SYNOPSIS_LABELS.map(([key, label]) => (
                   <div key={key}>
-                    <span className="text-[11px] font-bold text-gray-400 dark:text-zinc-500">{label}</span>
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="text-[11px] font-bold text-gray-400 dark:text-zinc-500">{label}</span>
+                      <div className="flex items-center gap-1.5">
+                        {sectionPrev[key] && !sectionLoading && (
+                          <button
+                            onClick={() => handleSectionUndo(key)}
+                            className="text-[10px] font-bold text-comic-blue hover:underline"
+                          >↶ 되돌리기</button>
+                        )}
+                        <button
+                          onClick={() => { setOpenSection(openSection === key ? null : key); setShowCustomInput(null); setCustomDirection(''); }}
+                          disabled={sectionLoading === key}
+                          className="text-[10px] font-bold text-purple-500 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors disabled:opacity-50"
+                        >✨ 바꾸기</button>
+                      </div>
+                    </div>
                     <textarea
                       value={ideaBrief.story?.[key] || ''}
                       onChange={(e) => updateBriefStory(key, e.target.value)}
                       onBlur={() => saveBriefField('story', ideaBrief.story)}
-                      className="w-full px-2 py-1.5 border-2 border-border dark:border-zinc-700 bg-transparent rounded-lg text-sm font-bold text-gray-700 dark:text-gray-300 focus:outline-none focus:border-comic-orange resize-none"
+                      disabled={sectionLoading === key}
+                      className={`w-full px-2 py-1.5 border-2 bg-transparent rounded-lg text-sm font-bold text-gray-700 dark:text-gray-300 focus:outline-none focus:border-comic-orange resize-none transition-colors ${
+                        sectionHighlight === key
+                          ? 'border-purple-400 dark:border-purple-500 bg-purple-50/50 dark:bg-purple-500/10'
+                          : 'border-border dark:border-zinc-700'
+                      } ${sectionLoading === key ? 'opacity-50' : ''}`}
                       rows={2}
                     />
+                    {sectionLoading === key && (
+                      <div className="flex items-center gap-1 mt-0.5 text-purple-500">
+                        <RefreshCw size={10} className="animate-spin" />
+                        <span className="text-[10px] font-bold">바꾸는 중…</span>
+                      </div>
+                    )}
+                    {/* 칩 줄 */}
+                    {openSection === key && !sectionLoading && (
+                      <div className="mt-1.5 flex flex-nowrap sm:flex-wrap gap-1 items-center overflow-x-auto pb-1 -mb-1">
+                        {(SECTION_CHIPS[key] || []).map(chip => (
+                          <button
+                            key={chip.key}
+                            onClick={() => handleSectionRewrite(key, chip.key)}
+                            className="px-2.5 py-1 text-[11px] font-bold rounded-full border border-purple-300 dark:border-purple-600 text-purple-600 dark:text-purple-300 hover:bg-purple-500 hover:text-white dark:hover:bg-purple-600 transition-all whitespace-nowrap"
+                          >{chip.label}</button>
+                        ))}
+                        {showCustomInput !== key ? (
+                          <button
+                            onClick={() => setShowCustomInput(key)}
+                            className="px-2.5 py-1 text-[11px] font-bold rounded-full border border-dashed border-gray-300 dark:border-zinc-600 text-gray-500 dark:text-zinc-400 hover:border-purple-400 hover:text-purple-500 transition-all whitespace-nowrap"
+                          >직접 입력…</button>
+                        ) : (
+                          <div className="flex items-center gap-1 min-w-0 flex-1">
+                            <input
+                              type="text"
+                              value={customDirection}
+                              onChange={(e) => setCustomDirection(e.target.value)}
+                              onKeyDown={(e) => e.key === 'Enter' && customDirection.trim() && handleSectionRewrite(key, customDirection.trim())}
+                              placeholder="예: 엄마가 먼저 안아주게"
+                              autoFocus
+                              className="flex-1 min-w-0 px-2 py-1 text-[11px] font-bold border border-purple-300 dark:border-purple-600 bg-transparent rounded-full text-ink-black dark:text-white focus:outline-none focus:border-purple-500 placeholder-gray-400"
+                            />
+                            <button
+                              onClick={() => customDirection.trim() && handleSectionRewrite(key, customDirection.trim())}
+                              disabled={!customDirection.trim()}
+                              className="px-2 py-1 text-[11px] font-bold text-white bg-purple-500 rounded-full hover:bg-purple-600 transition-colors disabled:opacity-50 whitespace-nowrap"
+                            >적용</button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1055,7 +1173,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
             {generating
               ? <><RefreshCw size={14} className="animate-spin" /> 생성 중...</>
               : inputsChanged
-                ? '기획 다시 생성 — 등장인물/설정이 바뀌었어요'
+                ? '기획 다시 생성 — 아이디어가 바뀌었어요'
                 : '기획 생성'
             }
           </button>
@@ -1082,7 +1200,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
           {inputsChanged && !generating && (
             <div className="flex items-start gap-2 px-3 py-2 rounded-xl border-2 border-yellow-300 bg-yellow-50 text-yellow-800 dark:border-yellow-500/40 dark:bg-yellow-500/10 dark:text-yellow-200 text-xs font-bold">
               <span>⚠</span>
-              <span>등장인물/설정이 바뀌었어요 — [기획 생성]을 다시 눌러야 반영돼요</span>
+              <span>아이디어가 바뀌었어요 — [기획 생성]을 다시 하면 반영돼요</span>
             </div>
           )}
           <div className="flex items-start justify-between gap-2">

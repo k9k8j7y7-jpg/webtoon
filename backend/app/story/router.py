@@ -46,6 +46,8 @@ class ApproveRequest(BaseModel):
 class IdeaBriefRequest(BaseModel):
     raw: str | None = None
     hint: str | None = None
+    target_section: str | None = None  # ki|seung|jeon|gyeol → 단락 모드
+    direction: str | None = None       # 칩 키 또는 직접 입력 텍스트
 
 
 class IdeaBriefUpdate(BaseModel):
@@ -91,7 +93,16 @@ async def create_idea_brief(
 
     existing = get_idea_brief(gs)
 
-    if body.hint and existing:
+    if body.target_section and body.direction and existing:
+        # 단락 모드: 해당 단락만 재생성
+        valid_sections = ("ki", "seung", "jeon", "gyeol")
+        if body.target_section not in valid_sections:
+            raise HTTPException(status_code=400, detail=f"target_section은 {valid_sections} 중 하나여야 합니다.")
+        result = await revise_idea_brief(
+            existing, "", target_section=body.target_section, direction=body.direction,
+        )
+        result["raw"] = existing.get("raw", "")
+    elif body.hint and existing:
         # 재정리: 기존 brief + hint
         result = await revise_idea_brief(existing, body.hint)
         # raw 교체 여부: hint만이면 raw 유지
@@ -267,11 +278,15 @@ async def create_planning(
 
     # last_gen_input: 기획 생성 시점의 카드 스냅샷 → 새로고침 후 stale 배너용
     gs = dict(episode.gate_status or {})
+    # idea_brief story 스냅샷 (단락 변경 stale 감지용)
+    current_brief = get_idea_brief(gs)
+    brief_story = current_brief.get("story", {}) if current_brief else {}
     gen_input = {
         "genre": so.get("genre") if so else None,
         "mood": so.get("mood") if so else None,
         "development": so.get("development") if so else None,
         "characters": [c.model_dump() for c in body.characters] if body.characters else [],
+        "brief_story": brief_story,
     }
     gs["last_gen_input"] = gen_input
     # planning_draft도 동기화 (현재 입력 = 마지막 생성 입력)
