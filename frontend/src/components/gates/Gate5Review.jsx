@@ -4,9 +4,10 @@ import api, { pollJob } from '../../api/client';
 import JobProgress from '../JobProgress';
 import BubbleOverlay, { BubbleMiniIcon, STYLE_ORDER, STYLE_LABELS } from '../BubbleOverlay';
 import { resolveBubbleStyle } from '../../utils/bubbleMapping';
-import { Image, RefreshCw, RotateCcw, Download, Check, AlertTriangle, MessageSquare, Save, X, ZoomIn, ChevronLeft, ChevronRight, ChevronDown, Pencil, SlidersHorizontal, ExternalLink, LayoutGrid, Share2, Film } from 'lucide-react';
+import { Image, RefreshCw, RotateCcw, Download, Check, AlertTriangle, MessageSquare, Save, X, ZoomIn, ChevronLeft, ChevronRight, ChevronDown, Pencil, SlidersHorizontal, ExternalLink, LayoutGrid, Share2, Film, Clapperboard, Play, Trash2 } from 'lucide-react';
 import MotionModal from '../MotionModal';
 import MotionPicker from '../MotionPicker';
+import ReelModal from '../ReelModal';
 import CutEditor from '../CutEditor';
 import SfxLayer from '../SfxLayer';
 import EffectLayer from '../EffectLayer';
@@ -221,10 +222,15 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
   const [instaShareOpen, setInstaShareOpen] = useState(false);
   const [epMeta, setEpMeta] = useState(null); // { title, is_public, share_token }
   const { user } = useAuth();
-  const [motionModalCut, setMotionModalCut] = useState(null); // 모션 모달 열린 컷
-  const [motionPickerCut, setMotionPickerCut] = useState(null); // 모션 피커 열린 컷
-  const [motionJobs, setMotionJobs] = useState({}); // { cut_id: job_id }
-  const [characters, setCharacters] = useState([]); // 에피소드 캐릭터 목록
+  const [motionModalCut, setMotionModalCut] = useState(null);
+  const [motionPickerCut, setMotionPickerCut] = useState(null);
+  const [motionJobs, setMotionJobs] = useState({});
+  const [characters, setCharacters] = useState([]);
+  const [reelModalOpen, setReelModalOpen] = useState(false);
+  const [reelStatus, setReelStatus] = useState(null); // {status, path, is_stale, ...}
+  const [reelJob, setReelJob] = useState(null); // job_id
+  const [reelDropdown, setReelDropdown] = useState(false);
+  const [reelPreview, setReelPreview] = useState(false); // 미리보기 모달
 
   const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
 
@@ -643,6 +649,35 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
 
   const hasMotionCuts = cuts.some(c => getMotion(c).selected);
 
+  // ── 릴스 헬퍼 ──
+  const loadReel = async () => {
+    try {
+      const { data } = await api.get(`/projects/${projectId}/episodes/${episodeId}/reel`);
+      setReelStatus(data);
+    } catch { setReelStatus(null); }
+  };
+  useEffect(() => { if (cuts.length > 0) loadReel(); }, [cuts]);
+
+  const handleReelStarted = async (jobId) => {
+    setReelJob(jobId);
+    setReelStatus({ status: 'queued' });
+    try {
+      await pollJob(jobId, (j) => setReelStatus({ status: j.status === 'processing' ? 'running' : j.status, stage: j.progress?.stage }));
+    } catch { /* job lost */ }
+    setReelJob(null);
+    await loadReel();
+    window.dispatchEvent(new Event('packets:refresh'));
+  };
+
+  const handleReelDelete = async () => {
+    if (!window.confirm('릴스 영상을 지울까요?')) return;
+    try {
+      await api.delete(`/projects/${projectId}/episodes/${episodeId}/reel`);
+      setReelStatus({ status: 'none' });
+      setReelDropdown(false);
+    } catch { /* ignore */ }
+  };
+
   const dialogueTypeLabel = { speech: '대사', narration: '나레이션', thought: '독백', sfx: '효과음' };
 
   // ── B. 영문 → 한글 표시 매핑 ──
@@ -771,6 +806,84 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                     <Film size={12} /> 움직인 컷 MP4
                   </button>
                 )}
+                {/* 릴스 영상 버튼 */}
+                {(() => {
+                  const rs = reelStatus?.status;
+                  const isRunning = rs === 'queued' || rs === 'running' || !!reelJob;
+                  const isDone = rs === 'done';
+                  const isStale = reelStatus?.is_stale;
+
+                  if (isRunning) {
+                    return (
+                      <span className="flex items-center gap-1 h-10 sm:h-auto px-3 py-2 text-xs font-bold text-rose-500 dark:text-rose-400 animate-pulse">
+                        <span className="animate-spin"><Clapperboard size={12} /></span> 릴스 만드는 중…
+                      </span>
+                    );
+                  }
+                  if (isDone) {
+                    return (
+                      <div className="relative">
+                        <button
+                          onClick={() => { setReelDropdown(!reelDropdown); }}
+                          className="flex items-center gap-1 h-10 sm:h-auto px-2 sm:px-3 py-2 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-full text-xs font-bold whitespace-nowrap hover:bg-rose-100 dark:hover:bg-rose-900/30 transition-colors shadow-sm border border-rose-200 dark:border-rose-500/30"
+                        >
+                          <Clapperboard size={12} /> 릴스 영상 <ChevronDown size={10} />
+                          {isStale && <span className="ml-1 px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400 text-[8px]">컷 변경</span>}
+                        </button>
+                        {reelDropdown && createPortal(
+                          <div
+                            className="fixed inset-0 z-[60]"
+                            onClick={() => setReelDropdown(false)}
+                          >
+                            <div
+                              className="fixed z-[60] bg-white dark:bg-zinc-800 border-2 border-border dark:border-zinc-600 rounded-xl shadow-lg p-2 w-52"
+                              style={{ top: 'min(50%, 400px)', right: '1rem' }}
+                              onClick={e => e.stopPropagation()}
+                            >
+                              <button onClick={() => { setReelDropdown(false); setReelPreview(true); }}
+                                className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-700 flex items-center gap-2">
+                                <Play size={14} /> 미리보기
+                              </button>
+                              <button onClick={async () => {
+                                setReelDropdown(false);
+                                if (!reelStatus?.path) return;
+                                const resp = await fetch(imageUrl(reelStatus.path));
+                                const blob = await resp.blob();
+                                const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+                                a.download = 'reel.mp4'; a.click(); URL.revokeObjectURL(a.href);
+                              }} className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-700 flex items-center gap-2">
+                                <Download size={14} /> 받기 (MP4)
+                              </button>
+                              <button onClick={() => { setReelDropdown(false); setInstaShareOpen(true); }}
+                                className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-700 flex items-center gap-2">
+                                <Share2 size={14} /> 인스타 공유
+                              </button>
+                              <button onClick={() => { setReelDropdown(false); setReelModalOpen(true); }}
+                                className="w-full text-left px-3 py-2 text-sm text-rose-500 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-900/20 flex items-center gap-2">
+                                <RefreshCw size={14} /> 다시 만들기 (1패킷)
+                              </button>
+                              <button onClick={() => { setReelDropdown(false); handleReelDelete(); }}
+                                className="w-full text-left px-3 py-2 text-sm text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2">
+                                <Trash2 size={14} /> 삭제
+                              </button>
+                            </div>
+                          </div>,
+                          document.body
+                        )}
+                      </div>
+                    );
+                  }
+                  // none / failed
+                  return (
+                    <button
+                      onClick={() => setReelModalOpen(true)}
+                      disabled={!hasImages}
+                      className="flex flex-1 sm:flex-none items-center justify-center gap-1 h-10 sm:h-auto px-2 sm:px-3 py-2 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-full text-xs font-bold whitespace-nowrap hover:bg-rose-100 dark:hover:bg-rose-900/30 transition-colors shadow-sm border border-rose-200 dark:border-rose-500/30 disabled:opacity-50"
+                    >
+                      <Clapperboard size={12} /> 릴스 영상
+                    </button>
+                  );
+                })()}
                 <div className="relative flex">
                   <button
                     onClick={() => setA4Mode(a4Mode ? null : 'grid')}
@@ -1563,6 +1676,37 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
         />
       )}
 
+      {/* 릴스 모달 */}
+      {reelModalOpen && (
+        <ReelModal
+          cuts={cuts}
+          projectId={projectId}
+          episodeId={episodeId}
+          onClose={() => setReelModalOpen(false)}
+          onStarted={handleReelStarted}
+          getImageUrl={(cut) => imageUrl(cut.image_url)}
+        />
+      )}
+
+      {/* 릴스 미리보기 */}
+      {reelPreview && reelStatus?.path && createPortal(
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80" onClick={() => setReelPreview(false)}>
+          <div className="relative" onClick={e => e.stopPropagation()}>
+            <video
+              src={imageUrl(reelStatus.path)}
+              controls playsInline autoPlay
+              className="max-h-[90vh] max-w-[90vw] rounded-lg shadow-2xl"
+              style={{ aspectRatio: '9 / 16' }}
+            />
+            <button onClick={() => setReelPreview(false)}
+              className="absolute top-2 right-2 bg-black/60 text-white p-1.5 rounded-full hover:bg-black/80">
+              <X size={16} />
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {/* 모션 모달 */}
       {motionModalCut && (
         <MotionModal
@@ -1605,6 +1749,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
           const url = ep || sel?.path;
           return url ? { cut_number: c.cut_number, url: imageUrl(url), cut_id: c.cut_id } : null;
         }).filter(Boolean)}
+        reelPath={reelStatus?.status === 'done' && reelStatus?.path ? imageUrl(reelStatus.path) : null}
       />
     </div>
   );

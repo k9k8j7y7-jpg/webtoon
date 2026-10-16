@@ -9,7 +9,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Share2, Copy, Check, Download, X, Film } from 'lucide-react';
+import { Share2, Copy, Check, Download, X, Film, Clapperboard } from 'lucide-react';
 import { renderCutToCanvas, composePageGrid } from '../utils/exportRenderer';
 import { collectUsedFonts, loadFontCSS, ensureFontsLoaded } from '../utils/fontEmbed';
 
@@ -127,6 +127,7 @@ export default function InstaShareModal({
   isPublic,
   onZipDownload,
   motionVideoUrls, // [{cut_number, url}] — selected motion mp4 URLs
+  reelPath, // string | null — 릴스 mp4 URL
 }) {
   // ── 렌더링 상태 ──
   const [renderState, setRenderState] = useState('idle'); // idle | rendering | done | error
@@ -148,8 +149,8 @@ export default function InstaShareModal({
   // ── 크레딧 체크박스 ──
   const [showCredit, setShowCredit] = useState(() => localStorage.getItem('insta_credit') !== '0');
 
-  // ── 영상 컷만 보내기 ──
-  const [shareVideoOnly, setShareVideoOnly] = useState(false);
+  // ── 공유 소스 선택 (이미지 / 영상 컷 / 릴스) ──
+  const [shareSource, setShareSource] = useState('images'); // 'images' | 'motionVideo' | 'reel'
 
   const abortRef = useRef(null);
   const renderKeyRef = useRef(0); // 토글 전환 시 이전 렌더 무시용
@@ -304,8 +305,20 @@ export default function InstaShareModal({
     setShareError(null);
 
     let shareFiles;
-    if (shareVideoOnly && (motionVideoUrls || []).length > 0) {
-      // 영상 MP4 파일 다운로드 → File 변환
+    if (shareSource === 'reel' && reelPath) {
+      try {
+        const resp = await fetch(reelPath);
+        const blob = await resp.blob();
+        shareFiles = [new File([blob], 'ezitoon_reel.mp4', { type: 'video/mp4' })];
+        if (!navigator.canShare?.({ files: shareFiles })) {
+          setShareError('이 기기에서 영상 공유를 지원하지 않아요');
+          return;
+        }
+      } catch {
+        setShareError('릴스 파일 준비 실패');
+        return;
+      }
+    } else if (shareSource === 'motionVideo' && (motionVideoUrls || []).length > 0) {
       try {
         shareFiles = [];
         for (const mv of motionVideoUrls) {
@@ -317,7 +330,7 @@ export default function InstaShareModal({
           setShareError('이 기기에서 영상 공유를 지원하지 않아요');
           return;
         }
-      } catch (e) {
+      } catch {
         setShareError('영상 파일 준비 실패');
         return;
       }
@@ -424,25 +437,30 @@ export default function InstaShareModal({
             </span>
           </label>
 
-          {/* 영상 컷만 보내기 토글 */}
-          {(motionVideoUrls || []).length > 0 && isShareSupported && (
-            <div className="bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-700 rounded-xl p-3 space-y-2">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={shareVideoOnly}
-                  onChange={(e) => setShareVideoOnly(e.target.checked)}
-                  className="w-4 h-4 rounded border-violet-300 dark:border-violet-600 text-violet-500 focus:ring-violet-500/50"
-                />
-                <span className="text-xs font-bold text-violet-700 dark:text-violet-300 flex items-center gap-1">
-                  <Film size={12} /> 영상 컷만 보내기 ({motionVideoUrls.length}개)
-                </span>
-              </label>
-              {shareVideoOnly && (
-                <p className="text-[10px] text-violet-500 dark:text-violet-400">
-                  인스타 → 릴스로 받아져요. 이미지 대신 MP4 파일을 보내요.
-                </p>
-              )}
+          {/* 공유 소스 3택 라디오 — 영상 컷 또는 릴스가 있을 때 */}
+          {((motionVideoUrls || []).length > 0 || reelPath) && (
+            <div className="flex rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-700">
+              <button
+                onPointerDown={() => setShareSource('images')}
+                className={`flex-1 py-2 text-[11px] font-bold transition-colors ${shareSource === 'images' ? 'bg-neon-from text-white' : 'bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400'}`}
+              >
+                이미지
+              </button>
+              <button
+                onPointerDown={() => (motionVideoUrls || []).length > 0 && setShareSource('motionVideo')}
+                disabled={!(motionVideoUrls || []).length}
+                className={`flex-1 py-2 text-[11px] font-bold transition-colors ${shareSource === 'motionVideo' ? 'bg-violet-500 text-white' : 'bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400'} disabled:opacity-30 disabled:cursor-not-allowed`}
+              >
+                <Film size={10} className="inline mr-0.5" />영상 컷
+              </button>
+              <button
+                onPointerDown={() => reelPath && setShareSource('reel')}
+                disabled={!reelPath}
+                className={`flex-1 py-2 text-[11px] font-bold transition-colors ${shareSource === 'reel' ? 'bg-rose-500 text-white' : 'bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400'} disabled:opacity-30 disabled:cursor-not-allowed`}
+                title={!reelPath ? '먼저 릴스 영상을 만들어요' : ''}
+              >
+                <Clapperboard size={10} className="inline mr-0.5" />릴스
+              </button>
             </div>
           )}
 

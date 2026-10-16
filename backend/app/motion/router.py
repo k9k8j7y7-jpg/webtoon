@@ -293,3 +293,153 @@ async def export_motion(
             return {"video_url": c["path"]}
 
     raise HTTPException(status_code=404, detail="영상 파일을 찾을 수 없어요")
+
+
+# ── 릴스 영상 ────────────────────────────────────────────────
+
+@router.post("/projects/{project_id}/episodes/{episode_id}/reel", status_code=202)
+async def create_reel(
+    project_id: int,
+    episode_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """릴스 영상(컷 이어붙이기 9:16 MP4) 생성."""
+    episode = db.query(Episode).filter(
+        Episode.id == episode_id, Episode.project_id == project_id,
+    ).first()
+    if not episode:
+        raise HTTPException(status_code=404, detail="Episode not found")
+
+    gate = get_gate_number(episode.gate_status)
+    if gate < 5:
+        raise HTTPException(status_code=400, detail=f"Current gate is {gate}, reel requires gate 5")
+
+    # 이미지 있는 컷 확인
+    cut_count = db.query(Cut).filter(
+        Cut.episode_id == episode_id, Cut.image_url.isnot(None),
+    ).count()
+    if cut_count == 0:
+        raise HTTPException(status_code=400, detail="이미지가 있는 컷이 없어요")
+
+    # 이미 진행 중?
+    gs = episode.gate_status or {}
+    reel = gs.get("reel", {})
+    if reel.get("status") in ("queued", "running"):
+        raise HTTPException(status_code=409, detail="이미 릴스를 만들고 있어요")
+
+    # 패킷 확인 + 차감
+    require_packets(current_user.id, 1, db)
+    from app.packets.service import charge_packets
+    charge_packets(current_user.id, 1, "generation", None, db, f"reel ep={episode_id}")
+
+    # gate_status.reel 초기화
+    from sqlalchemy.orm.attributes import flag_modified
+    job = create_job(total=cut_count + 1)
+    gs["reel"] = {"status": "queued", "job_id": job.job_id}
+    episode.gate_status = gs
+    flag_modified(episode, "gate_status")
+    db.commit()
+
+    # BackgroundTasks — ORM 객체 대신 id만
+    bg_episode_id = episode_id
+    bg_project_id = project_id
+    bg_user_id = current_user.id
+    bg_nickname = current_user.nickname or "작가"
+    bg_job_id = job.job_id
+
+    from app.motion.reel import generate_reel
+
+    async def _run():
+        return await generate_reel(
+            episode_id=bg_episode_id,
+            project_id=bg_project_id,
+            user_id=bg_user_id,
+            nickname=bg_nickname,
+            job_id=bg_job_id,
+        )
+
+    run_job_in_background(background_tasks, bg_job_id, _run())
+    return {"job_id": job.job_id, "cut_count": cut_count, "packets_charged": 1}
+
+
+@router.get("/projects/{project_id}/episodes/{episode_id}/reel")
+async def get_reel(
+    project_id: int,
+    episode_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """릴스 상태·URL 조회."""
+    episode = db.query(Episode).filter(
+        Episode.id == episode_id, Episode.project_id == project_id,
+    ).first()
+    if not episode:
+        raise HTTPException(status_code=404, detail="Episode not found")
+
+    gs = episode.gate_status or {}
+    reel = gs.get("reel")
+    if not reel:
+        return {"status": "none"}
+
+    # stale 판정
+    from app.motion.reel import _compute_source_hash
+    cuts = db.query(Cut).filter(
+        Cut.episode_id == episode_id, Cut.image_url.isnot(None),
+    ).order_by(Cut.cut_number).all()
+    cut_data = []
+    for c in cuts:
+        spec = c.spec or {}
+        motion = spec.get("motion", {})
+        cut_data.append({
+            "image_url": c.image_url,
+            "motion": motion,
+        })
+    current_hash = _compute_source_hash(cut_data)
+    is_stale = reel.get("source_hash") and reel["source_hash"] != current_hash
+
+    return {
+        "status": reel.get("status"),
+        "path": reel.get("path"),
+        "version": reel.get("version"),
+        "cut_count": reel.get("cut_count"),
+        "duration_sec": reel.get("duration_sec"),
+        "size_kb": reel.get("size_kb"),
+        "is_stale": is_stale,
+        "job_id": reel.get("job_id"),
+        "error": reel.get("error"),
+    }
+
+
+@router.delete("/projects/{project_id}/episodes/{episode_id}/reel")
+async def delete_reel(
+    project_id: int,
+    episode_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """릴스 삭제."""
+    episode = db.query(Episode).filter(
+        Episode.id == episode_id, Episode.project_id == project_id,
+    ).first()
+    if not episode:
+        raise HTTPException(status_code=404, detail="Episode not found")
+
+    gs = dict(episode.gate_status or {})
+    reel = gs.get("reel", {})
+    path = reel.get("path")
+
+    # 파일 삭제
+    if path:
+        local = Path(LOCAL_STORAGE_DIR) / path.replace("/storage/", "")
+        if local.exists():
+            local.unlink()
+
+    gs["reel"] = {"status": "none"}
+    from sqlalchemy.orm.attributes import flag_modified
+    episode.gate_status = gs
+    flag_modified(episode, "gate_status")
+    db.commit()
+
+    return {"ok": True}
