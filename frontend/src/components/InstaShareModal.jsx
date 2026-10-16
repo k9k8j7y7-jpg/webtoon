@@ -9,7 +9,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Share2, Copy, Check, Download, X } from 'lucide-react';
+import { Share2, Copy, Check, Download, X, Film } from 'lucide-react';
 import { renderCutToCanvas, composePageGrid } from '../utils/exportRenderer';
 import { collectUsedFonts, loadFontCSS, ensureFontsLoaded } from '../utils/fontEmbed';
 
@@ -126,6 +126,7 @@ export default function InstaShareModal({
   shareUrl,
   isPublic,
   onZipDownload,
+  motionVideoUrls, // [{cut_number, url}] — selected motion mp4 URLs
 }) {
   // ── 렌더링 상태 ──
   const [renderState, setRenderState] = useState('idle'); // idle | rendering | done | error
@@ -146,6 +147,9 @@ export default function InstaShareModal({
 
   // ── 크레딧 체크박스 ──
   const [showCredit, setShowCredit] = useState(() => localStorage.getItem('insta_credit') !== '0');
+
+  // ── 영상 컷만 보내기 ──
+  const [shareVideoOnly, setShareVideoOnly] = useState(false);
 
   const abortRef = useRef(null);
   const renderKeyRef = useRef(0); // 토글 전환 시 이전 렌더 무시용
@@ -296,13 +300,34 @@ export default function InstaShareModal({
   }
 
   // ── 공유 실행 ──
-  function handleShare() {
-    const files = filesRef.current;
-    if (!files.length) return;
+  async function handleShare() {
     setShareError(null);
 
+    let shareFiles;
+    if (shareVideoOnly && (motionVideoUrls || []).length > 0) {
+      // 영상 MP4 파일 다운로드 → File 변환
+      try {
+        shareFiles = [];
+        for (const mv of motionVideoUrls) {
+          const resp = await fetch(mv.url);
+          const blob = await resp.blob();
+          shareFiles.push(new File([blob], `ezitoon_cut${mv.cut_number}.mp4`, { type: 'video/mp4' }));
+        }
+        if (!navigator.canShare?.({ files: shareFiles })) {
+          setShareError('이 기기에서 영상 공유를 지원하지 않아요');
+          return;
+        }
+      } catch (e) {
+        setShareError('영상 파일 준비 실패');
+        return;
+      }
+    } else {
+      shareFiles = filesRef.current;
+      if (!shareFiles.length) return;
+    }
+
     navigator.share({
-      files,
+      files: shareFiles,
       title: episodeTitle || 'EziToon 웹툰',
     }).then(() => {
       onClose();
@@ -398,6 +423,28 @@ export default function InstaShareModal({
               크레딧 표시 ({'\u00A9'} {nickname || '작가'} · EziToon)
             </span>
           </label>
+
+          {/* 영상 컷만 보내기 토글 */}
+          {(motionVideoUrls || []).length > 0 && isShareSupported && (
+            <div className="bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-700 rounded-xl p-3 space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={shareVideoOnly}
+                  onChange={(e) => setShareVideoOnly(e.target.checked)}
+                  className="w-4 h-4 rounded border-violet-300 dark:border-violet-600 text-violet-500 focus:ring-violet-500/50"
+                />
+                <span className="text-xs font-bold text-violet-700 dark:text-violet-300 flex items-center gap-1">
+                  <Film size={12} /> 영상 컷만 보내기 ({motionVideoUrls.length}개)
+                </span>
+              </label>
+              {shareVideoOnly && (
+                <p className="text-[10px] text-violet-500 dark:text-violet-400">
+                  인스타 → 릴스로 받아져요. 이미지 대신 MP4 파일을 보내요.
+                </p>
+              )}
+            </div>
+          )}
 
           {/* 렌더링 진행 */}
           {renderState === 'rendering' && (

@@ -4,7 +4,9 @@ import api, { pollJob } from '../../api/client';
 import JobProgress from '../JobProgress';
 import BubbleOverlay, { BubbleMiniIcon, STYLE_ORDER, STYLE_LABELS } from '../BubbleOverlay';
 import { resolveBubbleStyle } from '../../utils/bubbleMapping';
-import { Image, RefreshCw, RotateCcw, Download, Check, AlertTriangle, MessageSquare, Save, X, ZoomIn, ChevronLeft, ChevronRight, ChevronDown, Pencil, SlidersHorizontal, ExternalLink, LayoutGrid, Share2 } from 'lucide-react';
+import { Image, RefreshCw, RotateCcw, Download, Check, AlertTriangle, MessageSquare, Save, X, ZoomIn, ChevronLeft, ChevronRight, ChevronDown, Pencil, SlidersHorizontal, ExternalLink, LayoutGrid, Share2, Film } from 'lucide-react';
+import MotionModal from '../MotionModal';
+import MotionPicker from '../MotionPicker';
 import CutEditor from '../CutEditor';
 import SfxLayer from '../SfxLayer';
 import EffectLayer from '../EffectLayer';
@@ -24,19 +26,31 @@ import { useAuth } from '../../contexts/AuthContext';
 // 에피소드 비율 "9:16" → CSS aspect-ratio "9 / 16" (미설정 = 기존 에피소드 1:1)
 const cssAspect = (ratio) => (ratio || '1:1').replace(':', ' / ');
 
-function CutImageWithBubbles({ cut, imageUrl, onZoom, products, aspectRatio }) {
+function CutImageWithBubbles({ cut, imageUrl, onZoom, products, aspectRatio, resolveUrl }) {
   const containerRef = useRef(null);
-  const imgRef = useRef(null);
+  const mediaRef = useRef(null);
+  const [videoError, setVideoError] = useState(false);
   // 오버레이 박스 = 틀 안에 object-contain으로 실제 그려진 이미지 영역 (틀과 이미지 비율이 달라도 말풍선 위치 정합)
   const [dims, setDims] = useState({ w: 0, h: 0, x: 0, y: 0 });
 
+  // 모션 영상 판정
+  const motion = cut.motion || {};
+  const selectedCandidate = motion.selected && (motion.candidates || []).find(c => c.id === motion.selected);
+  const reducedMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+  const videoSrc = selectedCandidate?.path && !reducedMotion && !videoError
+    ? (resolveUrl ? resolveUrl(selectedCandidate.path) : `${(typeof window !== 'undefined' && (import.meta.env.VITE_API_URL || '/WEBTOON')) || '/WEBTOON'}${selectedCandidate.path}`)
+    : null;
+
   const measure = useCallback(() => {
     const el = containerRef.current;
-    const img = imgRef.current;
-    if (!el || !img || !img.naturalWidth) return;
+    const m = mediaRef.current;
+    if (!el || !m) return;
+    const nw = m.naturalWidth || m.videoWidth || 0;
+    const nh = m.naturalHeight || m.videoHeight || 0;
+    if (!nw) return;
     const cw = el.clientWidth, ch = el.clientHeight;
-    const scale = Math.min(cw / img.naturalWidth, ch / img.naturalHeight);
-    const w = img.naturalWidth * scale, h = img.naturalHeight * scale;
+    const scale = Math.min(cw / nw, ch / nh);
+    const w = nw * scale, h = nh * scale;
     setDims({ w, h, x: (cw - w) / 2, y: (ch - h) / 2 });
   }, []);
 
@@ -50,13 +64,26 @@ function CutImageWithBubbles({ cut, imageUrl, onZoom, products, aspectRatio }) {
 
   return (
     <div ref={containerRef} className="relative bg-gray-100 dark:bg-zinc-800 group/img overflow-hidden" style={{ aspectRatio: cssAspect(aspectRatio) }}>
-      <img
-        ref={imgRef}
-        src={imageUrl}
-        alt={`컷 ${cut.cut_number}`}
-        className={`w-full h-full object-contain ${cut.status === 'invalidated' ? 'opacity-50' : ''}`}
-        onLoad={measure}
-      />
+      {videoSrc ? (
+        <video
+          ref={mediaRef}
+          src={videoSrc}
+          poster={imageUrl}
+          autoPlay muted loop playsInline
+          preload="metadata"
+          className={`w-full h-full object-contain ${cut.status === 'invalidated' ? 'opacity-50' : ''}`}
+          onLoadedMetadata={measure}
+          onError={() => setVideoError(true)}
+        />
+      ) : (
+        <img
+          ref={mediaRef}
+          src={imageUrl}
+          alt={`컷 ${cut.cut_number}`}
+          className={`w-full h-full object-contain ${cut.status === 'invalidated' ? 'opacity-50' : ''}`}
+          onLoad={measure}
+        />
+      )}
       <div className="absolute pointer-events-none" style={{ left: dims.x, top: dims.y, width: dims.w, height: dims.h }}>
       {/* 제품 오버레이 */}
       {dims.w > 0 && products?.length > 0 && (
@@ -116,23 +143,40 @@ function CutImageWithBubbles({ cut, imageUrl, onZoom, products, aspectRatio }) {
 }
 
 // ── 라이트박스: 이미지 + SVG 말풍선 오버레이 ──
-function LightboxImageWithBubbles({ cut, imgSrc, products }) {
+function LightboxImageWithBubbles({ cut, imgSrc, products, resolveUrl }) {
   const containerRef = useRef(null);
   const [dims, setDims] = useState({ w: 0, h: 0 });
+  const [videoError, setVideoError] = useState(false);
 
-  const handleImageLoad = useCallback((e) => {
-    const img = e.target;
-    setDims({ w: img.clientWidth, h: img.clientHeight });
+  const handleMediaLoad = useCallback((e) => {
+    const m = e.target;
+    setDims({ w: m.clientWidth, h: m.clientHeight });
   }, []);
+
+  const motion = cut.motion || {};
+  const sel = motion.selected && (motion.candidates || []).find(c => c.id === motion.selected);
+  const reducedMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+  const videoSrc = sel?.path && !reducedMotion && !videoError && resolveUrl ? resolveUrl(sel.path) : null;
 
   return (
     <div ref={containerRef} className="relative inline-block">
-      <img
-        src={imgSrc}
-        alt={`컷 ${cut.cut_number} 미리보기`}
-        className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg shadow-2xl"
-        onLoad={handleImageLoad}
-      />
+      {videoSrc ? (
+        <video
+          src={videoSrc}
+          poster={imgSrc}
+          autoPlay muted loop playsInline preload="metadata"
+          className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg shadow-2xl"
+          onLoadedMetadata={handleMediaLoad}
+          onError={() => setVideoError(true)}
+        />
+      ) : (
+        <img
+          src={imgSrc}
+          alt={`컷 ${cut.cut_number} 미리보기`}
+          className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg shadow-2xl"
+          onLoad={handleMediaLoad}
+        />
+      )}
       {dims.w > 0 && products?.length > 0 && (
         <ProductLayer productItems={cut.product_items} products={products} width={dims.w} height={dims.h} />
       )}
@@ -177,6 +221,10 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
   const [instaShareOpen, setInstaShareOpen] = useState(false);
   const [epMeta, setEpMeta] = useState(null); // { title, is_public, share_token }
   const { user } = useAuth();
+  const [motionModalCut, setMotionModalCut] = useState(null); // 모션 모달 열린 컷
+  const [motionPickerCut, setMotionPickerCut] = useState(null); // 모션 피커 열린 컷
+  const [motionJobs, setMotionJobs] = useState({}); // { cut_id: job_id }
+  const [characters, setCharacters] = useState([]); // 에피소드 캐릭터 목록
 
   const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
 
@@ -205,10 +253,18 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
     } catch { /* PublishBar가 별도 호출하므로 실패해도 무관 */ }
   };
 
+  const loadCharacters = async () => {
+    try {
+      const { data } = await api.get(`/projects/${projectId}/episodes/${episodeId}/characters`);
+      setCharacters(data);
+    } catch { /* 무시 */ }
+  };
+
   const loadAllData = async () => {
     await loadCuts();
-    loadProducts(); // 광고 아니면 404 — 실패해도 무관
+    loadProducts();
     loadEpMeta();
+    loadCharacters();
   };
 
   const { loading: initialLoading, error: loadError, retry: retryLoad } = useGateLoad(loadAllData);
@@ -556,6 +612,37 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
   const pendingCuts = cuts.filter(c => c.status === 'pending' || c.status === 'invalidated');
   const hasImages = cuts.some(c => c.image_url);
 
+  // ── 모션 헬퍼 ──
+  const getMotion = (cut) => cut.motion || (cut.spec?.motion) || {};
+  const motionStatus = (cut) => getMotion(cut).status || 'none';
+
+  const handleMotionStarted = async (cutId, jobId) => {
+    setMotionJobs(prev => ({ ...prev, [cutId]: jobId }));
+    try {
+      await pollJob(jobId, () => {});
+    } catch { /* job lost 등 */ }
+    setMotionJobs(prev => { const n = { ...prev }; delete n[cutId]; return n; });
+    setCacheBuster(Date.now());
+    await loadCuts();
+    window.dispatchEvent(new Event('packets:refresh'));
+  };
+
+  const handleMotionSelected = () => {
+    setCacheBuster(Date.now());
+    loadCuts();
+  };
+
+  const handleMotionDeleted = () => {
+    setCacheBuster(Date.now());
+    loadCuts();
+  };
+
+  const handleMotionRemake = (cut) => {
+    setMotionModalCut(cut);
+  };
+
+  const hasMotionCuts = cuts.some(c => getMotion(c).selected);
+
   const dialogueTypeLabel = { speech: '대사', narration: '나레이션', thought: '독백', sfx: '효과음' };
 
   // ── B. 영문 → 한글 표시 매핑 ──
@@ -658,6 +745,32 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                 >
                   <Download size={12} /> PNG
                 </button>
+                {hasMotionCuts && (
+                  <button
+                    onClick={async () => {
+                      const motionCuts = cuts.filter(c => getMotion(c).selected);
+                      if (!motionCuts.length) return;
+                      for (const c of motionCuts) {
+                        try {
+                          const { data } = await api.get(`/cuts/${c.cut_id}/motion/export`);
+                          const url = data.video_url ? imageUrl(data.video_url) : null;
+                          if (!url) continue;
+                          const resp = await fetch(url);
+                          const blob = await resp.blob();
+                          const a = document.createElement('a');
+                          a.href = URL.createObjectURL(blob);
+                          a.download = `cut_${c.cut_number}.mp4`;
+                          a.click();
+                          URL.revokeObjectURL(a.href);
+                          if (motionCuts.length > 1) await new Promise(r => setTimeout(r, 300));
+                        } catch { /* skip */ }
+                      }
+                    }}
+                    className="flex flex-1 sm:flex-none items-center justify-center gap-1 h-10 sm:h-auto px-2 sm:px-3 py-2 bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 rounded-full text-xs font-bold whitespace-nowrap hover:bg-violet-100 dark:hover:bg-violet-900/30 transition-colors shadow-sm border border-violet-200 dark:border-violet-500/30"
+                  >
+                    <Film size={12} /> 움직인 컷 MP4
+                  </button>
+                )}
                 <div className="relative flex">
                   <button
                     onClick={() => setA4Mode(a4Mode ? null : 'grid')}
@@ -789,6 +902,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                               onZoom={() => setPreviewIndex(cutIdx)}
                               products={products}
                               aspectRatio={gateStatus?.aspect_ratio}
+                              resolveUrl={imageUrl}
                             />
                           </div>
                         );
@@ -817,6 +931,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                   onZoom={(e) => { e.stopPropagation(); setPreviewIndex(cuts.indexOf(cut)); }}
                   products={products}
                   aspectRatio={gateStatus?.aspect_ratio}
+                  resolveUrl={imageUrl}
                 />
               ) : (
                 <div className="bg-gray-50 dark:bg-zinc-800 flex items-center justify-center" style={{ aspectRatio: cssAspect(gateStatus?.aspect_ratio) }}>
@@ -884,6 +999,81 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                     )}
                   </div>
                 )}
+                {/* 모션 상태 표시 */}
+                {cut.image_url && (() => {
+                  const ms = motionStatus(cut);
+                  const isRunning = ms === 'queued' || ms === 'running' || !!motionJobs[cut.cut_id];
+                  const isDone = ms === 'done' && !getMotion(cut).selected;
+                  const isSelected = ms === 'done' && !!getMotion(cut).selected;
+                  const hasPhotoReal = (cut.characters || []).some(c => {
+                    const ch = characters.find(x => x.ref_key === (typeof c === 'string' ? c : c.character_id));
+                    return ch?.is_photo_real;
+                  });
+
+                  if (isRunning) {
+                    return (
+                      <div className="mt-1 flex items-center gap-1 text-[10px] text-violet-500 dark:text-violet-400 font-bold px-1">
+                        <span className="animate-spin"><Film size={10} /></span> 영상 만드는 중…
+                      </div>
+                    );
+                  }
+                  if (isDone) {
+                    return (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setMotionPickerCut(cut); }}
+                        className="mt-1 flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 animate-pulse hover:bg-violet-200 dark:hover:bg-violet-900/50 transition-colors"
+                      >
+                        <Film size={10} /> ▶ 후보 고르기
+                      </button>
+                    );
+                  }
+                  if (isSelected) {
+                    const selCand = (getMotion(cut).candidates || []).find(x => x.id === getMotion(cut).selected);
+                    return (
+                      <div className="mt-1 flex items-center gap-1">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setMotionPickerCut(cut); }}
+                          className="flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full bg-violet-50 dark:bg-violet-900/20 text-violet-500 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/30 transition-colors"
+                        >
+                          <Film size={10} /> ▶ 영상
+                        </button>
+                        {selCand?.path && (
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                const { data } = await api.get(`/cuts/${cut.cut_id}/motion/export`);
+                                const url = data.video_url ? imageUrl(data.video_url) : imageUrl(selCand.path);
+                                const resp = await fetch(url);
+                                const blob = await resp.blob();
+                                const a = document.createElement('a');
+                                a.href = URL.createObjectURL(blob);
+                                a.download = `cut_${cut.cut_number}.mp4`;
+                                a.click();
+                                URL.revokeObjectURL(a.href);
+                              } catch { /* 폴백: 원본 mp4 */ }
+                            }}
+                            title="영상 받기 (MP4)"
+                            className="flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-1 rounded-full bg-gray-100 dark:bg-zinc-800 text-gray-500 dark:text-zinc-400 hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors"
+                          >
+                            <Download size={9} />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  }
+                  // none — 움직이게 버튼
+                  return (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setMotionModalCut(cut); }}
+                      disabled={!!job || hasPhotoReal}
+                      title={hasPhotoReal ? '실사 캐릭터 컷은 아직 지원하지 않아요' : '컷을 움직이게 만들기'}
+                      className="mt-1 flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full bg-gray-50 dark:bg-zinc-800/50 text-gray-400 dark:text-zinc-500 hover:bg-violet-50 dark:hover:bg-violet-900/20 hover:text-violet-500 dark:hover:text-violet-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <Film size={10} /> 움직이게
+                    </button>
+                  );
+                })()}
               </div>
             </div>
           ))}
@@ -943,7 +1133,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
 
             {/* 이미지 + 말풍선 SVG 오버레이 */}
             <div className="relative max-h-[90vh] max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
-              <LightboxImageWithBubbles cut={cut} imgSrc={imgSrc} products={products} />
+              <LightboxImageWithBubbles cut={cut} imgSrc={imgSrc} products={products} resolveUrl={imageUrl} />
             </div>
 
             {/* 하단 정보 */}
@@ -1373,6 +1563,27 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
         />
       )}
 
+      {/* 모션 모달 */}
+      {motionModalCut && (
+        <MotionModal
+          cut={motionModalCut}
+          characters={characters}
+          onClose={() => setMotionModalCut(null)}
+          onStarted={(jobId) => handleMotionStarted(motionModalCut.cut_id, jobId)}
+        />
+      )}
+
+      {/* 모션 피커 */}
+      {motionPickerCut && (
+        <MotionPicker
+          cut={motionPickerCut}
+          onClose={() => setMotionPickerCut(null)}
+          onSelected={handleMotionSelected}
+          onDeleted={handleMotionDeleted}
+          onRemake={() => handleMotionRemake(motionPickerCut)}
+        />
+      )}
+
       {/* 인스타 공유 모달 */}
       <InstaShareModal
         open={instaShareOpen}
@@ -1387,6 +1598,13 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
         shareUrl={epMeta?.share_token ? `${window.location.origin}/WEBTOON/view/${epMeta.share_token}` : ''}
         isPublic={epMeta?.is_public || false}
         onZipDownload={() => { setInstaShareOpen(false); handleExport('instagram_carousel'); }}
+        motionVideoUrls={cuts.filter(c => getMotion(c).selected).map(c => {
+          const m = getMotion(c);
+          const ep = m.export_path;
+          const sel = (m.candidates || []).find(x => x.id === m.selected);
+          const url = ep || sel?.path;
+          return url ? { cut_number: c.cut_number, url: imageUrl(url), cut_id: c.cut_id } : null;
+        }).filter(Boolean)}
       />
     </div>
   );

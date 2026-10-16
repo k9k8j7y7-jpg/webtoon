@@ -27,30 +27,51 @@ function resolveUrl(path) {
 
 function CutViewer({ cut, products }) {
   const [dims, setDims] = useState({ w: 0, h: 0 });
-  const imgRef = useRef(null);
+  const mediaRef = useRef(null);
+  const [videoError, setVideoError] = useState(false);
 
   const updateDims = useCallback(() => {
-    if (imgRef.current) {
-      setDims({ w: imgRef.current.clientWidth, h: imgRef.current.clientHeight });
+    if (mediaRef.current) {
+      setDims({ w: mediaRef.current.clientWidth, h: mediaRef.current.clientHeight });
     }
   }, []);
 
   useEffect(() => {
     const obs = new ResizeObserver(updateDims);
-    if (imgRef.current) obs.observe(imgRef.current);
+    if (mediaRef.current) obs.observe(mediaRef.current);
     return () => obs.disconnect();
   }, [updateDims]);
 
+  // 모션 영상 URL (selected가 있고, prefers-reduced-motion이 아니면)
+  const motion = cut.motion || {};
+  const selectedCandidate = motion.selected && (motion.candidates || []).find(c => c.id === motion.selected);
+  const reducedMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+  const videoUrl = selectedCandidate?.path && !reducedMotion && !videoError ? resolveUrl(selectedCandidate.path) : null;
+
   return (
     <div className="relative w-full">
-      <img
-        ref={imgRef}
-        src={resolveUrl(cut.image_url)}
-        alt={`컷 ${cut.cut_number}`}
-        className="w-full block"
-        onLoad={updateDims}
-        draggable={false}
-      />
+      {videoUrl ? (
+        <video
+          ref={mediaRef}
+          src={videoUrl}
+          poster={resolveUrl(cut.image_url)}
+          autoPlay muted loop playsInline
+          preload="metadata"
+          className="w-full block"
+          onLoadedMetadata={updateDims}
+          onError={() => setVideoError(true)}
+          draggable={false}
+        />
+      ) : (
+        <img
+          ref={mediaRef}
+          src={resolveUrl(cut.image_url)}
+          alt={`컷 ${cut.cut_number}`}
+          className="w-full block"
+          onLoad={updateDims}
+          draggable={false}
+        />
+      )}
       {dims.w > 0 && (
         <>
           <ProductLayer productItems={cut.product_items || []} products={products || []} width={dims.w} height={dims.h} />

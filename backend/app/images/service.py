@@ -453,6 +453,14 @@ async def generate_cut_image(
         "version": version,
     }
     updated_spec["status"] = "approved"
+
+    # 이미지 재생성 → motion 자동 삭제 (이미지 불일치 방지)
+    if updated_spec.get("motion", {}).get("status") not in (None, "none"):
+        from app.motion.service import _delete_video_files
+        _delete_video_files(episode_id, cut.cut_id)
+        updated_spec["motion"] = {"status": "none"}
+        logger.info("Motion auto-deleted on image regen: cut=%s", cut.cut_id)
+
     cut.spec = updated_spec
 
     # 9. cut_asset_refs 재작성 (무효화 인덱스)

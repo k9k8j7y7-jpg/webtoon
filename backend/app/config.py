@@ -63,6 +63,14 @@ class Settings(BaseSettings):
     TOSS_CLIENT_KEY: str = ""
     TOSS_SECRET_KEY: str = ""
 
+    # Motion (Veo video generation)
+    VIDEO_MODEL: str = "veo-3.1-lite-generate-preview"
+    MOTION_PACKETS: int = 4
+    MOTION_CANDIDATES: int = 2
+    MOTION_CLIP_SEC: float = 3.0
+    MOTION_MAX_RETRY: int = 1
+    MOTION_CONCURRENCY: int = 1
+
     # Web Push (VAPID) — 비어 있으면 푸시 발송을 건너뜀(알림센터 기록은 그대로)
     VAPID_PUBLIC: str = ""
     VAPID_PRIVATE: str = ""

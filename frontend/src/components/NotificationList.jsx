@@ -1,10 +1,10 @@
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, MessageSquare, Bell } from 'lucide-react';
+import { BookOpen, MessageSquare, Bell, Film } from 'lucide-react';
 import api from '../api/client';
 import { Avatar } from './AuthorLink';
 import timeAgo from '../utils/timeAgo';
 
-const TYPE_ICON = { new_episode: BookOpen, inquiry_answer: MessageSquare };
+const TYPE_ICON = { new_episode: BookOpen, inquiry_answer: MessageSquare, motion_done: Film };
 
 export const refreshUnread = () => window.dispatchEvent(new Event('notifications:refresh'));
 

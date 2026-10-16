@@ -223,6 +223,7 @@ async def list_cuts(
             "emphasis": (c.spec or {}).get("emphasis"),
             "prompt_override": bool((c.spec or {}).get("prompt_override")),
             "drama_level": (c.spec or {}).get("drama_level"),
+            "motion": (c.spec or {}).get("motion"),
         }
         for c in cuts
     ]

@@ -160,6 +160,7 @@ def get_viewer_data(
                 "product_items": (c.spec or {}).get("product_items", []),
                 "pngbubble_items": (c.spec or {}).get("pngbubble_items", []),
                 "characters": (c.spec or {}).get("characters", []),
+                "motion": (c.spec or {}).get("motion"),
             }
             for c in cuts
         ],

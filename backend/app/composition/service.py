@@ -494,6 +494,7 @@ def compose_dialogue_on_image(
     base_image: Image.Image,
     dialogue: list[dict],
     cut_spec: dict | None = None,
+    return_overlay: bool = False,
 ) -> Image.Image:
     """베이스 이미지 위에 대사 말풍선을 합성한다.
 
@@ -623,6 +624,8 @@ def compose_dialogue_on_image(
 
         cursor_y_bottom = by - BUBBLE_GAP
 
+    if return_overlay:
+        return overlay  # RGBA 오버레이만 반환 (motion export용)
     result = Image.alpha_composite(img, overlay)
     return result.convert("RGB")
 
