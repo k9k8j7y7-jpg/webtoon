@@ -13,6 +13,7 @@ mkdirSync(OUT, { recursive: true });
 const VIEWER_TOKEN = '65cb2832-881d-4863-8fb4-5c7044384858'; // ep30 자연바람 아로마 헤어팩 광고
 const EP_9x16 = '/projects/5/episodes/36/workflow'; // 장소 테스트2
 const EP_1x1 = '/projects/5/episodes/5/workflow';   // 쿨링 헤어팩 다이어리 (1:1)
+const EP_REEL = '/projects/5/episodes/39/workflow?gate=5'; // 캐릭터 테스트 (릴스)
 const WIDTHS = [375, 412, 1280];
 const THEMES = ['dark', 'light'];
 
@@ -82,6 +83,29 @@ async function overflowX(page) {
       if (clicked) {
         await page.waitForTimeout(2500);
         await shot('gate4', true);
+      }
+
+      // 릴스 버튼·드롭다운 (모바일만, 다크만)
+      if (theme === 'dark' && mobile) {
+        await page.goto(`${BASE}${EP_REEL}`, { waitUntil: 'networkidle' });
+        await page.waitForTimeout(4000);
+        // 릴스 버튼 스크롤
+        await page.evaluate(() => {
+          const b = document.querySelector('[data-reel-btn]');
+          if (b) b.scrollIntoView({ block: 'center' });
+        });
+        await page.waitForTimeout(300);
+        await shot('reel-buttons');
+        // 드롭다운 열기
+        const reelBtn = await page.$('[data-reel-btn]');
+        if (reelBtn) {
+          await reelBtn.click();
+          await page.waitForTimeout(600);
+          await shot('reel-dropdown');
+          // 닫기
+          await page.click('.fixed.inset-0', { timeout: 1000 }).catch(() => {});
+          await page.waitForTimeout(300);
+        }
       }
 
       // 공개 뷰어 (항상 다크 — 변화 없음 확인)

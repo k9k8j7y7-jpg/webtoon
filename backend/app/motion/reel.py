@@ -211,6 +211,7 @@ async def generate_reel(
         finally:
             db.close()
 
+        logger.info("Reel start ep=%d cuts=%d hash=%s", episode_id, len(cut_data), source_hash)
         total = len(cut_data) + 1  # +1 for credit
         if job:
             job.progress = {"done": 0, "total": total, "stage": "preparing clips"}
