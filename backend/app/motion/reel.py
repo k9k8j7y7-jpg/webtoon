@@ -169,6 +169,7 @@ async def generate_reel(
     from app.storyboard.models import Cut, GenerationLog
     from app.projects.models import Episode
     from app.social.service import notify
+    from app.push.service import send_push
     from app.packets.service import refund_packets
     from app.jobs import get_job
     from sqlalchemy.orm.attributes import flag_modified
@@ -201,7 +202,12 @@ async def generate_reel(
                 })
 
             episode = db.query(Episode).filter(Episode.id == episode_id).first()
-            source_hash = _compute_source_hash(cut_data)
+            # _compute_source_hash expects nested "motion" dict
+            hash_input = [
+                {"image_url": cd["image_url"], "motion": {"selected": cd["motion_selected"], "export_path": cd["motion_export_path"]}}
+                for cd in cut_data
+            ]
+            source_hash = _compute_source_hash(hash_input)
         finally:
             db.close()
 
@@ -327,7 +333,7 @@ async def generate_reel(
             )
             db2.add(log)
 
-            notify(
+            n = notify(
                 db=db2,
                 user_id=user_id,
                 type="reel_done",
@@ -337,6 +343,14 @@ async def generate_reel(
             )
 
             db2.commit()
+            # BackgroundTasks 안이라 send_push 직접 호출
+            try:
+                send_push([user_id], "reel_done", "릴스 영상이 완성됐어요",
+                          f"{len(cut_data)}컷 · {gs['reel']['duration_sec']}초",
+                          f"/projects/{project_id}/episodes/{episode_id}/workflow?gate=5",
+                          n.id if n else None)
+            except Exception:
+                logger.warning("reel_done push failed", exc_info=True)
             logger.info("Reel done: %s (%d KB, %d cuts)", reel_url, len(reel_bytes) // 1024, len(cut_data))
         finally:
             db2.close()
@@ -357,7 +371,7 @@ async def generate_reel(
                 ep.gate_status = gs
                 flag_modified(ep, "gate_status")
 
-            notify(
+            n = notify(
                 db=db3,
                 user_id=user_id,
                 type="reel_done",
@@ -366,6 +380,13 @@ async def generate_reel(
                 link=f"/projects/{project_id}/episodes/{episode_id}/workflow?gate=5",
             )
             db3.commit()
+            try:
+                send_push([user_id], "reel_done", "릴스 생성에 실패해 패킷을 돌려드렸어요",
+                          str(e)[:100],
+                          f"/projects/{project_id}/episodes/{episode_id}/workflow?gate=5",
+                          n.id if n else None)
+            except Exception:
+                logger.warning("reel_done push failed", exc_info=True)
         finally:
             db3.close()
 

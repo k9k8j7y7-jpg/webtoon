@@ -710,7 +710,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
         {/* 모바일: 제목 / 생성 버튼 / 내보내기 4개를 세로로 쌓음 (가로 배치 시 제목이 폭 0으로 눌려 글자 단위로 꺾이던 문제) */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
           <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2">
-            <Image size={20} className="text-indigo-500 shrink-0" /> 게이트 5 — 이미지 검수
+            <Image size={20} className="text-indigo-500 shrink-0" /> 웹툰 만들기
           </h2>
           <div className="flex flex-col gap-2 sm:flex-row">
             {pendingCuts.length > 0 && (
@@ -751,32 +751,32 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
               );
             })()}
             {hasImages && (
-              <div className="grid grid-cols-4 gap-2 sm:flex sm:gap-1">
+              <div className="flex flex-wrap gap-2 sm:gap-1">
                 <button
                   onClick={() => handleExport('vertical_single')}
                   disabled={exporting}
-                  className="flex flex-1 sm:flex-none items-center justify-center gap-1 h-10 sm:h-auto px-2 sm:px-3 py-2 bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-gray-300 rounded-full text-xs font-bold whitespace-nowrap hover:bg-gray-200 dark:hover:bg-white/20 transition-colors shadow-sm disabled:opacity-50 dark:border dark:border-white/10"
+                  className="flex items-center gap-1 h-10 sm:h-auto px-3 py-2 bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-gray-300 rounded-full text-xs font-bold whitespace-nowrap hover:bg-gray-200 dark:hover:bg-white/20 transition-colors shadow-sm disabled:opacity-50 dark:border dark:border-white/10"
                 >
                   <Download size={12} /> 세로
                 </button>
                 <button
                   onClick={() => handleExport('instagram_carousel')}
                   disabled={exporting}
-                  className="flex flex-1 sm:flex-none items-center justify-center gap-1 h-10 sm:h-auto px-2 sm:px-3 py-2 bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-gray-300 rounded-full text-xs font-bold whitespace-nowrap hover:bg-gray-200 dark:hover:bg-white/20 transition-colors shadow-sm disabled:opacity-50 dark:border dark:border-white/10"
+                  className="flex items-center gap-1 h-10 sm:h-auto px-3 py-2 bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-gray-300 rounded-full text-xs font-bold whitespace-nowrap hover:bg-gray-200 dark:hover:bg-white/20 transition-colors shadow-sm disabled:opacity-50 dark:border dark:border-white/10"
                 >
                   <Download size={12} /> 인스타
                 </button>
                 <button
                   onClick={() => setInstaShareOpen(true)}
                   disabled={exporting}
-                  className="flex flex-1 sm:flex-none items-center justify-center gap-1 h-10 sm:h-auto px-2 sm:px-3 py-2 bg-gradient-to-r from-purple-500/20 to-pink-500/20 dark:from-purple-500/30 dark:to-pink-500/30 text-purple-700 dark:text-purple-300 rounded-full text-xs font-bold whitespace-nowrap hover:from-purple-500/30 hover:to-pink-500/30 dark:hover:from-purple-500/40 dark:hover:to-pink-500/40 transition-colors shadow-sm disabled:opacity-50 border border-purple-200 dark:border-purple-500/30"
+                  className="flex items-center gap-1 h-10 sm:h-auto px-3 py-2 bg-gradient-to-r from-purple-500/20 to-pink-500/20 dark:from-purple-500/30 dark:to-pink-500/30 text-purple-700 dark:text-purple-300 rounded-full text-xs font-bold whitespace-nowrap hover:from-purple-500/30 hover:to-pink-500/30 dark:hover:from-purple-500/40 dark:hover:to-pink-500/40 transition-colors shadow-sm disabled:opacity-50 border border-purple-200 dark:border-purple-500/30"
                 >
                   <Share2 size={12} /> 인스타 공유
                 </button>
                 <button
                   onClick={() => handleExport('png_cuts')}
                   disabled={exporting}
-                  className="flex flex-1 sm:flex-none items-center justify-center gap-1 h-10 sm:h-auto px-2 sm:px-3 py-2 bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-gray-300 rounded-full text-xs font-bold whitespace-nowrap hover:bg-gray-200 dark:hover:bg-white/20 transition-colors shadow-sm disabled:opacity-50 dark:border dark:border-white/10"
+                  className="flex items-center gap-1 h-10 sm:h-auto px-3 py-2 bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-gray-300 rounded-full text-xs font-bold whitespace-nowrap hover:bg-gray-200 dark:hover:bg-white/20 transition-colors shadow-sm disabled:opacity-50 dark:border dark:border-white/10"
                 >
                   <Download size={12} /> PNG
                 </button>
@@ -801,7 +801,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                         } catch { /* skip */ }
                       }
                     }}
-                    className="flex flex-1 sm:flex-none items-center justify-center gap-1 h-10 sm:h-auto px-2 sm:px-3 py-2 bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 rounded-full text-xs font-bold whitespace-nowrap hover:bg-violet-100 dark:hover:bg-violet-900/30 transition-colors shadow-sm border border-violet-200 dark:border-violet-500/30"
+                    className="flex items-center gap-1 h-10 sm:h-auto px-3 py-2 bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 rounded-full text-xs font-bold whitespace-nowrap hover:bg-violet-100 dark:hover:bg-violet-900/30 transition-colors shadow-sm border border-violet-200 dark:border-violet-500/30"
                   >
                     <Film size={12} /> 움직인 컷 MP4
                   </button>
@@ -822,13 +822,19 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                   }
                   if (isDone) {
                     return (
-                      <div className="relative">
+                      <>
                         <button
+                          data-reel-btn
                           onClick={() => { setReelDropdown(!reelDropdown); }}
-                          className="flex items-center gap-1 h-10 sm:h-auto px-2 sm:px-3 py-2 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-full text-xs font-bold whitespace-nowrap hover:bg-rose-100 dark:hover:bg-rose-900/30 transition-colors shadow-sm border border-rose-200 dark:border-rose-500/30"
+                          className="flex items-center gap-1 h-10 sm:h-auto px-3 py-2 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-full text-xs font-bold whitespace-nowrap hover:bg-rose-100 dark:hover:bg-rose-900/30 transition-colors shadow-sm border border-rose-200 dark:border-rose-500/30"
+                          title={isStale ? '컷이 바뀌었어요 — 다시 만들기' : undefined}
                         >
-                          <Clapperboard size={12} /> 릴스 영상 <ChevronDown size={10} />
-                          {isStale && <span className="ml-1 px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400 text-[8px]">컷 변경</span>}
+                          <span className="relative shrink-0">
+                            <Clapperboard size={12} />
+                            {isStale && <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-500" />}
+                          </span>
+                          릴스 영상
+                          <ChevronDown data-reel-chevron size={10} className="shrink-0" />
                         </button>
                         {reelDropdown && createPortal(
                           <div
@@ -840,6 +846,9 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                               style={{ top: 'min(50%, 400px)', right: '1rem' }}
                               onClick={e => e.stopPropagation()}
                             >
+                              {isStale && (
+                                <p className="px-3 py-1.5 text-[11px] text-gray-400 dark:text-gray-500 leading-snug">컷이 바뀌었어요 — 다시 만들면 최신 컷으로 만들어요</p>
+                              )}
                               <button onClick={() => { setReelDropdown(false); setReelPreview(true); }}
                                 className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-700 flex items-center gap-2">
                                 <Play size={14} /> 미리보기
@@ -870,7 +879,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                           </div>,
                           document.body
                         )}
-                      </div>
+                      </>
                     );
                   }
                   // none / failed
@@ -878,7 +887,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                     <button
                       onClick={() => setReelModalOpen(true)}
                       disabled={!hasImages}
-                      className="flex flex-1 sm:flex-none items-center justify-center gap-1 h-10 sm:h-auto px-2 sm:px-3 py-2 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-full text-xs font-bold whitespace-nowrap hover:bg-rose-100 dark:hover:bg-rose-900/30 transition-colors shadow-sm border border-rose-200 dark:border-rose-500/30 disabled:opacity-50"
+                      className="flex items-center gap-1 h-10 sm:h-auto px-3 py-2 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-full text-xs font-bold whitespace-nowrap hover:bg-rose-100 dark:hover:bg-rose-900/30 transition-colors shadow-sm border border-rose-200 dark:border-rose-500/30 disabled:opacity-50"
                     >
                       <Clapperboard size={12} /> 릴스 영상
                     </button>
@@ -888,7 +897,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                   <button
                     onClick={() => setA4Mode(a4Mode ? null : 'grid')}
                     disabled={exporting}
-                    className="flex flex-1 sm:flex-none items-center justify-center gap-1 h-10 sm:h-auto px-2 sm:px-3 py-2 bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-gray-300 rounded-full text-xs font-bold whitespace-nowrap hover:bg-gray-200 dark:hover:bg-white/20 transition-colors shadow-sm disabled:opacity-50 dark:border dark:border-white/10"
+                    className="flex items-center gap-1 h-10 sm:h-auto px-3 py-2 bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-gray-300 rounded-full text-xs font-bold whitespace-nowrap hover:bg-gray-200 dark:hover:bg-white/20 transition-colors shadow-sm disabled:opacity-50 dark:border dark:border-white/10"
                   >
                     <Download size={12} /> A4
                   </button>

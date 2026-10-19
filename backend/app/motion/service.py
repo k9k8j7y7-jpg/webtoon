@@ -677,7 +677,7 @@ async def run_motion_pipeline(
 
             # 알림
             cut_number = cut.cut_number or 0
-            notify(
+            n = notify(
                 db=db,
                 user_id=user_id,
                 type="motion_done",
@@ -687,6 +687,13 @@ async def run_motion_pipeline(
             )
 
             db.commit()
+            try:
+                send_push([user_id], "motion_done", f"{cut_number}번 컷 영상이 완성됐어요",
+                          "후보 2개를 비교해서 골라보세요",
+                          f"/projects/{project_id}/episodes/{episode_id}/workflow?gate=5&cut={cut_id}",
+                          n.id if n else None)
+            except Exception:
+                logger.warning("motion_done push failed", exc_info=True)
         finally:
             db.close()
 
@@ -716,7 +723,7 @@ async def run_motion_pipeline(
                 flag_modified(cut, "spec")
 
             # 실패 알림
-            notify(
+            n = notify(
                 db=db,
                 user_id=user_id,
                 type="motion_done",
@@ -726,6 +733,13 @@ async def run_motion_pipeline(
             )
 
             db.commit()
+            try:
+                send_push([user_id], "motion_done", "영상 생성에 실패해 패킷을 돌려드렸어요",
+                          str(e)[:100],
+                          f"/projects/{project_id}/episodes/{episode_id}/workflow?gate=5&cut={cut_id}",
+                          n.id if n else None)
+            except Exception:
+                logger.warning("motion_done push failed", exc_info=True)
         finally:
             db.close()
 
