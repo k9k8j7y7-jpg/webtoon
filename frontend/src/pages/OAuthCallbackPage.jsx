@@ -22,7 +22,12 @@ export default function OAuthCallbackPage() {
     sessionStorage.removeItem('login_redirect');
 
     api.post(`/auth/${provider}/callback`, { code })
-      .then(({ data }) => login(data.access_token))
+      .then(({ data }) => {
+        if (data.welcome_packets) {
+          sessionStorage.setItem('welcome_packets', String(data.welcome_packets));
+        }
+        return login(data.access_token);
+      })
       .then(() => navigate(redirectTo, { replace: true }))
       .catch((err) => {
         const msg = err.response?.data?.detail || '로그인에 실패했습니다.';

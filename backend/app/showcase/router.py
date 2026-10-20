@@ -146,6 +146,7 @@ def get_viewer_data(
         "view_count": episode.view_count,
         "like_count": episode.like_count,
         "page_format": get_page_format(episode.gate_status or {}),
+        "reel": (episode.gate_status or {}).get("reel", {}).get("path") if (episode.gate_status or {}).get("reel", {}).get("status") == "done" else None,
         "products": [
             {"id": p.id, "name": p.name, "photo_url": p.photo_url}
             for p in ep_products if p.photo_url

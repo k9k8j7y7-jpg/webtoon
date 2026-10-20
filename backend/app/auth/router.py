@@ -6,6 +6,7 @@ from app.database import get_db
 from app.auth.jwt import create_access_token
 from app.auth.oauth import EXCHANGE_HANDLERS
 from app.users.models import User
+from app.packets.service import grant_packets
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -19,7 +20,7 @@ class AuthResponse(BaseModel):
     user: dict
 
 
-@router.post("/{provider}/callback", response_model=AuthResponse)
+@router.post("/{provider}/callback")
 async def oauth_callback(
     provider: str,
     body: OAuthCallbackRequest,
@@ -47,6 +48,7 @@ async def oauth_callback(
         .first()
     )
 
+    is_new = False
     if user is None:
         user = User(
             provider=oauth_info.provider,
@@ -57,6 +59,13 @@ async def oauth_callback(
         db.add(user)
         db.commit()
         db.refresh(user)
+        # 환영 패킷 3개 지급
+        try:
+            grant_packets(user.id, 3, db)
+            db.commit()
+        except Exception:
+            pass  # 지급 실패해도 가입은 진행
+        is_new = True
     else:
         # Update profile on login
         if oauth_info.email:
@@ -68,12 +77,13 @@ async def oauth_callback(
 
     access_token = create_access_token(user.id)
 
-    return AuthResponse(
-        access_token=access_token,
-        user={
+    return {
+        "access_token": access_token,
+        "user": {
             "id": user.id,
             "display_name": user.display_name,
             "email": user.email,
             "provider": user.provider,
         },
-    )
+        "welcome_packets": 3 if is_new else 0,
+    }

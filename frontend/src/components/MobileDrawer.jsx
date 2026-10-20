@@ -79,7 +79,7 @@ export default function MobileDrawer({ open, onClose, user, packets, unreadCount
 
               <SectionLabel>계정</SectionLabel>
               <MenuItem to="/notifications" icon={Bell} label="알림" badge={unreadCount > 0 ? `${unreadCount}` : null} />
-              <MenuItem to="/packets" icon={Package} label="패킷 충전" badge={packets?.balance != null ? `${packets.balance}패킷` : null} />
+              <MenuItem to="/packets" icon={Package} label="가격 · 패킷 충전" badge={packets?.balance != null ? `${packets.balance}패킷` : null} />
               <MenuItem to={user.nickname ? `/u/${encodeURIComponent(user.nickname)}` : '/settings'} icon={UserCircle} label="내 작가 페이지" />
               <MenuItem to="/settings" icon={Settings} label="설정" badge={user.nickname ? null : '닉네임 없음'} />
 

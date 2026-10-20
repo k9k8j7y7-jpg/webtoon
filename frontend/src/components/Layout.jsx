@@ -14,11 +14,23 @@ export default function Layout() {
   const { theme, toggleTheme } = useTheme();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [welcomeToast, setWelcomeToast] = useState(null);
   const helpRef = useRef(null);
   // 패킷 잔량 + 안 읽은 알림 수 (랜딩 헤더와 공용 훅)
   const { packets, unreadCount } = useHeaderCounts(user);
   // 이름 클릭 → 내 작가 페이지 (닉네임 없으면 설정에서 먼저 정하도록)
   const profilePath = user?.nickname ? `/u/${encodeURIComponent(user.nickname)}` : '/settings';
+
+  // 환영 패킷 토스트
+  useEffect(() => {
+    const wp = sessionStorage.getItem('welcome_packets');
+    if (wp) {
+      sessionStorage.removeItem('welcome_packets');
+      setWelcomeToast(`환영 패킷 ${wp}개를 드렸어요`);
+      const t = setTimeout(() => setWelcomeToast(null), 5000);
+      return () => clearTimeout(t);
+    }
+  }, []);
 
   // ? 드롭다운 바깥 클릭 닫기
   useEffect(() => {
@@ -35,6 +47,11 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen bg-transparent">
+      {welcomeToast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[60] bg-emerald-600 text-white px-6 py-3 rounded-full shadow-lg font-bold text-sm animate-bounce">
+          🎉 {welcomeToast}
+        </div>
+      )}
       <NoticeBar />
       <header className="bg-white/75 dark:bg-night-bg/80 backdrop-blur-md border-b border-border dark:border-night-border sticky top-0 z-50 transition-colors duration-200">
         <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">

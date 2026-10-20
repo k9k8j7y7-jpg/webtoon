@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Package, ArrowUpCircle, ArrowDownCircle, RefreshCw, CreditCard, ShoppingCart, CheckCircle, XCircle, X } from 'lucide-react';
 import api from '../api/client';
+import { PACKET_USAGE, REFUND_TEXT } from '../utils/packetUsage';
 
 const REASON_ICON = {
   generation: ArrowDownCircle,
@@ -14,6 +15,12 @@ const REASON_COLOR = {
   refund: 'text-emerald-500',
   admin_grant: 'text-comic-blue',
   purchase: 'text-comic-orange',
+};
+const PRODUCT_DESC = {
+  packet_15: { episodes: '1~2편', label: '체험' },
+  packet_30: { episodes: '3~4편', label: '시작' },
+  packet_100: { episodes: '12편', label: '인기' },
+  packet_300: { episodes: '37편', label: '대용량' },
 };
 
 export default function PacketsPage() {
@@ -257,31 +264,47 @@ export default function PacketsPage() {
           <h2 className="text-base font-bold text-ink-black dark:text-white">패킷 충전</h2>
         </div>
 
+        {/* 혜택 뱃지 */}
+        <div className="px-4 pt-4 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+          <span><span className="text-emerald-500">✓</span> 1회 결제</span>
+          <span><span className="text-emerald-500">✓</span> 유효기간 없음</span>
+          <span><span className="text-emerald-500">✓</span> 자동결제 없음</span>
+        </div>
+
         {/* 상품 카드 */}
-        <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {products.map(p => (
-            <button
-              key={p.code}
-              disabled={paying || !!selectedProduct}
-              onClick={() => selectProduct(p)}
-              className={`relative border-2 rounded-xl p-4 text-center transition-colors disabled:opacity-50 ${
-                selectedProduct?.code === p.code
-                  ? 'border-comic-blue bg-comic-blue/5 dark:bg-comic-blue/10'
-                  : 'border-border dark:border-white/10 hover:border-comic-blue dark:hover:border-comic-blue'
-              }`}
-            >
-              <div className="text-2xl font-black text-ink-black dark:text-white">{p.packets}</div>
-              <div className="text-xs font-bold text-gray-400 mb-2">패킷</div>
-              <div className="text-lg font-black text-comic-blue">
-                {p.amount.toLocaleString()}<span className="text-xs font-bold">원</span>
-              </div>
-              {p.code === 'packet_100' && (
-                <div className="absolute -top-2 -right-2 bg-comic-orange text-white text-[10px] font-black px-2 py-0.5 rounded-full">
-                  인기
+        <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {products.map(p => {
+            const desc = PRODUCT_DESC[p.code];
+            return (
+              <button
+                key={p.code}
+                disabled={paying || !!selectedProduct}
+                onClick={() => selectProduct(p)}
+                className={`relative border-2 rounded-xl p-4 text-center transition-colors disabled:opacity-50 ${
+                  selectedProduct?.code === p.code
+                    ? 'border-comic-blue bg-comic-blue/5 dark:bg-comic-blue/10'
+                    : 'border-border dark:border-white/10 hover:border-comic-blue dark:hover:border-comic-blue'
+                }`}
+              >
+                {desc && (
+                  <div className="text-xs font-bold text-gray-400 mb-1">{desc.label}</div>
+                )}
+                <div className="text-2xl font-black text-ink-black dark:text-white">{p.packets}</div>
+                <div className="text-xs font-bold text-gray-400 mb-2">패킷</div>
+                <div className="text-lg font-black text-comic-blue">
+                  {p.amount.toLocaleString()}<span className="text-xs font-bold">원</span>
                 </div>
-              )}
-            </button>
-          ))}
+                {desc && (
+                  <div className="text-[10px] text-gray-400 mt-1">약 {p.packets}컷 · 8컷 에피소드 약 {desc.episodes}</div>
+                )}
+                {(desc?.label === '인기' || p.code === 'packet_100') && (
+                  <div className="absolute -top-2 -right-2 bg-comic-orange text-white text-[10px] font-black px-2 py-0.5 rounded-full">
+                    인기
+                  </div>
+                )}
+              </button>
+            );
+          })}
         </div>
 
         {/* 토스 위젯 영역 */}
@@ -420,10 +443,22 @@ export default function PacketsPage() {
         )}
       </div>
 
-      {/* 안내 */}
-      <div className="text-xs text-gray-400 dark:text-gray-500 text-center space-y-1">
-        <p>컷 이미지 생성 = 1패킷 / 캐릭터 시트 = 2패킷 / 장소·사진 변환 = 1패킷</p>
-        <p>텍스트 전용(외형 추출, 콘티 등) = 무료</p>
+      {/* 패킷 사용처 + 환불 */}
+      <div className="glass-card overflow-hidden">
+        <div className="px-6 py-3 border-b border-border dark:border-white/10">
+          <h3 className="text-sm font-bold text-ink-black dark:text-white">패킷은 어디에 쓰나요</h3>
+        </div>
+        <div className="divide-y divide-border dark:divide-white/5">
+          {PACKET_USAGE.map((item, i) => (
+            <div key={i} className="px-6 py-2.5 flex items-center justify-between">
+              <span className="text-sm text-gray-600 dark:text-gray-400">{item.label}</span>
+              <span className={`text-sm font-bold ${item.cost === '무료' || item.cost === '차감 없음' ? 'text-emerald-500' : 'text-ink-black dark:text-white'}`}>{item.cost}</span>
+            </div>
+          ))}
+        </div>
+        <div className="px-6 py-3 border-t border-border dark:border-white/10 bg-gray-50/50 dark:bg-white/5">
+          <p className="text-xs text-gray-500 dark:text-gray-400">환불: {REFUND_TEXT}</p>
+        </div>
       </div>
     </div>
   );
