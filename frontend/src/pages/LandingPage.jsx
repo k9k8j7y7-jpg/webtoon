@@ -207,6 +207,12 @@ export default function LandingPage() {
             <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-cyan-500 opacity-80 group-hover:opacity-100 transition-opacity"></div>
             <span className="relative text-white font-bold text-base">{user ? '내 작품 만들기' : '무료로 시작하기 — 가입하면 3패킷'}</span>
           </button>
+          <button
+            onClick={() => navigate(user ? '/quick' : '/login', user ? undefined : { state: { from: '/quick' } })}
+            className="group relative px-8 py-3.5 rounded-full overflow-hidden transition-all hover:scale-105 z-10 border border-white/30 hover:border-white/60 mb-2"
+          >
+            <span className="relative text-white/80 group-hover:text-white font-bold text-base">한 컷 먼저 만들어보기 (1패킷)</span>
+          </button>
           {!user && <p className="text-xs text-gray-500 z-10 mb-4">카카오 · 구글 · 네이버로 3초 가입</p>}
         </section>
 

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../api/client';
-import { Plus, FolderOpen, Trash2, Clock } from 'lucide-react';
+import { Plus, FolderOpen, Trash2, Clock, Sparkles } from 'lucide-react';
 
 export default function DashboardPage() {
   const [projects, setProjects] = useState([]);
@@ -40,6 +40,20 @@ export default function DashboardPage() {
 
   return (
     <div>
+      {/* 빠른 한 컷 카드 */}
+      <button
+        onClick={() => navigate('/quick')}
+        className="w-full mb-6 p-4 rounded-2xl bg-gradient-to-r from-purple-600/10 to-cyan-500/10 dark:from-purple-600/20 dark:to-cyan-500/20 border border-purple-500/20 dark:border-purple-500/30 hover:scale-[1.01] transition-transform text-left flex items-center gap-4"
+      >
+        <div className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-600 to-cyan-500 flex items-center justify-center shrink-0">
+          <Sparkles size={18} className="text-white" />
+        </div>
+        <div>
+          <p className="font-bold text-ink-black dark:text-white text-sm">빠른 한 컷</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">캐릭터 고르고 한 줄이면 끝</p>
+        </div>
+      </button>
+
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold font-serif text-ink-black dark:text-white">내 프로젝트</h1>
         <button

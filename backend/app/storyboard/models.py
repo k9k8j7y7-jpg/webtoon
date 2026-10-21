@@ -60,4 +60,5 @@ class GenerationLog(Base):
     credits_charged = Column(Integer, nullable=False, default=0)
     packets_charged = Column(Integer, nullable=False, default=0)
     seed = Column(BigInteger, nullable=True)
+    source = Column(String(20), nullable=True)
     created_at = Column(DateTime, nullable=False, server_default=func.now())

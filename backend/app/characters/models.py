@@ -37,6 +37,7 @@ class Character(Base):
     reference_photos = Column(JSON, nullable=True)  # URL 배열, 최대 3장
     is_photo_real = Column(Boolean, nullable=False, default=False)
     consent_given = Column(Boolean, nullable=False, default=False)
+    is_preset = Column(Boolean, nullable=False, default=False)
     description = Column(String(2000), nullable=True)
     status = Column(
         Enum("draft", "approved", "invalidated", name="char_status_enum"),

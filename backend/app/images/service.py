@@ -282,6 +282,7 @@ async def generate_cut_image(
     project_id: int,
     user_id: int,
     db: Session,
+    source: str | None = None,
 ) -> dict:
     """단일 컷의 이미지를 생성한다. 레퍼런스 주입 포함."""
     # 실사 캐릭터 포함 에피소드 → GPT 어댑터
@@ -487,6 +488,7 @@ async def generate_cut_image(
         credits_charged=0,  # legacy 크레딧 비활성화
         packets_charged=1,
         seed=result.seed,
+        source=source,
     )
     db.add(log)
     db.flush()

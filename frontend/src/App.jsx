@@ -25,6 +25,7 @@ import SettingsPage from './pages/SettingsPage';
 import AuthorPage from './pages/AuthorPage';
 import SubscriptionsPage from './pages/SubscriptionsPage';
 import NotificationsPage from './pages/NotificationsPage';
+import QuickPage from './pages/QuickPage';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -69,6 +70,8 @@ function AppRoutes() {
 
       {/* 랜딩 = 로그인 여부와 무관한 공개 홈(추천·전체 갤러리). 내 작품 대시보드는 /my */}
       <Route path="/" element={<LandingPage />} />
+
+      <Route path="/quick" element={<ProtectedRoute><QuickPage /></ProtectedRoute>} />
 
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route path="/my" element={<DashboardPage />} />

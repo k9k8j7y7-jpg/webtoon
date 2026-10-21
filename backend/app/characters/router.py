@@ -662,8 +662,8 @@ async def link_character(
     if not character:
         raise HTTPException(status_code=404, detail="Character not found")
 
-    # 같은 프로젝트 또는 user_id 승격 캐릭터만 허용
-    if character.project_id != project_id and character.user_id != current_user.id:
+    # 같은 프로젝트 또는 user_id 승격 캐릭터만 허용 (프리셋은 누구나 접근 가능)
+    if character.project_id != project_id and character.user_id != current_user.id and not character.is_preset:
         raise HTTPException(status_code=403, detail="이 캐릭터에 접근할 수 없습니다")
 
     # 스타일 불일치 차단 (실사 캐릭터는 스타일 무관 — 스킵)
