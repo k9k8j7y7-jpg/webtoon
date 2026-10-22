@@ -9,6 +9,7 @@ import useHeaderCounts from '../hooks/useHeaderCounts';
 import { useAuth } from '../contexts/AuthContext';
 import { CATEGORY_LABELS } from '../utils/resolveUrl';
 import { PACKET_USAGE, REFUND_TEXT } from '../utils/packetUsage';
+import SITE_INFO from '../config/siteInfo';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
 const CATEGORY_MAP = { '단편': 'short', '연작': 'series', '광고·홍보': 'ad' };
@@ -469,20 +470,23 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="border-t border-white/10 bg-[#060913] py-12 relative z-10">
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center md:items-start gap-8">
-          <div className="flex flex-col items-center md:items-start gap-2">
-            <h2 className="text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-500 to-cyan-400">EziToon</h2>
-            <p className="text-gray-500 text-sm mt-2">AI 웹툰 자동화의 새로운 표준</p>
-            <p className="text-gray-600 text-xs mt-1">대표: 김정신 | 문의: k9k8j7y7@naver.com</p>
+          <div className="flex flex-col items-center md:items-start gap-1.5">
+            <h2 className="text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-500 to-cyan-400">{SITE_INFO.serviceName}</h2>
+            <p className="text-gray-500 text-sm mt-1">AI 웹툰 자동화의 새로운 표준</p>
+            <p className="text-gray-600 text-xs mt-1">{SITE_INFO.companyName} | 대표 {SITE_INFO.ceo}</p>
+            <p className="text-gray-600 text-xs">사업자등록번호 {SITE_INFO.bizNo} | 통신판매업 {SITE_INFO.salesNo}</p>
+            <p className="text-gray-600 text-xs">{SITE_INFO.address}</p>
+            <p className="text-gray-600 text-xs">전화 {SITE_INFO.phone} | {SITE_INFO.email}</p>
           </div>
-          
+
           <div className="flex gap-6 text-sm font-medium text-gray-400">
             <Link to="/terms" className="hover:text-white transition-colors">이용약관</Link>
             <Link to="/privacy" className="hover:text-white transition-colors">개인정보처리방침</Link>
             <Link to="/faq" className="hover:text-white transition-colors">FAQ</Link>
           </div>
-          
+
           <div className="text-gray-600 text-sm">
-            &copy; {new Date().getFullYear()} EziToon. All rights reserved.
+            &copy; {new Date().getFullYear()} {SITE_INFO.serviceName}. All rights reserved.
           </div>
         </div>
       </footer>

@@ -7,6 +7,7 @@ import NoticeBar from './NoticeBar';
 import MobileDrawer from './MobileDrawer';
 import NotificationBell from './NotificationBell';
 import { useTheme } from '../contexts/ThemeContext';
+import SITE_INFO from '../config/siteInfo';
 
 export default function Layout() {
   const { user, logout } = useAuth();
@@ -142,6 +143,22 @@ export default function Layout() {
       <main className="max-w-7xl mx-auto px-4 py-6">
         <Outlet />
       </main>
+
+      {/* 공통 푸터 — 사업자 정보 + 약관·개인정보 */}
+      <footer className="border-t border-border dark:border-night-border bg-gray-50 dark:bg-night-bg/60 py-8 mt-8">
+        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center sm:items-start gap-4 text-xs text-gray-400 dark:text-gray-500">
+          <div className="flex flex-col items-center sm:items-start gap-0.5">
+            <span className="font-bold text-gray-500 dark:text-gray-400">{SITE_INFO.serviceName}</span>
+            <span>{SITE_INFO.companyName} | 대표 {SITE_INFO.ceo} | 사업자등록번호 {SITE_INFO.bizNo}</span>
+            <span>통신판매업 {SITE_INFO.salesNo} | {SITE_INFO.address}</span>
+            <span>전화 {SITE_INFO.phone} | {SITE_INFO.email}</span>
+          </div>
+          <div className="flex gap-4 text-xs font-medium shrink-0">
+            <Link to="/terms" className="hover:text-gray-600 dark:hover:text-gray-300 transition-colors">이용약관</Link>
+            <Link to="/privacy" className="hover:text-gray-600 dark:hover:text-gray-300 transition-colors">개인정보처리방침</Link>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

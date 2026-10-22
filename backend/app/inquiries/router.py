@@ -5,7 +5,7 @@ from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -17,6 +17,7 @@ from app.image_util import validate_and_process
 from app.storage import upload_image
 from app.social.models import Notification
 from app.social.service import notify
+from app.push.service import send_push
 
 router = APIRouter(tags=["inquiries"])
 
@@ -129,8 +130,38 @@ async def create_inquiry(
     if attachment_urls:
         inquiry.attachments = attachment_urls
 
+    # 관리자 전원에게 알림
+    admin_ids = [
+        r[0] for r in db.execute(
+            text("SELECT id FROM users WHERE is_admin = 1")
+        ).fetchall()
+    ]
+    short_title = title.strip()[:20]
+    notif_ids = []
+    for aid in admin_ids:
+        n = notify(
+            db, aid, "inquiry_new",
+            title=f"새 문의: {short_title}",
+            body=f"{CATEGORY_LABELS.get(category, category)} · {current_user.display_name or current_user.email}",
+            link="/admin?tab=inquiries",
+            actor_id=current_user.id,
+        )
+        notif_ids.append((aid, n.id if n else None))
+
     db.commit()
     db.refresh(inquiry)
+
+    # send_push 직접 호출 (BackgroundTasks 없음)
+    try:
+        send_push(
+            admin_ids, "inquiry_new",
+            f"새 문의: {short_title}",
+            f"{CATEGORY_LABELS.get(category, category)} · {current_user.display_name or current_user.email}",
+            "/admin?tab=inquiries",
+        )
+    except Exception:
+        pass  # push 실패해도 문의 생성은 성공
+
     return _inquiry_to_dict(inquiry)
 
 
