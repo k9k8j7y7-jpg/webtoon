@@ -87,13 +87,25 @@ function sfxHitBox(text, imgW, fontScale) {
 //  메인 컴포넌트
 // ──────────────────────────────────────────────────────────────
 
-export default function CutEditor({ cut, imageUrl, characters = [], charNameMap = {}, products = [], onClose, onSave, onPrev, onNext, cutIndex, totalCuts, onBatchNarrationStyle, initialMode = 'view' }) {
+export default function CutEditor({ cut, imageUrl, characters = [], charNameMap = {}, products = [], onClose, onSave, onPrev, onNext, cutIndex, totalCuts, onBatchNarrationStyle, initialMode = 'view', initialTool }) {
   const [mode, setMode] = useState(initialMode);
-  const [bubbles, setBubbles] = useState(() => (cut.dialogue || []).map(d => ({ ...d })));
+  // initialMode="edit" → computeInitialLayouts 적용 (enterEditMode과 동일)
+  const [bubbles, setBubbles] = useState(() =>
+    initialMode === 'edit'
+      ? computeInitialLayouts(cut.dialogue || [])
+      : (cut.dialogue || []).map(d => ({ ...d }))
+  );
   const [sfxItems, setSfxItems] = useState(() => (cut.sfx_items || []).map(s => ({ ...s })));
   const [effectItems, setEffectItems] = useState(() => (cut.effect_items || []).map(e => ({ ...e })));
   const [productItems, setProductItems] = useState(() => (cut.product_items || []).map(p => ({ ...p })));
-  const [selectedIdx, setSelectedIdx] = useState(null);     // 선택된 말풍선 인덱스
+  // initialTool="bubble" → 첫 번째 일반 말풍선 선택
+  const [selectedIdx, setSelectedIdx] = useState(() => {
+    if (initialMode === 'edit' && initialTool === 'bubble') {
+      const idx = (cut.dialogue || []).findIndex(d => d.type !== 'narration');
+      return idx >= 0 ? idx : null;
+    }
+    return null;
+  });
   const [selectedSfxIdx, setSelectedSfxIdx] = useState(null); // 선택된 효과음 인덱스
   const [selectedEffectIdx, setSelectedEffectIdx] = useState(null); // 선택된 배경효과 인덱스
   const [selectedProductIdx, setSelectedProductIdx] = useState(null); // 선택된 제품 인덱스

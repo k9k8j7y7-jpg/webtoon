@@ -379,7 +379,7 @@ export default function InstaShareModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm"
-      onPointerDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div className="glass-card w-full sm:max-w-md mx-0 sm:mx-4 rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
 
@@ -389,7 +389,7 @@ export default function InstaShareModal({
             <Share2 size={18} className="text-neon-from" />
             <h3 className="font-bold text-ink-black dark:text-white text-sm">인스타그램 공유</h3>
           </div>
-          <button onPointerDown={onClose} className="p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-full transition-colors">
+          <button type="button" onClick={onClose} className="p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-full transition-colors">
             <X size={16} />
           </button>
         </div>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api, { pollJob } from '../api/client';
@@ -90,6 +91,16 @@ export default function QuickPage() {
   // ── 모달 상태 ──
   const [instaOpen, setInstaOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  // 모달 닫기 후 300ms 투명 오버레이 유지 (ghost click 차단)
+  const [modalShield, setModalShield] = useState(false);
+  const closeInstaModal = () => {
+    setInstaOpen(false);
+    setModalShield(true);
+    setTimeout(() => setModalShield(false), 350);
+  };
+
+  // ── 다시 그리기 확인 단계 ──
+  const [regenConfirm, setRegenConfirm] = useState(false);
 
   // ── 패킷 ──
   const [balance, setBalance] = useState(null);
@@ -214,6 +225,7 @@ export default function QuickPage() {
   if (result && !generating) {
     const hasDialogue = cutData?.dialogue?.length > 0;
     return (
+      <>
       <div className="min-h-screen bg-night-bg text-white">
         <QuickHeader balance={balance} />
         <div className="max-w-lg mx-auto px-4 py-6">
@@ -226,35 +238,46 @@ export default function QuickPage() {
             />
           </div>
 
-          {/* 액션 버튼 */}
-          <div className={`grid ${hasDialogue ? 'grid-cols-2' : 'grid-cols-3'} gap-2 mb-4`}>
-            <button onClick={() => setInstaOpen(true)} className="flex items-center justify-center gap-1.5 px-3 py-3 rounded-xl bg-white/10 hover:bg-white/20 transition text-xs font-bold">
+          {/* 액션 버튼 — 모달 열려 있으면 pointer-events 차단 (③ ghost click 방지) */}
+          <div className={`grid ${hasDialogue ? 'grid-cols-2' : 'grid-cols-3'} gap-2 mb-4`} style={(instaOpen || modalShield) ? { pointerEvents: 'none' } : undefined}>
+            <button type="button" onClick={() => setInstaOpen(true)} className="flex items-center justify-center gap-1.5 px-3 py-3 rounded-xl bg-white/10 hover:bg-white/20 transition text-xs font-bold">
               <Share2 size={14} /> 인스타 공유
             </button>
-            <button onClick={handleDownload} className="flex items-center justify-center gap-1.5 px-3 py-3 rounded-xl bg-white/10 hover:bg-white/20 transition text-xs font-bold">
+            <button type="button" onClick={handleDownload} className="flex items-center justify-center gap-1.5 px-3 py-3 rounded-xl bg-white/10 hover:bg-white/20 transition text-xs font-bold">
               <Download size={14} /> PNG 저장
             </button>
             {hasDialogue && (
-              <button onClick={() => setEditOpen(true)} className="flex items-center justify-center gap-1.5 px-3 py-3 rounded-xl bg-white/10 hover:bg-white/20 transition text-xs font-bold">
+              <button type="button" onClick={() => setEditOpen(true)} className="flex items-center justify-center gap-1.5 px-3 py-3 rounded-xl bg-white/10 hover:bg-white/20 transition text-xs font-bold">
                 <PenLine size={14} /> 말풍선 고치기
               </button>
             )}
-            <button onClick={handleRegenerate} className="flex items-center justify-center gap-1.5 px-3 py-3 rounded-xl bg-white/10 hover:bg-white/20 transition text-xs font-bold">
-              <RefreshCw size={14} /> 다시 그리기 · 1패킷
-            </button>
+            {/* ② 다시 그리기 — 확인 단계 */}
+            {!regenConfirm ? (
+              <button type="button" onClick={() => setRegenConfirm(true)} className="flex items-center justify-center gap-1.5 px-3 py-3 rounded-xl bg-white/10 hover:bg-white/20 transition text-xs font-bold">
+                <RefreshCw size={14} /> 다시 그리기 · 1패킷
+              </button>
+            ) : (
+              <div className="col-span-full flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-900/30 border border-amber-600/40 text-xs">
+                <span className="flex-1 text-amber-200">1패킷을 써서 다시 그릴까요?</span>
+                <button type="button" onClick={() => { setRegenConfirm(false); handleRegenerate(); }} className="px-3 py-1.5 rounded-lg bg-amber-600 text-white font-bold hover:bg-amber-500 transition text-xs">다시 그리기</button>
+                <button type="button" onClick={() => setRegenConfirm(false)} className="px-3 py-1.5 rounded-lg bg-white/10 text-gray-300 font-bold hover:bg-white/20 transition text-xs">취소</button>
+              </div>
+            )}
           </div>
 
           {/* 이야기 만들기 CTA */}
           <button
+            type="button"
             onClick={handleExpandStory}
             disabled={expanding}
             className="w-full flex items-center justify-center gap-2 px-6 py-4 rounded-2xl bg-gradient-to-r from-purple-600 to-cyan-500 hover:scale-[1.02] transition-transform text-base font-bold mb-4 disabled:opacity-60"
+            style={(instaOpen || modalShield) ? { pointerEvents: 'none' } : undefined}
           >
             이 컷으로 이야기 만들기 <ArrowRight size={18} />
           </button>
 
           <div className="text-center">
-            <button onClick={() => navigate(`/projects/${result.project_id}`)} className="text-sm text-gray-400 hover:text-white transition underline">
+            <button type="button" onClick={() => navigate(`/projects/${result.project_id}`)} className="text-sm text-gray-400 hover:text-white transition underline">
               내 작품에서 보기
             </button>
           </div>
@@ -264,48 +287,58 @@ export default function QuickPage() {
           )}
           {error && <p className="mt-4 text-center text-red-400 text-sm">{error}</p>}
         </div>
-
-        {/* 인스타 공유 모달 */}
-        {cutData && (
-          <InstaShareModal
-            open={instaOpen}
-            onClose={() => setInstaOpen(false)}
-            cuts={[cutData]}
-            characters={[]}
-            getImageUrl={(c) => resolveUrl(c.image_url)}
-            products={[]}
-            pageFormat={null}
-            episodeTitle={prompt}
-            nickname={user?.nickname || ''}
-            shareUrl=""
-            isPublic={false}
-            onZipDownload={() => setInstaOpen(false)}
-            motionVideoUrls={[]}
-            reelPath={null}
-          />
-        )}
-
-        {/* 말풍선 편집기 */}
-        {editOpen && cutData && (
-          <CutEditor
-            cut={{ ...cutData, dialogue: cutData.dialogue || [], sfx_items: cutData.sfx_items || [], effect_items: cutData.effect_items || [], product_items: cutData.product_items || [], pngbubble_items: cutData.pngbubble_items || [] }}
-            products={[]}
-            imageUrl={resolveUrl(cutData.image_url || result.image_url)}
-            characters={cutData.characters || []}
-            charNameMap={{}}
-            initialMode="edit"
-            onClose={() => setEditOpen(false)}
-            onSave={async () => {
-              await loadCutData(result.project_id, result.episode_id);
-              setEditOpen(false);
-            }}
-            onPrev={null}
-            onNext={null}
-            cutIndex={1}
-            totalCuts={1}
-          />
-        )}
       </div>
+
+      {/* 인스타 공유 모달 — portal + ghost click 차단 */}
+      {cutData && createPortal(
+        <InstaShareModal
+          open={instaOpen}
+          onClose={closeInstaModal}
+          cuts={[cutData]}
+          characters={[]}
+          getImageUrl={(c) => resolveUrl(c.image_url)}
+          products={[]}
+          pageFormat={null}
+          episodeTitle={prompt}
+          nickname={user?.nickname || ''}
+          shareUrl=""
+          isPublic={false}
+          onZipDownload={closeInstaModal}
+          motionVideoUrls={[]}
+          reelPath={null}
+        />,
+        document.body
+      )}
+
+      {/* ① 모달 닫기 후 투명 실드 — 300ms 동안 ghost click 흡수 */}
+      {modalShield && createPortal(
+        <div className="fixed inset-0 z-50" style={{ background: 'transparent' }} />,
+        document.body
+      )}
+
+      {/* 말풍선 편집기 — portal */}
+      {editOpen && cutData && createPortal(
+        <CutEditor
+          cut={{ ...cutData, dialogue: cutData.dialogue || [], sfx_items: cutData.sfx_items || [], effect_items: cutData.effect_items || [], product_items: cutData.product_items || [], pngbubble_items: cutData.pngbubble_items || [] }}
+          products={[]}
+          imageUrl={resolveUrl(cutData.image_url || result.image_url)}
+          characters={cutData.characters || []}
+          charNameMap={{}}
+          initialMode="edit"
+          initialTool="bubble"
+          onClose={() => setEditOpen(false)}
+          onSave={async () => {
+            await loadCutData(result.project_id, result.episode_id);
+            setEditOpen(false);
+          }}
+          onPrev={null}
+          onNext={null}
+          cutIndex={1}
+          totalCuts={1}
+        />,
+        document.body
+      )}
+      </>
     );
   }
 
