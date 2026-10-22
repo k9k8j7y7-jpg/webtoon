@@ -117,6 +117,15 @@ async function overflowX(page) {
         await shot('viewer');
       }
 
+      // 빠른 한 컷 — 폼 + 결과 (375/412만, 다크만)
+      if (theme === 'dark' && mobile) {
+        await page.goto(`${BASE}/quick`, { waitUntil: 'networkidle' });
+        await page.waitForTimeout(1500);
+        await shot('quick-form', true);
+        // 기존 결과가 있는 에피소드 조회를 위해 최근 quick 프로젝트 확인
+        // (실제 생성 없이 폼 화면만 캡처)
+      }
+
       await ctx.close();
     }
   }
