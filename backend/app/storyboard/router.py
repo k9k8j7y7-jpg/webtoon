@@ -695,13 +695,13 @@ async def get_prompt_preview(
     product_desc = ""
     if spec.get("has_product", False):
         from app.products.models import Product as ProductModel
+        from app.prompts.product import build_product_clause
         products = db.query(ProductModel).filter(
-            ProductModel.episode_id == episode_id, ProductModel.sheet_url.isnot(None)
+            ProductModel.episode_id == episode_id, ProductModel.photo_url.isnot(None)
         ).all()
         for prod in products:
-            features = f" ({prod.features})" if prod.features else ""
-            product_desc += f"Product '{prod.name}'{features} appears in this scene. "
-            ref_labels.append(f"[이미지] 제품 '{prod.name}' — 시트")
+            product_desc = build_product_clause(prod)
+            ref_labels.append(f"[이미지] 제품 '{prod.name}' — 참조 사진")
 
     # 스타일
     from app.styles.models import Style, STYLE_PRESETS

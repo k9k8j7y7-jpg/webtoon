@@ -69,11 +69,17 @@ SYSTEM_INSTRUCTION = """너는 웹툰 대본 작가야.
 - 장소(location)는 물리적으로 다른 공간만 구분하라. 같은 공간의 다른 앵글·창밖 풍경·입구/내부는 하나의 location_id로 통합. 단편 기준 보통 2~4개, 최대 5개"""
 
 
-async def generate_script(planning: dict, series_context: dict | None = None, is_ad: bool = False) -> dict:
+async def generate_script(
+    planning: dict,
+    series_context: dict | None = None,
+    is_ad: bool = False,
+    product_name: str | None = None,
+) -> dict:
     """기획안으로부터 대본을 생성한다.
 
     series_context가 있으면 연작 컨텍스트를 프롬프트에 주입한다.
     is_ad가 True면 광고 웹툰 지침을 적용한다.
+    product_name이 있으면 제품 소품 등장 지시를 추가한다.
     """
     from app.script.prompt_fragments import (
         build_series_context_block,
@@ -109,6 +115,10 @@ async def generate_script(planning: dict, series_context: dict | None = None, is
 
     if series_block:
         prompt += f"\n{series_block}\n"
+
+    # 비광고 에피소드에서 제품이 등록되어 있으면 소품으로 한 줄
+    if product_name and not is_ad:
+        prompt += f"\n등장 제품: {product_name}(소품으로 자연스럽게 등장시켜라)\n"
 
     prompt += f"""
 중요 지시:

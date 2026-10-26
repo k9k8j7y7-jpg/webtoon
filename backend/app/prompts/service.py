@@ -210,16 +210,9 @@ def build_cut_prompt(
     if extra_prompt:
         parts.append(extra_prompt.strip())
 
-    # ── 3.5. 제품 (광고 에피소드) ──
+    # ── 3.5. 제품 ──
     if product_desc:
-        parts.append(
-            f"{product_desc}"
-            f"Draw the product matching the provided product reference sheet. "
-            f"CRITICAL: The product must be realistically sized relative to characters — "
-            f"a hand-held bottle stays hand-sized, a package stays table-sized. "
-            f"NEVER make the product giant or background-sized. "
-            f"Show it naturally held, placed on a surface, or used by a character"
-        )
+        parts.append(product_desc)
 
     # ── 4. 스타일 (얼굴 정체성을 덮지 않는 선에서) ──
     if has_photo_real_char:

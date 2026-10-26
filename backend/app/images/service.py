@@ -122,11 +122,13 @@ def _get_character_references(
     character_ids: list[str],
     db: Session,
     cut_spec: dict | None = None,
+    reserved_slots: int = 1,
 ) -> tuple[list[bytes], list[str], dict[str, str]]:
     """캐릭터 레퍼런스 이미지 + 라벨 + 설명 로드.
 
     front 이미지는 항상 포함. expressions 시트는 우선순위에 따라 포함.
     cut_spec이 있으면 컷의 emotion으로 패널 매핑 라벨을 생성한다.
+    reserved_slots: 장소+제품 등 뒤에 올 참조를 위해 예약할 슬롯 수.
     """
     # 1차: front 수집
     front_images: list[tuple[str, bytes, str]] = []  # (char_id, bytes, name)
@@ -211,8 +213,8 @@ def _get_character_references(
         else:
             ref_labels.append(f"Character '{char_id}' ({name}) - front reference sheet")
 
-    # 장소 1장 자리 예약 (호출부에서 추가) → 남은 슬롯 계산
-    remaining = MAX_REF_IMAGES - len(ref_images) - 1  # 장소용 1슬롯 예약
+    # 장소+제품 등 뒤에 올 참조를 위한 슬롯 예약
+    remaining = MAX_REF_IMAGES - len(ref_images) - reserved_slots
 
     for char_id, img_bytes, name, panel in expr_images:
         if remaining <= 0:
@@ -290,9 +292,42 @@ async def generate_cut_image(
     adapter = get_openai_image_adapter() if use_gpt else get_image_adapter()
     spec = cut.spec
 
-    # 1. 캐릭터 레퍼런스 로드 (이미지 + 라벨 — front + expressions)
+    # 1. 캐릭터 레퍼런스 로드
     char_ids = [c.get("character_id") for c in spec.get("characters", []) if c.get("character_id")]
-    ref_images, ref_labels, char_descs = _get_character_references(episode_id, char_ids, db, cut_spec=spec)
+    # 제품 + 장소로 예약할 슬롯 수: has_product면 2(제품+장소), 아니면 1(장소만)
+    cut_has_product = spec.get("has_product", False)
+    _reserved = 2 if cut_has_product else 1
+    ref_images, ref_labels, char_descs = _get_character_references(
+        episode_id, char_ids, db, cut_spec=spec, reserved_slots=_reserved
+    )
+    # 참조 추적 (generation_logs.refs 기록용)
+    ref_tracking = [{"type": lbl.split(" - ")[0] if " - " in lbl else "char", "label": lbl} for lbl in ref_labels]
+
+    # 1.5. 제품 레퍼런스 — has_product 컷은 2순위 (캐릭터 시트 바로 다음)
+    product_desc = ""
+    product_ref_attached = False
+    if cut_has_product:
+        from app.products.models import Product
+        from app.prompts.product import build_product_clause
+        products = db.query(Product).filter(
+            Product.episode_id == episode_id, Product.photo_url.isnot(None)
+        ).all()
+        for prod in products:
+            # 제품 참조 이미지: photo_url(실사) 우선, 없으면 sheet_url
+            prod_url = prod.photo_url or prod.sheet_url
+            if prod_url and len(ref_images) < MAX_REF_IMAGES:
+                from app.image_util import composite_on_white
+                prod_bytes = _load_image_bytes(prod_url)
+                if prod_bytes:
+                    # 투명 PNG면 흰 배경 합성
+                    if prod.photo_url and prod_url == prod.photo_url:
+                        prod_bytes = composite_on_white(prod_bytes)
+                    ref_images.append(prod_bytes)
+                    ref_labels.append(f"Product '{prod.name}' — reference photo, reproduce EXACTLY")
+                    ref_tracking.append({"type": "product", "product_id": prod.id, "label": prod.name})
+                    product_ref_attached = True
+                    logger.info("Cut %s product_ref: attached (photo) product=%d", cut.cut_id, prod.id)
+            product_desc = build_product_clause(prod)
 
     # 2. 장소 레퍼런스 로드 (샷 타입에 따라 이미지 첨부 여부 분기)
     location_id = spec.get("location_id")
@@ -303,7 +338,6 @@ async def generate_cut_image(
     if location_id:
         loc_ref, loc_desc, loc_is_photo = _get_location_reference(episode_id, location_id, db)
         if loc_ref and shot_type not in _TEXT_ONLY_SHOTS:
-            # long/full(및 미지정) — 썸네일 리사이즈 후 첨부
             if len(ref_images) < MAX_REF_IMAGES:
                 loc_ref = _downscale_image(loc_ref, max_long_side=768)
                 ref_images.append(loc_ref)
@@ -315,6 +349,7 @@ async def generate_cut_image(
                     )
                 else:
                     ref_labels.append("Location background reference — style guide only, do NOT reproduce as a separate image")
+                ref_tracking.append({"type": "location", "label": location_id})
                 logger.info("Cut %s location_ref: attached(768px) shot=%s", cut.cut_id, shot_type)
             else:
                 logger.warning(
@@ -322,25 +357,12 @@ async def generate_cut_image(
                     MAX_REF_IMAGES, location_id,
                 )
         else:
-            # bust/close_up — 텍스트 설명만, 이미지 미첨부
             logger.info("Cut %s location_ref: text_only shot=%s", cut.cut_id, shot_type)
 
-    # 2.5. 제품 레퍼런스 로드 (광고 에피소드 — has_product 컷만)
-    product_desc = ""
-    cut_has_product = spec.get("has_product", False)
-    if cut_has_product:
-        from app.products.models import Product
-        products = db.query(Product).filter(
-            Product.episode_id == episode_id, Product.sheet_url.isnot(None)
-        ).all()
-        for prod in products:
-            if len(ref_images) < MAX_REF_IMAGES:
-                prod_bytes = _load_image_bytes(prod.sheet_url)
-                if prod_bytes:
-                    ref_images.append(prod_bytes)
-                    ref_labels.append(f"Product '{prod.name}' — illustration reference sheet")
-            features = f" ({prod.features})" if prod.features else ""
-            product_desc += f"Product '{prod.name}'{features} appears in this scene. "
+    # refs 추적 로그
+    logger.info("Cut %s refs(%d/%d): %s",
+                cut.cut_id, len(ref_images), MAX_REF_IMAGES,
+                " | ".join(r.get("label", r.get("type", "?")) for r in ref_tracking))
 
     # 3. 스타일 프롬프트
     style = db.query(Style).filter(Style.episode_id == episode_id).first()

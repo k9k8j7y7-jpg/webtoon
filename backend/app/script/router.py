@@ -85,7 +85,16 @@ async def create_script(
             }
 
     ad_flag = is_ad_episode(episode.gate_status)
-    result = await generate_script(planning, series_context=series_context, is_ad=ad_flag)
+
+    # 제품이 등록되어 있으면 이름 전달 (비광고 에피소드에서 소품 한 줄)
+    from app.products.models import Product
+    first_product = db.query(Product).filter(Product.episode_id == episode.id).first()
+    _product_name = first_product.name if first_product else None
+
+    result = await generate_script(
+        planning, series_context=series_context,
+        is_ad=ad_flag, product_name=_product_name,
+    )
 
     # 대본 저장
     script_data = dict(episode.script) if episode.script else {}

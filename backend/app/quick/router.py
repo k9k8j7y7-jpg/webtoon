@@ -4,7 +4,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -14,6 +14,7 @@ from app.jobs import create_job, get_job, run_job_in_background
 from app.packets.service import require_packets
 from app.characters.models import Character, EpisodeCharacter
 from app.projects.models import Project, Episode
+from app.products.models import Product
 from app.storyboard.models import Cut
 from app.styles.models import Style, STYLE_PRESETS
 from app.images.service import generate_cut_image
@@ -39,6 +40,12 @@ class QuickRequest(BaseModel):
     aspect_ratio: str = Field(default="9:16")
     shot: str = Field(default="full")
     dialogue: str = Field(default="")
+    product_photo_url: str | None = Field(default=None)  # quick/product-upload에서 받은 URL
+    product_name: str | None = Field(default=None)
+    product_shape: str | None = Field(default=None)
+    product_size_hint: str | None = Field(default=None)
+    product_label_text: str | None = Field(default=None)
+    product_description: str | None = Field(default=None)
 
 
 @router.post("/quick", status_code=202)
@@ -159,8 +166,35 @@ async def create_quick_cut(
         prompt_snippet=preset_info["prompt"],
     ))
 
+    # 8.5. 제품 연결 (선택)
+    has_product = False
+    product = None
+    if body.product_photo_url:
+        product = Product(
+            episode_id=episode.id,
+            name=body.product_name or "제품",
+            photo_url=body.product_photo_url,
+            shape=body.product_shape,
+            size_hint=body.product_size_hint,
+            label_text=body.product_label_text,
+            description=body.product_description,
+            status="approved",
+        )
+        db.add(product)
+        db.flush()
+        has_product = True
+        logger.info("Quick cut product: id=%d name=%s", product.id, product.name)
+
     # 9. 컷 1개 생성
     cut_id = f"quick_{uuid.uuid4().hex[:8]}"
+    # 제품이 있고 프롬프트에 제품 언급 없으면 자동 보강
+    action = body.prompt
+    if has_product and product and product.name:
+        name_lower = product.name.lower()
+        prompt_lower = action.lower()
+        if name_lower not in prompt_lower and "제품" not in action and "product" not in prompt_lower:
+            action = f"{action} ({product.name}을(를) 들고)"
+
     cut_spec = {
         "cut_id": cut_id,
         "scene_id": "s01",
@@ -172,7 +206,7 @@ async def create_quick_cut(
             "outfit": "default",
         }],
         "shot": body.shot or "full",
-        "action": body.prompt,
+        "action": action,
         "dialogue": [{
             "type": "speech",
             "speaker": clone.ref_key,
@@ -182,7 +216,7 @@ async def create_quick_cut(
             "x": 0.5, "y": 0.15, "width": 0.6,
         }] if body.dialogue.strip() else [],
         "emphasis": "normal",
-        "has_product": False,
+        "has_product": has_product,
         "location_id": None,
         "status": "pending",
     }
@@ -250,6 +284,76 @@ async def get_quick_status(
     if not job:
         raise HTTPException(404, "Job not found")
     return job.to_dict()
+
+
+@router.post("/quick/product-upload")
+async def quick_product_upload(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """빠른 컷용 제품 사진 업로드 + 비전 분석. 0패킷.
+
+    Product 행은 create_quick_cut에서 에피소드 확정 후 생성.
+    여기서는 사진 저장 + 분석 결과만 반환.
+    """
+    from app.image_util import validate_and_process, composite_on_white
+    from app.storage import upload_image
+    import uuid as _uuid
+
+    raw = await file.read()
+    try:
+        processed, mime = validate_and_process(
+            raw, original_content_type=file.content_type or "",
+            original_filename=file.filename or "",
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+    # 임시 경로에 사진 저장
+    tmp_key = _uuid.uuid4().hex[:12]
+    url = upload_image(
+        image_bytes=processed,
+        path_prefix=f"quick/tmp/{tmp_key}",
+        filename="photo.jpg",
+        mime_type=mime,
+    )
+
+    # 비전 분석 (gemini flash, 0패킷)
+    analysis = {"name": "제품", "shape": "other", "size_hint": "one_hand"}
+    try:
+        from google.genai import types
+        from app.adapters.gemini import get_client, AI_TOKENS_SHORT, parse_ai_json
+        ref_bytes = composite_on_white(processed)
+        client = get_client()
+        resp = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[
+                types.Part.from_bytes(data=ref_bytes, mime_type="image/jpeg"),
+                (
+                    "Analyze this product image. Return JSON: "
+                    "{\"name\": \"...\", \"label_text\": \"...\", \"shape\": \"...\", "
+                    "\"size_hint\": \"...\", \"description\": \"...\"}. "
+                    "name=product name on label, label_text=ALL text on label, "
+                    "shape=bottle/can/box/tube/flat/pouch/other, "
+                    "size_hint=palm/one_hand/two_hands/tabletop/large, "
+                    "description=visual description under 80 words. ONLY JSON."
+                ),
+            ],
+            config=types.GenerateContentConfig(temperature=0.2, max_output_tokens=AI_TOKENS_SHORT),
+        )
+        analysis = parse_ai_json(resp.text)
+    except Exception as e:
+        logger.warning("Quick product analyze failed: %s", e)
+
+    return {
+        "photo_url": url,
+        "name": analysis.get("name", "제품"),
+        "label_text": analysis.get("label_text"),
+        "shape": analysis.get("shape", "other"),
+        "size_hint": analysis.get("size_hint", "one_hand"),
+        "description": analysis.get("description"),
+    }
 
 
 @router.post("/quick/{episode_id}/expand")

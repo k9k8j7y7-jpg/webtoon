@@ -1,6 +1,7 @@
-"""게이트 3 — 제품 자산 엔드포인트 (광고 에피소드용)."""
+"""게이트 3 — 제품 자산 엔드포인트."""
 
 import os
+import logging
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
@@ -17,9 +18,12 @@ from app.adapters.gemini_image import get_image_adapter
 from app.styles.models import Style, STYLE_PRESETS
 from app.packets.service import require_packets, charge_packets
 from app.storyboard.models import GenerationLog
-from app.workflow.gate import is_ad_episode
 
 router = APIRouter(tags=["gate3-products"])
+logger = logging.getLogger(__name__)
+
+VALID_SHAPES = {"bottle", "can", "box", "tube", "flat", "pouch", "other"}
+VALID_SIZE_HINTS = {"palm", "one_hand", "two_hands", "tabletop", "large"}
 
 
 class ProductCreate(BaseModel):
@@ -30,6 +34,11 @@ class ProductCreate(BaseModel):
 class ProductUpdate(BaseModel):
     name: str | None = None
     features: str | None = None
+    description: str | None = None
+    shape: str | None = None
+    size_hint: str | None = None
+    size_ratio: float | None = None
+    label_text: str | None = None
 
 
 @router.get("/projects/{project_id}/episodes/{episode_id}/products")
@@ -46,6 +55,12 @@ async def list_products(
             "id": p.id,
             "name": p.name,
             "features": p.features,
+            "description": p.description,
+            "shape": p.shape,
+            "size_hint": p.size_hint,
+            "size_ratio": p.size_ratio,
+            "label_text": p.label_text,
+            "holding_photo_url": p.holding_photo_url,
             "photo_url": p.photo_url,
             "sheet_url": p.sheet_url,
             "status": p.status,
@@ -89,8 +104,23 @@ async def update_product(
         product.name = body.name
     if body.features is not None:
         product.features = body.features
+    if body.description is not None:
+        product.description = body.description
+    if body.shape is not None and body.shape in VALID_SHAPES:
+        product.shape = body.shape
+    if body.size_hint is not None and body.size_hint in VALID_SIZE_HINTS:
+        product.size_hint = body.size_hint
+    if body.size_ratio is not None:
+        product.size_ratio = body.size_ratio
+    if body.label_text is not None:
+        product.label_text = body.label_text
     db.commit()
-    return {"id": product.id, "name": product.name, "features": product.features}
+    return {
+        "id": product.id, "name": product.name, "features": product.features,
+        "description": product.description, "shape": product.shape,
+        "size_hint": product.size_hint, "size_ratio": product.size_ratio,
+        "label_text": product.label_text,
+    }
 
 
 @router.delete("/products/{product_id}")
@@ -114,18 +144,53 @@ async def upload_product_photo(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """제품 참고 사진 업로드 (투명 PNG 전용)."""
+    """제품 참고 사진 업로드 (일반 이미지 — 참조 생성용)."""
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    from app.image_util import validate_product_photo
+    from app.image_util import validate_and_process
 
     raw = await file.read()
     try:
-        processed, mime = validate_product_photo(
+        processed, mime = validate_and_process(
             raw,
             original_content_type=file.content_type or "",
+            original_filename=file.filename or "",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    ext = "jpg" if "jpeg" in mime else "png"
+    url = upload_image(
+        image_bytes=processed,
+        path_prefix=f"episodes/{product.episode_id}/products/{product.id}",
+        filename=f"photo.{ext}",
+        mime_type=mime,
+    )
+    product.photo_url = url
+    db.commit()
+
+    return {"id": product.id, "photo_url": url}
+
+
+@router.post("/products/{product_id}/holding-photo")
+async def upload_holding_photo(
+    product_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """들고 찍은 사진 업로드 (크기 비율 측정용, 일반 이미지)."""
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    from app.image_util import validate_and_process
+    raw = await file.read()
+    try:
+        processed, mime = validate_and_process(
+            raw, original_content_type=file.content_type or "",
             original_filename=file.filename or "",
         )
     except ValueError as e:
@@ -134,13 +199,118 @@ async def upload_product_photo(
     url = upload_image(
         image_bytes=processed,
         path_prefix=f"episodes/{product.episode_id}/products/{product.id}",
-        filename="photo.png",
+        filename="holding.jpg",
         mime_type=mime,
     )
-    product.photo_url = url
+    product.holding_photo_url = url
     db.commit()
+    return {"id": product.id, "holding_photo_url": url}
 
-    return {"id": product.id, "photo_url": url}
+
+@router.post("/products/{product_id}/analyze")
+async def analyze_product(
+    product_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """제품 사진 비전 분석 (0패킷). 결과를 제안으로 반환, 저장은 PUT으로."""
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    if not product.photo_url:
+        raise HTTPException(status_code=400, detail="제품 사진을 먼저 업로드해주세요")
+
+    from app.images.service import _load_image_bytes
+    from app.image_util import composite_on_white
+    from google.genai import types
+    from app.adapters.gemini import get_client, AI_TOKENS_SHORT
+
+    photo_bytes = _load_image_bytes(product.photo_url)
+    if not photo_bytes:
+        raise HTTPException(status_code=400, detail="제품 사진을 읽을 수 없습니다")
+
+    ref_bytes = composite_on_white(photo_bytes)
+    client = get_client()
+
+    # 1. 제품 사진 분석
+    vision_resp = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=[
+            types.Part.from_bytes(data=ref_bytes, mime_type="image/jpeg"),
+            (
+                "Analyze this product image. Return a JSON object with these fields:\n"
+                "- name: product name visible on the label (Korean or English)\n"
+                "- colors: comma-separated list of dominant colors\n"
+                "- label_text: ALL text visible on the product label, transcribed exactly as printed "
+                "(line breaks as \\n)\n"
+                "- shape: one of: bottle, can, box, tube, flat, pouch, other\n"
+                "- size_hint: estimated size category: palm (fits in palm), one_hand (gripped in one hand), "
+                "two_hands (needs both hands), tabletop (sits on table, too big to hold), large (bigger)\n"
+                "- description: visual description in English under 100 words — shape silhouette, "
+                "material/finish, cap/nozzle type, color zones, distinctive design elements\n"
+                "Return ONLY the JSON object, no markdown."
+            ),
+        ],
+        config=types.GenerateContentConfig(
+            temperature=0.2,
+            max_output_tokens=AI_TOKENS_SHORT,
+        ),
+    )
+
+    from app.adapters.gemini import parse_ai_json
+    analysis = parse_ai_json(vision_resp.text)
+
+    # 2. 들고 사진 있으면 size_ratio 추정
+    size_ratio = None
+    if product.holding_photo_url:
+        holding_bytes = _load_image_bytes(product.holding_photo_url)
+        if holding_bytes:
+            ratio_resp = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=[
+                    types.Part.from_bytes(data=holding_bytes, mime_type="image/jpeg"),
+                    (
+                        "A person is holding a product in this photo. "
+                        "Measure the product height and the hand length (wrist to middle fingertip). "
+                        "Return a JSON object: {\"product_height_px\": N, \"hand_length_px\": N, \"ratio\": R} "
+                        "where ratio = product_height / hand_length. Return ONLY JSON."
+                    ),
+                ],
+                config=types.GenerateContentConfig(
+                    temperature=0.2,
+                    max_output_tokens=512,
+                ),
+            )
+            try:
+                ratio_data = parse_ai_json(ratio_resp.text)
+                size_ratio = round(float(ratio_data.get("ratio", 0)), 2)
+                if size_ratio > 0:
+                    # size_hint 보정
+                    if size_ratio < 0.5:
+                        analysis["size_hint"] = "palm"
+                    elif size_ratio <= 1.3:
+                        analysis["size_hint"] = "one_hand"
+                    elif size_ratio <= 2.5:
+                        analysis["size_hint"] = "two_hands"
+                    else:
+                        analysis["size_hint"] = "tabletop"
+                else:
+                    size_ratio = None
+            except Exception as e:
+                logger.warning("size_ratio extraction failed: %s", e)
+
+    result = {
+        "name": analysis.get("name", product.name),
+        "colors": analysis.get("colors", ""),
+        "label_text": analysis.get("label_text", ""),
+        "shape": analysis.get("shape", "other"),
+        "size_hint": analysis.get("size_hint", "one_hand"),
+        "description": analysis.get("description", ""),
+        "size_ratio": size_ratio,
+    }
+    logger.info("Product %d analyzed: shape=%s size=%s ratio=%s",
+                product_id, result["shape"], result["size_hint"], size_ratio)
+    return result
 
 
 @router.post("/products/{product_id}/generate-sheet")
