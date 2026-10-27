@@ -77,6 +77,19 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
   const [uploadingProductPhoto, setUploadingProductPhoto] = useState(null);
   const [generatingSheet, setGeneratingSheet] = useState(null);
 
+  // 제품 추가/편집 모달
+  const [productModal, setProductModal] = useState(null); // null | { step: 'upload'|'analyze'|'result', productId, ... }
+  const [modalProductPhoto, setModalProductPhoto] = useState(null); // File
+  const [modalHoldingPhoto, setModalHoldingPhoto] = useState(null); // File
+  const [modalPhotoPreview, setModalPhotoPreview] = useState('');
+  const [modalHoldingPreview, setModalHoldingPreview] = useState('');
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analyzeResult, setAnalyzeResult] = useState(null);
+  // 분석 결과 편집 폼
+  const [modalForm, setModalForm] = useState({
+    name: '', name_ko: '', colors: '', label_text: '', shape: 'bottle', size_hint: 'one_hand', description: '',
+  });
+
   const extractError = (err) => {
     const d = err.response?.data?.detail;
     if (typeof d === 'string') return d;
@@ -159,6 +172,115 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
     }
   };
 
+  // ── 제품 모달: 열기 ──
+  const openProductModal = (existingProduct = null) => {
+    setModalProductPhoto(null);
+    setModalHoldingPhoto(null);
+    setModalPhotoPreview(existingProduct?.photo_url ? imageUrl(existingProduct.photo_url) : '');
+    setModalHoldingPreview(existingProduct?.holding_photo_url ? imageUrl(existingProduct.holding_photo_url) : '');
+    setAnalyzeResult(null);
+    setAnalyzing(false);
+    if (existingProduct) {
+      setModalForm({
+        name: existingProduct.name || '', name_ko: existingProduct.name_ko || '',
+        colors: existingProduct.colors || '', label_text: existingProduct.label_text || '',
+        shape: existingProduct.shape || 'bottle', size_hint: existingProduct.size_hint || 'one_hand',
+        description: existingProduct.description || '',
+      });
+      setProductModal({ step: existingProduct.photo_url ? 'result' : 'upload', productId: existingProduct.id });
+    } else {
+      setModalForm({ name: '', name_ko: '', colors: '', label_text: '', shape: 'bottle', size_hint: 'one_hand', description: '' });
+      setProductModal({ step: 'upload', productId: null });
+    }
+  };
+
+  const closeProductModal = () => {
+    setProductModal(null);
+    setModalProductPhoto(null);
+    setModalHoldingPhoto(null);
+    setModalPhotoPreview('');
+    setModalHoldingPreview('');
+    setAnalyzeResult(null);
+    setAnalyzing(false);
+  };
+
+  // ── 제품 모달: 사진 업로드 + 분석 ──
+  const handleModalAnalyze = async () => {
+    if (!productModal) return;
+    setAnalyzing(true);
+    try {
+      let pid = productModal.productId;
+      // 제품 레코드가 없으면 생성
+      if (!pid) {
+        const { data } = await api.post(`/projects/${projectId}/episodes/${episodeId}/products`, {
+          name: modalForm.name || '제품',
+        });
+        pid = data.id;
+        setProductModal(prev => ({ ...prev, productId: pid }));
+      }
+      // 사진 업로드
+      if (modalProductPhoto) {
+        const form = new FormData();
+        form.append('file', modalProductPhoto);
+        await api.post(`/products/${pid}/photo`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+      }
+      // 들고 사진 업로드
+      if (modalHoldingPhoto) {
+        const form = new FormData();
+        form.append('file', modalHoldingPhoto);
+        await api.post(`/products/${pid}/holding-photo`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+      }
+      // 분석
+      const { data: result } = await api.post(`/products/${pid}/analyze`);
+      setAnalyzeResult(result);
+      setModalForm({
+        name: result.name || modalForm.name,
+        name_ko: result.name_ko || '',
+        colors: result.colors || '',
+        label_text: result.label_text || '',
+        shape: result.shape || 'bottle',
+        size_hint: result.size_hint || 'one_hand',
+        description: result.description || '',
+      });
+      setProductModal(prev => ({ ...prev, step: 'result', sizeRatio: result.size_ratio }));
+    } catch (err) {
+      setError(extractError(err));
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  // ── 제품 모달: 저장 ──
+  const handleModalSave = async () => {
+    if (!productModal?.productId) return;
+    try {
+      await api.put(`/products/${productModal.productId}`, {
+        name: modalForm.name,
+        name_ko: modalForm.name_ko || null,
+        description: modalForm.description || null,
+        shape: modalForm.shape,
+        size_hint: modalForm.size_hint,
+        label_text: modalForm.label_text || null,
+        size_ratio: productModal.sizeRatio ?? null,
+      });
+      closeProductModal();
+      setCacheBuster(Date.now());
+      await loadProducts();
+    } catch (err) {
+      setError(extractError(err));
+    }
+  };
+
+  const SHAPE_CHIPS = [
+    { key: 'bottle', label: '병' }, { key: 'can', label: '캔' }, { key: 'box', label: '박스' },
+    { key: 'tube', label: '튜브' }, { key: 'flat', label: '납작' }, { key: 'pouch', label: '파우치' },
+    { key: 'other', label: '기타' },
+  ];
+  const SIZE_CHIPS = [
+    { key: 'palm', label: '손바닥' }, { key: 'one_hand', label: '한 손' },
+    { key: 'two_hands', label: '두 손' }, { key: 'tabletop', label: '탁상' }, { key: 'large', label: '대형' },
+  ];
+
   const imageUrl = (path) => {
     if (!path) return '';
     if (path.startsWith('http')) return path;
@@ -186,7 +308,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
     setLocations(locDetails);
     setStyles(styleRes.data);
     setPresets(presetsRes.data);
-    if (isAd) await loadProducts();
+    await loadProducts();
   };
 
   const { loading: initialLoading, error: loadError, retry: retryLoad } = useGateLoad(loadAssets);
@@ -1539,124 +1661,229 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
         )}
       </div>
 
-      {/* 제품 자산 (광고 에피소드) */}
-      {isAd && (
-        <ErrorBoundary label="제품 자산">
-        <div className="glass-card p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2">
-              <Package size={20} className="text-amber-500" /> 제품 자산
-            </h2>
+      {/* 제품 자산 */}
+      <ErrorBoundary label="제품 자산">
+      <div className="glass-card p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2">
+            <Package size={20} className="text-amber-500" /> 제품
+            {isAd && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">광고</span>}
+          </h2>
+          {products.length === 0 && (
             <button
-              onClick={() => setShowProductForm(true)}
+              onClick={() => openProductModal()}
               className="flex items-center gap-1 px-3 py-2 text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/40 rounded-full transition-colors"
             >
               <Plus size={12} /> 제품 추가
             </button>
-          </div>
-
-          <p className="text-xs text-amber-600/70 dark:text-amber-400/60 mb-3 -mt-2">
-            제품 사진은 배경이 투명한 PNG만 가능해요. 컷 위에 자연스럽게 올라가려면 배경이 없어야 합니다.
-          </p>
-
-          {/* 제품 추가 폼 */}
-          {showProductForm && (
-            <div className="mb-4 p-4 border-2 border-amber-200 dark:border-amber-800 rounded-xl bg-amber-50/50 dark:bg-amber-900/10">
-              <div className="space-y-3">
-                <input
-                  type="text"
-                  value={productName}
-                  onChange={(e) => setProductName(e.target.value)}
-                  placeholder="제품명"
-                  className="w-full px-3 py-2 border-2 border-border dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-sm font-bold text-ink-black dark:text-white placeholder-gray-400 focus:border-amber-500 focus:outline-none"
-                  autoFocus
-                />
-                <textarea
-                  value={productFeatures}
-                  onChange={(e) => setProductFeatures(e.target.value)}
-                  placeholder="제품 특징 메모 (선택) — 예: 유기농 녹차 성분, 쿨링 효과, 민트색 패키지"
-                  rows={2}
-                  className="w-full px-3 py-2 border-2 border-border dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-sm font-bold text-ink-black dark:text-white placeholder-gray-400 focus:border-amber-500 focus:outline-none resize-none"
-                />
-                <div className="flex gap-2">
-                  <button onClick={() => setShowProductForm(false)} className="px-3 py-1.5 text-xs font-bold text-gray-500 dark:text-gray-400 border border-border dark:border-zinc-700 rounded-lg hover:bg-gray-50 dark:hover:bg-zinc-800">취소</button>
-                  <button onClick={createProduct} disabled={!productName.trim()} className="px-3 py-1.5 text-xs font-bold text-white bg-amber-500 rounded-lg hover:bg-amber-600 disabled:opacity-50">추가</button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* 제품 목록 */}
-          {products.length > 0 ? (
-            <div className="space-y-3">
-              {products.map((p) => (
-                <div key={p.id} className="border-2 border-border dark:border-zinc-700 rounded-xl p-3 bg-white/50 dark:bg-zinc-800/50">
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <div className="min-w-0">
-                      <div className="font-bold text-sm text-ink-black dark:text-white">{p.name}</div>
-                      {p.features && <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{p.features}</div>}
-                    </div>
-                    <button onClick={() => deleteProduct(p.id)} className="text-gray-300 hover:text-red-500 dark:text-zinc-600 dark:hover:text-red-400 transition-colors flex-shrink-0"><Trash2 size={14} /></button>
-                  </div>
-
-                  <div className="flex gap-3">
-                    {/* 사진 */}
-                    <div className="flex flex-col items-center gap-1">
-                      {p.photo_url ? (
-                        <img
-                          src={imageUrl(p.photo_url)}
-                          alt="제품 사진"
-                          className="w-20 h-20 object-contain rounded-lg border border-border dark:border-zinc-700 cursor-pointer bg-[url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%228%22 height=%228%22><rect width=%224%22 height=%224%22 fill=%22%23ccc%22/><rect x=%224%22 y=%224%22 width=%224%22 height=%224%22 fill=%22%23ccc%22/></svg>')]"
-                          onClick={() => setLightbox({ url: imageUrl(p.photo_url), label: `${p.name} 사진` })}
-                        />
-                      ) : (
-                        <div className="w-20 h-20 border-2 border-dashed border-gray-300 dark:border-zinc-600 rounded-lg flex flex-col items-center justify-center gap-0.5">
-                          <Camera size={16} className="text-gray-400" />
-                          <span className="text-[8px] text-gray-400 leading-tight text-center px-1">투명 PNG</span>
-                        </div>
-                      )}
-                      <label className="cursor-pointer text-[10px] font-bold text-amber-600 dark:text-amber-400 hover:underline">
-                        {uploadingProductPhoto === p.id ? '업로드 중...' : (p.photo_url ? '사진 변경' : '사진 업로드')}
-                        <input type="file" accept="image/png" className="hidden" onChange={(e) => e.target.files[0] && uploadProductPhoto(p.id, e.target.files[0])} disabled={uploadingProductPhoto === p.id} />
-                      </label>
-                    </div>
-
-                    {/* 시트 */}
-                    <div className="flex flex-col items-center gap-1">
-                      {p.sheet_url ? (
-                        <img
-                          src={imageUrl(p.sheet_url)}
-                          alt="제품 시트"
-                          className="w-20 h-20 object-cover rounded-lg border-2 border-amber-300 dark:border-amber-700 cursor-pointer"
-                          onClick={() => setLightbox({ url: imageUrl(p.sheet_url), label: `${p.name} 시트` })}
-                        />
-                      ) : (
-                        <div className="w-20 h-20 border-2 border-dashed border-amber-300 dark:border-amber-700 rounded-lg flex items-center justify-center">
-                          <Sparkles size={16} className="text-amber-400" />
-                        </div>
-                      )}
-                      {p.photo_newer_than_sheet && (
-                        <span className="text-[9px] text-amber-600 dark:text-amber-400">⚠ 사진이 바뀌었어요</span>
-                      )}
-                      {p.photo_url && (
-                        <button
-                          onClick={() => generateProductSheet(p.id)}
-                          disabled={generatingSheet === p.id || !hasStyle}
-                          className={`text-[10px] font-bold hover:underline disabled:opacity-50 ${p.photo_newer_than_sheet ? 'text-red-500 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}`}
-                        >
-                          {generatingSheet === p.id ? '생성 중...' : (p.photo_newer_than_sheet ? '시트 재생성 (1패킷)' : (p.sheet_url ? '재생성 (1패킷)' : '시트 생성 (1패킷)'))}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm font-bold text-gray-400 dark:text-gray-500">제품을 추가해서 광고 웹툰에 제품 참조를 연결하세요</p>
           )}
         </div>
-        </ErrorBoundary>
+
+        {products.length > 0 ? (
+          <div className="space-y-3">
+            {products.map((p) => (
+              <div key={p.id} className="border-2 border-border dark:border-zinc-700 rounded-xl p-3 bg-white/50 dark:bg-zinc-800/50">
+                <div className="flex items-start gap-3">
+                  {/* 누끼 썸네일 */}
+                  <div className="flex-shrink-0">
+                    {p.photo_url ? (
+                      <img
+                        src={imageUrl(p.photo_url)}
+                        alt={p.name}
+                        className="w-16 h-16 object-contain rounded-lg border border-border dark:border-zinc-700 cursor-pointer bg-[url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%228%22 height=%228%22><rect width=%224%22 height=%224%22 fill=%22%23ccc%22/><rect x=%224%22 y=%224%22 width=%224%22 height=%224%22 fill=%22%23ccc%22/></svg>')]"
+                        onClick={() => setLightbox({ url: imageUrl(p.photo_url), label: `${p.name} 사진` })}
+                      />
+                    ) : (
+                      <div className="w-16 h-16 border-2 border-dashed border-gray-300 dark:border-zinc-600 rounded-lg flex items-center justify-center">
+                        <Camera size={16} className="text-gray-400" />
+                      </div>
+                    )}
+                  </div>
+                  {/* 정보 */}
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-sm text-ink-black dark:text-white">{p.name}</div>
+                    {p.name_ko && p.name_ko !== p.name && (
+                      <div className="text-xs text-gray-500 dark:text-gray-400">{p.name_ko}</div>
+                    )}
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {p.shape && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400">
+                          {SHAPE_CHIPS.find(s => s.key === p.shape)?.label || p.shape}
+                        </span>
+                      )}
+                      {p.size_hint && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400">
+                          {SIZE_CHIPS.find(s => s.key === p.size_hint)?.label || p.size_hint}
+                          {p.size_ratio ? ` · ${p.size_ratio}×` : ''}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {/* 버튼 */}
+                  <div className="flex gap-1 flex-shrink-0">
+                    <button onClick={() => openProductModal(p)} className="p-1.5 text-gray-400 hover:text-amber-500 dark:hover:text-amber-400 transition-colors" title="편집"><Edit3 size={14} /></button>
+                    <button onClick={() => deleteProduct(p.id)} className="p-1.5 text-gray-300 hover:text-red-500 dark:text-zinc-600 dark:hover:text-red-400 transition-colors" title="삭제"><Trash2 size={14} /></button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-400 dark:text-gray-500">
+            제품 사진을 올리면 웹툰 컷에 제품이 참조로 들어가요{!isAd && ' (선택)'}
+          </p>
+        )}
+      </div>
+      </ErrorBoundary>
+
+      {/* ── 제품 추가/편집 모달 ── */}
+      {productModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={closeProductModal}>
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl border-2 border-border dark:border-zinc-700 shadow-2xl w-full max-w-md max-h-[85vh] overflow-y-auto mx-4" onClick={e => e.stopPropagation()}>
+            {/* 헤더 */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border dark:border-zinc-700">
+              <h3 className="font-bold font-serif text-ink-black dark:text-white flex items-center gap-2">
+                <Package size={18} className="text-amber-500" /> {productModal.productId ? '제품 편집' : '제품 추가'}
+              </h3>
+              <button onClick={closeProductModal} className="p-1 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg"><X size={18} className="text-gray-500" /></button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {/* 사진 업로드 */}
+              <div>
+                <label className="text-xs font-bold text-gray-600 dark:text-gray-400 mb-1 block">제품 사진 (필수)</label>
+                <p className="text-[10px] text-gray-400 dark:text-gray-500 mb-2">흰 배경이면 더 좋아요</p>
+                <div className="flex items-center gap-3">
+                  {modalPhotoPreview ? (
+                    <img src={modalPhotoPreview} alt="제품" className="w-20 h-20 object-contain rounded-lg border border-border dark:border-zinc-700 bg-[url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%228%22 height=%228%22><rect width=%224%22 height=%224%22 fill=%22%23ccc%22/><rect x=%224%22 y=%224%22 width=%224%22 height=%224%22 fill=%22%23ccc%22/></svg>')]" />
+                  ) : (
+                    <div className="w-20 h-20 border-2 border-dashed border-gray-300 dark:border-zinc-600 rounded-lg flex items-center justify-center">
+                      <Upload size={20} className="text-gray-400" />
+                    </div>
+                  )}
+                  <label className="cursor-pointer px-3 py-2 text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors">
+                    {modalPhotoPreview ? '변경' : '사진 선택'}
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+                      const f = e.target.files[0];
+                      if (f) { setModalProductPhoto(f); setModalPhotoPreview(URL.createObjectURL(f)); }
+                    }} />
+                  </label>
+                </div>
+              </div>
+
+              {/* 들고 사진 (선택) */}
+              <div>
+                <label className="text-xs font-bold text-gray-600 dark:text-gray-400 mb-1 block">들고 찍은 사진 (선택)</label>
+                <p className="text-[10px] text-gray-400 dark:text-gray-500 mb-2">크기를 자동으로 맞춰요</p>
+                <div className="flex items-center gap-3">
+                  {modalHoldingPreview ? (
+                    <img src={modalHoldingPreview} alt="들고 사진" className="w-20 h-20 object-cover rounded-lg border border-border dark:border-zinc-700" />
+                  ) : (
+                    <div className="w-20 h-20 border-2 border-dashed border-gray-200 dark:border-zinc-700 rounded-lg flex items-center justify-center">
+                      <span className="text-[10px] text-gray-300 dark:text-gray-600">선택</span>
+                    </div>
+                  )}
+                  <label className="cursor-pointer px-3 py-2 text-xs font-bold text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-zinc-800 border border-border dark:border-zinc-700 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-700 transition-colors">
+                    {modalHoldingPreview ? '변경' : '사진 선택'}
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+                      const f = e.target.files[0];
+                      if (f) { setModalHoldingPhoto(f); setModalHoldingPreview(URL.createObjectURL(f)); }
+                    }} />
+                  </label>
+                </div>
+              </div>
+
+              {/* 분석 버튼 */}
+              {productModal.step === 'upload' && (
+                <button
+                  onClick={handleModalAnalyze}
+                  disabled={analyzing || (!modalProductPhoto && !modalPhotoPreview)}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-amber-500 text-white rounded-xl text-sm font-bold hover:bg-amber-600 disabled:opacity-50 transition-colors"
+                >
+                  {analyzing ? <><RefreshCw size={14} className="animate-spin" /> 분석 중...</> : <><Sparkles size={14} /> 분석</>}
+                </button>
+              )}
+
+              {/* 분석 결과 폼 */}
+              {productModal.step === 'result' && (
+                <div className="space-y-3 border-t border-border dark:border-zinc-700 pt-4">
+                  <div>
+                    <label className="text-xs font-bold text-gray-600 dark:text-gray-400 mb-1 block">제품명</label>
+                    <input
+                      type="text" value={modalForm.name} onChange={e => setModalForm(p => ({ ...p, name: e.target.value }))}
+                      className="w-full px-3 py-2 border-2 border-border dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-sm font-bold text-ink-black dark:text-white focus:border-amber-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-gray-600 dark:text-gray-400 mb-1 block">한글 이름</label>
+                    <input
+                      type="text" value={modalForm.name_ko} onChange={e => setModalForm(p => ({ ...p, name_ko: e.target.value }))}
+                      className="w-full px-3 py-2 border-2 border-border dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-sm font-bold text-ink-black dark:text-white focus:border-amber-500 focus:outline-none"
+                      placeholder="한글 제품명"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-gray-600 dark:text-gray-400 mb-1 block">색상</label>
+                    <input
+                      type="text" value={modalForm.colors} onChange={e => setModalForm(p => ({ ...p, colors: e.target.value }))}
+                      className="w-full px-3 py-2 border-2 border-border dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-sm text-ink-black dark:text-white focus:border-amber-500 focus:outline-none"
+                      placeholder="green, white, silver"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-gray-600 dark:text-gray-400 mb-1 block">라벨 글자</label>
+                    <p className="text-[10px] text-gray-400 dark:text-gray-500 mb-1">이 글자가 그림에 그대로 들어가요</p>
+                    <textarea
+                      value={modalForm.label_text} onChange={e => setModalForm(p => ({ ...p, label_text: e.target.value }))}
+                      rows={2}
+                      className="w-full px-3 py-2 border-2 border-border dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-sm text-ink-black dark:text-white focus:border-amber-500 focus:outline-none resize-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-gray-600 dark:text-gray-400 mb-1 block">형태</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {SHAPE_CHIPS.map(s => (
+                        <button key={s.key}
+                          onClick={() => setModalForm(p => ({ ...p, shape: s.key }))}
+                          className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors ${modalForm.shape === s.key ? 'bg-amber-500 text-white' : 'bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-zinc-700'}`}
+                        >{s.label}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-gray-600 dark:text-gray-400 mb-1 block">
+                      크기
+                      {productModal.sizeRatio > 0 && (
+                        <span className="ml-2 text-[10px] font-normal text-blue-500">손 길이의 {productModal.sizeRatio}배</span>
+                      )}
+                    </label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {SIZE_CHIPS.map(s => (
+                        <button key={s.key}
+                          onClick={() => setModalForm(p => ({ ...p, size_hint: s.key }))}
+                          className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors ${modalForm.size_hint === s.key ? 'bg-blue-500 text-white' : 'bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-zinc-700'}`}
+                        >{s.label}</button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 저장 / 재분석 */}
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      onClick={() => setProductModal(prev => ({ ...prev, step: 'upload' }))}
+                      className="flex-1 px-3 py-2.5 text-xs font-bold text-gray-500 dark:text-gray-400 border border-border dark:border-zinc-700 rounded-xl hover:bg-gray-50 dark:hover:bg-zinc-800"
+                    >다시 분석</button>
+                    <button
+                      onClick={handleModalSave}
+                      disabled={!modalForm.name.trim()}
+                      className="flex-1 px-3 py-2.5 text-xs font-bold text-white bg-amber-500 rounded-xl hover:bg-amber-600 disabled:opacity-50 transition-colors"
+                    >저장</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {error && (

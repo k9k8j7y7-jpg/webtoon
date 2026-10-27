@@ -154,11 +154,15 @@ async def create_storyboard(
     # 페이지 형식 (콘티 재분할 시 형식별 가이드 주입)
     page_format = get_page_format(episode.gate_status)
 
-    # 광고 에피소드: 제품명 수집 (콘티 생성 시 컷별 제품 등장 판단용)
+    # 제품명 수집 (콘티 생성 시 컷별 제품 등장 판단용 — 영문+한글)
     from app.products.models import Product as ProductModel
-    product_names = [
-        p.name for p in db.query(ProductModel).filter(ProductModel.episode_id == episode_id).all()
-    ]
+    _prods = db.query(ProductModel).filter(ProductModel.episode_id == episode_id).all()
+    product_names = []
+    for p in _prods:
+        if p.name:
+            product_names.append(p.name)
+        if p.name_ko:
+            product_names.append(p.name_ko)
 
     # 목표 컷 수가 있고, 현재와 다르면 AI 재분할
     if target:

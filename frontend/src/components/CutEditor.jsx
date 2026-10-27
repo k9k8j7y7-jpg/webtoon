@@ -946,7 +946,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
   ];
 
   const allToolItems = products.length > 0
-    ? [{ key: 'product', label: '제품', icon: ImageIcon, active: isProductActive, onClick: handleToggleProduct }, ...baseTools]
+    ? [{ key: 'product', label: '실사 제품', icon: ImageIcon, active: isProductActive, onClick: handleToggleProduct, tooltip: '실사 제품 올리기 — 제품 사진을 그대로 얹어요 (디테일 컷용)' }, ...baseTools]
     : baseTools;
 
   // ──────────────────────────────────────────────────────────────
@@ -1042,6 +1042,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                   <button
                     key={tool.key}
                     onClick={tool.onClick}
+                    title={tool.tooltip || tool.label}
                     className={`flex flex-col sm:flex-row items-center justify-center py-1 px-1 sm:px-3.5 h-[40px] sm:h-9 rounded-xl sm:rounded-full transition-all active:scale-95 ${
                       tool.active
                         ? 'bg-gradient-to-r from-neon-from to-neon-to text-white shadow-[0_0_12px_rgba(168,85,247,0.35)] font-bold'

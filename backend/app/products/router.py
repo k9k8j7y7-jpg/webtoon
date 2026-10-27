@@ -33,6 +33,7 @@ class ProductCreate(BaseModel):
 
 class ProductUpdate(BaseModel):
     name: str | None = None
+    name_ko: str | None = None
     features: str | None = None
     description: str | None = None
     shape: str | None = None
@@ -54,6 +55,7 @@ async def list_products(
         {
             "id": p.id,
             "name": p.name,
+            "name_ko": p.name_ko,
             "features": p.features,
             "description": p.description,
             "shape": p.shape,
@@ -102,6 +104,8 @@ async def update_product(
         raise HTTPException(status_code=404, detail="Product not found")
     if body.name is not None:
         product.name = body.name
+    if body.name_ko is not None:
+        product.name_ko = body.name_ko
     if body.features is not None:
         product.features = body.features
     if body.description is not None:
@@ -116,10 +120,10 @@ async def update_product(
         product.label_text = body.label_text
     db.commit()
     return {
-        "id": product.id, "name": product.name, "features": product.features,
-        "description": product.description, "shape": product.shape,
-        "size_hint": product.size_hint, "size_ratio": product.size_ratio,
-        "label_text": product.label_text,
+        "id": product.id, "name": product.name, "name_ko": product.name_ko,
+        "features": product.features, "description": product.description,
+        "shape": product.shape, "size_hint": product.size_hint,
+        "size_ratio": product.size_ratio, "label_text": product.label_text,
     }
 
 
@@ -239,7 +243,9 @@ async def analyze_product(
             types.Part.from_bytes(data=ref_bytes, mime_type="image/jpeg"),
             (
                 "Analyze this product image. Return a JSON object with these fields:\n"
-                "- name: product name visible on the label (Korean or English)\n"
+                "- name: product name visible on the label (in its original language)\n"
+                "- name_ko: product name in Korean (translate if label is in another language, "
+                "or Korean brand alias if commonly known — e.g. '밀본 엘루쥬다' for 'MILBON Elujuda')\n"
                 "- colors: comma-separated list of dominant colors\n"
                 "- label_text: ALL text visible on the product label, transcribed exactly as printed "
                 "(line breaks as \\n)\n"
@@ -270,21 +276,54 @@ async def analyze_product(
                 contents=[
                     types.Part.from_bytes(data=holding_bytes, mime_type="image/jpeg"),
                     (
-                        "A person is holding a product in this photo. "
-                        "Measure the product height and the hand length (wrist to middle fingertip). "
-                        "Return a JSON object: {\"product_height_px\": N, \"hand_length_px\": N, \"ratio\": R} "
-                        "where ratio = product_height / hand_length. Return ONLY JSON."
+                        "A person is holding a product in this photo.\n"
+                        "1. Measure the PRODUCT HEIGHT in pixels (top to bottom of the product).\n"
+                        "2. Measure the HAND LENGTH in pixels (wrist to middle fingertip).\n"
+                        "3. Compute ratio = product_px / hand_px.\n"
+                        "A typical hand-held bottle is ratio 1.0~1.5 (product is TALLER than the hand).\n"
+                        "A small lip balm is ratio 0.3~0.5 (product is shorter than the hand).\n"
+                        "Return ONLY: {\"product_px\": N, \"hand_px\": N, \"ratio\": R}\n"
+                        "No other keys or text."
                     ),
                 ],
                 config=types.GenerateContentConfig(
                     temperature=0.2,
-                    max_output_tokens=512,
+                    max_output_tokens=1024,
                 ),
             )
             try:
-                ratio_data = parse_ai_json(ratio_resp.text)
-                size_ratio = round(float(ratio_data.get("ratio", 0)), 2)
-                if size_ratio > 0:
+                import json as _json
+                import re as _re
+                raw_text = ratio_resp.text.strip()
+                # parse_ai_json 시도, 실패 시 정규식 폴백
+                try:
+                    ratio_data = parse_ai_json(raw_text)
+                except Exception:
+                    # JSON 블록 직접 추출
+                    m = _re.search(r'\{[^}]+\}', raw_text)
+                    ratio_data = _json.loads(m.group()) if m else {}
+
+                product_px = float(ratio_data.get("product_px", 0))
+                hand_px = float(ratio_data.get("hand_px", 0))
+                raw_ratio = float(ratio_data.get("ratio", 0))
+
+                # 교차검증: product_px/hand_px 직접 계산
+                if product_px > 0 and hand_px > 0:
+                    computed = product_px / hand_px
+                    # 모델의 ratio와 직접 계산이 크게 다르면 직접 계산 우선
+                    if raw_ratio > 0 and abs(computed - raw_ratio) / max(computed, raw_ratio) > 0.3:
+                        logger.warning("ratio mismatch: model=%.2f computed=%.2f, using computed",
+                                       raw_ratio, computed)
+                    size_ratio = round(computed, 2)
+                elif raw_ratio > 0:
+                    size_ratio = round(raw_ratio, 2)
+                else:
+                    size_ratio = None
+
+                logger.info("size_ratio raw: product_px=%s hand_px=%s model_ratio=%s → final=%s",
+                            product_px, hand_px, raw_ratio, size_ratio)
+
+                if size_ratio and size_ratio > 0:
                     # size_hint 보정
                     if size_ratio < 0.5:
                         analysis["size_hint"] = "palm"
@@ -301,6 +340,7 @@ async def analyze_product(
 
     result = {
         "name": analysis.get("name", product.name),
+        "name_ko": analysis.get("name_ko", ""),
         "colors": analysis.get("colors", ""),
         "label_text": analysis.get("label_text", ""),
         "shape": analysis.get("shape", "other"),
@@ -308,8 +348,8 @@ async def analyze_product(
         "description": analysis.get("description", ""),
         "size_ratio": size_ratio,
     }
-    logger.info("Product %d analyzed: shape=%s size=%s ratio=%s",
-                product_id, result["shape"], result["size_hint"], size_ratio)
+    logger.info("Product %d analyzed: shape=%s size=%s ratio=%s name_ko=%s",
+                product_id, result["shape"], result["size_hint"], size_ratio, result["name_ko"])
     return result
 
 

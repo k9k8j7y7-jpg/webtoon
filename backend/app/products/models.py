@@ -12,6 +12,7 @@ class Product(Base):
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     episode_id = Column(BigInteger, ForeignKey("episodes.id"), nullable=False, index=True)
     name = Column(String(200), nullable=False)
+    name_ko = Column(String(200), nullable=True)  # 한글 제품명 (비전 추출)
     features = Column(Text, nullable=True)  # 제품 특징 메모
     description = Column(Text, nullable=True)  # 자동 추출 요약 (색·라벨·재질)
     shape = Column(String(20), nullable=True)  # bottle/can/box/tube/flat/pouch/other

@@ -1,4 +1,5 @@
 -- step34: products 테이블에 제품 분석 필드 추가
+-- name_ko: 한글 제품명 (비전 추출)
 -- description: 자동 추출 요약 (색·라벨 글자·재질)
 -- shape: bottle/can/box/tube/flat/pouch/other
 -- size_hint: palm/one_hand/two_hands/tabletop/large
@@ -7,6 +8,7 @@
 -- label_text: 라벨에 적힌 글자 그대로
 
 ALTER TABLE products
+    ADD COLUMN name_ko VARCHAR(200) NULL AFTER name,
     ADD COLUMN description TEXT AFTER features,
     ADD COLUMN shape VARCHAR(20) AFTER description,
     ADD COLUMN size_hint VARCHAR(20) AFTER shape,

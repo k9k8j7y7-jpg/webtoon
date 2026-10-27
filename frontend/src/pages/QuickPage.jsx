@@ -81,6 +81,8 @@ export default function QuickPage() {
   const [shot, setShot] = useState('');
   const [style, setStyle] = useState('korean_webtoon');
   const [ratio, setRatio] = useState('1:1');
+  const [productPhoto, setProductPhoto] = useState(null); // File
+  const [productPreview, setProductPreview] = useState('');
 
   // ── 생성 상태 ──
   const [generating, setGenerating] = useState(false);
@@ -144,11 +146,23 @@ export default function QuickPage() {
     setResult(null);
     setCutData(null);
     try {
-      const body = { prompt: prompt.trim(), preset_ref: presetRef, style, aspect_ratio: ratio };
-      if (shot) body.shot = shot;
-      if (dialogue.trim()) body.dialogue = dialogue.trim();
-
-      const { data } = await api.post('/quick', body);
+      let data;
+      if (productPhoto) {
+        const form = new FormData();
+        form.append('prompt', prompt.trim());
+        form.append('preset_ref', presetRef);
+        form.append('style', style);
+        form.append('aspect_ratio', ratio);
+        if (shot) form.append('shot', shot);
+        if (dialogue.trim()) form.append('dialogue', dialogue.trim());
+        form.append('product_photo', productPhoto);
+        ({ data } = await api.post('/quick', form, { headers: { 'Content-Type': 'multipart/form-data' } }));
+      } else {
+        const body = { prompt: prompt.trim(), preset_ref: presetRef, style, aspect_ratio: ratio };
+        if (shot) body.shot = shot;
+        if (dialogue.trim()) body.dialogue = dialogue.trim();
+        ({ data } = await api.post('/quick', body));
+      }
       const job = await pollJob(data.job_id, null, 1500);
       const r = {
         ...job.result,
@@ -384,7 +398,7 @@ export default function QuickPage() {
             type="text"
             value={prompt}
             onChange={e => setPrompt(e.target.value)}
-            placeholder={PLACEHOLDERS[phIdx]}
+            placeholder={productPhoto ? '제품을 들고 웃는다' : PLACEHOLDERS[phIdx]}
             disabled={generating}
             maxLength={200}
             className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-sm transition"
@@ -418,6 +432,31 @@ export default function QuickPage() {
             maxLength={100}
             className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-sm transition"
           />
+        </section>
+
+        {/* ③ 제품 사진 (선택) */}
+        <section className="mb-6">
+          <h2 className="text-sm font-bold text-gray-400 mb-1">제품 사진 <span className="text-gray-600 font-normal">(선택)</span></h2>
+          <p className="text-[11px] text-gray-600 mb-3">모델이 들고 있게 그려요</p>
+          <div className="flex items-center gap-3">
+            {productPreview ? (
+              <div className="relative">
+                <img src={productPreview} alt="제품" className="w-16 h-16 object-contain rounded-lg border border-white/10 bg-white/5" />
+                <button
+                  onClick={() => { setProductPhoto(null); setProductPreview(''); }}
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] font-bold hover:bg-red-600"
+                >×</button>
+              </div>
+            ) : (
+              <label className="cursor-pointer flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-gray-400 text-xs font-bold hover:bg-white/10 transition">
+                📦 사진 선택
+                <input type="file" accept="image/*" className="hidden" disabled={generating} onChange={e => {
+                  const f = e.target.files?.[0];
+                  if (f) { setProductPhoto(f); setProductPreview(URL.createObjectURL(f)); }
+                }} />
+              </label>
+            )}
+          </div>
         </section>
 
         {/* ③ 스타일 선택 (비율 포함) */}

@@ -157,8 +157,9 @@ def _detect_product_in_cut(cut_data: dict, product_names: list[str]) -> bool:
         keywords = [w for w in name.lower().split() if len(w) >= 2]
         if any(kw in combined for kw in keywords):
             return True
-    # 제품 관련 일반 키워드
-    product_keywords = ["제품", "상품", "패키지", "브랜드", "사용", "바르", "뿌리", "마시", "먹"]
+    # 제품 관련 일반 키워드 (한글)
+    product_keywords = ["제품", "상품", "패키지", "브랜드", "사용", "바르", "뿌리", "마시", "먹",
+                        "들고", "보여주", "건네", "내밀", "꺼내"]
     if any(kw in combined for kw in product_keywords):
         return True
     return False

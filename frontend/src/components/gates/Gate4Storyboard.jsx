@@ -47,6 +47,7 @@ export default function Gate4Storyboard({ projectId, episodeId, onRefresh, readO
   const locOriginalsRef = useRef({});
 
   const isInvalidated = gateStatus?.gates?.['4_storyboard']?.status === 'invalidated';
+  const [hasProducts, setHasProducts] = useState(false);
 
   const loadCuts = async () => {
     const { data } = await api.get(`/projects/${projectId}/episodes/${episodeId}/cuts`);
@@ -73,8 +74,15 @@ export default function Gate4Storyboard({ projectId, episodeId, onRefresh, readO
     setEpisodeCharacters(data);
   };
 
+  const loadProducts = async () => {
+    try {
+      const { data } = await api.get(`/projects/${projectId}/episodes/${episodeId}/products`);
+      setHasProducts(data.length > 0);
+    } catch { /* ignore */ }
+  };
+
   const loadAllData = async () => {
-    await Promise.all([loadCuts(), loadLocations(), loadCharacters()]);
+    await Promise.all([loadCuts(), loadLocations(), loadCharacters(), loadProducts()]);
     loadRecommendation(); // 추천은 실패해도 무관
   };
 
@@ -590,6 +598,14 @@ export default function Gate4Storyboard({ projectId, episodeId, onRefresh, readO
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm font-bold text-gray-600 dark:text-gray-400">
               총 {cuts.length}컷
+              {hasProducts && (() => {
+                const productCuts = cuts.filter(c => c.has_product).length;
+                return productCuts > 0 ? (
+                  <span className="ml-2 text-amber-600 dark:text-amber-400">
+                    · {cuts.length}컷 중 {productCuts}컷에 제품
+                  </span>
+                ) : null;
+              })()}
             </p>
           </div>
 
@@ -635,11 +651,18 @@ export default function Gate4Storyboard({ projectId, episodeId, onRefresh, readO
                   </div>
                 </div>
 
-                {cut.has_product && (
+                {hasProducts && (
                   <div className="flex items-center gap-1 mb-1">
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-                      📦 제품 등장
-                    </span>
+                    {cut.has_product ? (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                        📦 제품 등장
+                        {cut.has_product_auto && <span className="ml-1 text-[9px] text-amber-500 dark:text-amber-500/70">자동</span>}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-400 dark:bg-zinc-800 dark:text-gray-600">
+                        📦 제품 없음
+                      </span>
+                    )}
                   </div>
                 )}
 
@@ -827,10 +850,10 @@ export default function Gate4Storyboard({ projectId, episodeId, onRefresh, readO
                 </div>
               </div>
 
-              {/* 제품 등장 토글 (광고 에피소드만) */}
-              {gateStatus?.is_ad && (
+              {/* 제품 등장 토글 */}
+              {hasProducts && (
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-gray-600 dark:text-gray-400">제품 등장</label>
+                  <label className="text-xs font-bold text-gray-600 dark:text-gray-400">📦 제품 등장</label>
                   <button
                     onClick={() => setEditForm(prev => ({ ...prev, has_product: !prev.has_product }))}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${

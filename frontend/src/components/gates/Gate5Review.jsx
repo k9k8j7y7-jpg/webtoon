@@ -1066,6 +1066,9 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
 
               <div className="p-2">
                 <div className="text-[11px] font-bold text-gray-500 dark:text-gray-400 mb-1.5 flex items-center gap-1">
+                  {cut.has_product && (
+                    <span className="text-[10px] px-1 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 shrink-0" title="제품 참조 포함">📦</span>
+                  )}
                   <span className="truncate">{shotLabel[cut.shot] || cut.shot} · {cut.characters?.map(c => getCharName(c)).join(', ')}</span>
                   {cut.characters?.some(c => isUnknownChar(c)) && (
                     <span className="text-amber-500 shrink-0" title={`알 수 없는 캐릭터: ${cut.characters.filter(c => isUnknownChar(c)).map(c => typeof c === 'string' ? c : c.character_id).join(', ')}`}>⚠</span>
@@ -1087,7 +1090,8 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                   <div className="flex gap-1">
                     <RegenDropdown cutId={cut.cut_id} cutSpec={cut} disabled={!!job}
                       onRegenerate={handleRegenerate}
-                      epDramaLevel={gateStatus?.drama_level || (gateStatus?.is_ad ? 'light' : 'normal')} />
+                      epDramaLevel={gateStatus?.drama_level || (gateStatus?.is_ad ? 'light' : 'normal')}
+                      hasProduct={cut.has_product && products.length > 0} />
                     <button
                       onClick={(e) => { e.stopPropagation(); handleRevert(cut.cut_id); }}
                       title="되돌리기"
@@ -1558,8 +1562,8 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
               />
             </div>
 
-            {/* 제품 등장 토글 (광고 에피소드만) */}
-            {gateStatus?.is_ad && (
+            {/* 제품 등장 토글 */}
+            {products.length > 0 && (
               <div className="flex items-center justify-between mb-4 p-3 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-xl">
                 <div>
                   <span className="text-xs font-bold text-amber-700 dark:text-amber-400">제품 등장</span>
@@ -1768,7 +1772,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
 const DRAMA_LABELS = { light: '담백', normal: '보통', strong: '과장' };
 const DRAMA_DESC = { light: '효과 없이 깔끔', normal: '감정 효과 2~3개', strong: '집중선·과장까지' };
 
-function RegenDropdown({ cutId, cutSpec, disabled, onRegenerate, epDramaLevel }) {
+function RegenDropdown({ cutId, cutSpec, disabled, onRegenerate, epDramaLevel, hasProduct }) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef(null);
   const [pos, setPos] = useState(null);
@@ -1803,6 +1807,12 @@ function RegenDropdown({ cutId, cutSpec, disabled, onRegenerate, epDramaLevel })
       <div data-drama-menu className="fixed inset-0 z-[60] flex items-end justify-center bg-black/50" onPointerDown={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
         <div className="w-full max-w-md bg-white dark:bg-night-card rounded-t-2xl shadow-2xl p-4 pb-6 space-y-1" onPointerDown={(e) => e.stopPropagation()}>
           <p className="text-xs font-bold text-gray-400 mb-2 px-1">연출 강도 재생성 (1패킷)</p>
+          {hasProduct && (
+            <div className="flex items-center gap-2 px-4 py-2 mb-1 bg-amber-50 dark:bg-amber-900/10 rounded-xl">
+              <span className="text-xs font-bold text-amber-700 dark:text-amber-400">📦 제품 참조 포함</span>
+              <Check size={12} className="text-amber-500 ml-auto" />
+            </div>
+          )}
           {['light', 'normal', 'strong'].map((level) => {
             const current = cutDrama || epDramaLevel;
             return (
@@ -1831,6 +1841,11 @@ function RegenDropdown({ cutId, cutSpec, disabled, onRegenerate, epDramaLevel })
         onPointerDown={(e) => e.stopPropagation()}
       >
         <p className="px-3 pt-2 pb-1 text-[10px] font-bold text-gray-400">연출 강도 재생성</p>
+        {hasProduct && (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/10">
+            📦 제품 참조 포함 <Check size={10} className="text-amber-500 ml-auto" />
+          </div>
+        )}
         {['light', 'normal', 'strong'].map((level) => {
           const current = cutDrama || epDramaLevel;
           return (
