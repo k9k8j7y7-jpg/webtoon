@@ -56,9 +56,17 @@ WEBTOON/
 - **패킷 가격 정책:** 순마진 = 결제액×0.872 − 93원×패킷수 기준으로 소량 45% / 중량 40% / 대량 35% 계단. 패킷당 판매가 최저 178원. 이미지 모델·환율 변경으로 원가가 바뀌면 재계산. 고품질 모델은 가격표 대신 패킷 차감 수(2패킷 등)로 반영
 - **환불:** 약관 제6조 4항 — 7일 이내 미사용 전액, 사용분 1개당 230원 정산. 가격 페이지·랜딩 FAQ·약관 3곳 통일(`REFUND_TEXT` 상수)
 
-## 현재 상태 (2026-10-20)
+## 현재 상태 (2026-10-27)
 
 **다음 작업:** E 오픈 준비(토스·네이버 도도 확인 후)
+
+**제품 자산 2단계 완료 (2026-10-27):** 지시서 `docs/지시서-제품자산.md`
+- Gate3 제품 섹션: isAd 조건 제거 → 항상 표시. [제품 추가] 모달(사진 필수·들고 사진 선택·[분석]→이름·한글이름·색·라벨글자·형태 칩7·크기 칩5 자동 선택→저장). 누끼 썸네일 카드+형태·크기 칩. 편집도 같은 모달
+- Gate4 콘티: 컷 카드 "📦 제품 등장"/"📦 제품 없음" 배지(자동이면 "자동" 표시), 상단 "N컷 중 M컷에 제품" 요약, 편집 모달 토글 hasProducts 조건
+- Gate5 이미지: 컷 카드 📦 배지, RegenDropdown "제품 참조 포함" 표시, 콘티 수정 토글 products.length>0 조건
+- 빠른 한 컷: "제품 사진 (선택)" 업로드 + placeholder "제품을 들고 웃는다" + FormData 분기
+- 컷 편집기: 제품 버튼 "실사 제품" + tooltip
+- 백엔드: analyze name_ko 추출, size_ratio 프롬프트 보강+교차검증(product_px÷hand_px)+파싱 폴백, _detect_product_in_cut 한글 키워드 추가, step34 name_ko
 
 **모션 웹툰 1단계 완료 (2026-10-16):** 지시서 `docs/지시서-모션.md`
 - Veo lite image-to-video: 4초 생성→3초 트림, 비율별 패딩·크롭, 후보 2개 순차(세마포어 1)
@@ -124,7 +132,7 @@ WEBTOON/
 - 컷 비율: 에피소드별 5종 선택(1:1 정사각/9:16 세로/16:9 가로/3:4 세로/4:3 가로). Gate3 UI 5버튼, 첫 이미지 생성 후 잠금(프론트 비활성+백엔드 거부). 기존 에피소드 1:1 잠금, 신규 기본 9:16. gate_status JSON 저장(step24). Gemini image_config.aspect_ratio 실전달. 시트 1:1 고정, 장소 16:9 고정, 컷은 에피소드 비율. 가로 비율 프롬프트: 풀샷 앵커 "characters occupy 60-80% HEIGHT" 보강. 인스타 캐러셀 export: letterbox(비율 유지+흰 배경, center-crop 폐지)
 - 대본 생성: 단편=STANDALONE_ADDON(완결 필수·기승전결), 연작=SERIES_ADDON(훅 끊기), 광고=AD_ADDON(제품 자연 노출+완결). 공용 SYSTEM_INSTRUCTION + 분기 애드온
 - 광고 에피소드: gate_status.is_ad 플래그(JSON, 마이그레이션 불필요). 프로젝트 페이지 3버튼(단편/연작/광고), 카드 amber 배지. 관리자 showcase 기본 카테고리 "ad"
-- 제품 자산: products 테이블(step25). Gate3 제품 섹션(광고 전용) — 사진 업로드→비전 추출→일러스트 시트(1패킷, 플랜C+참조 사진 직접 첨부). 컷별 has_product 플래그로 제품 등장 컷만 시트 참조+프롬프트 주입 (폴백 false — 기존 컷은 Gate5 콘티 수정 토글로 지정). Gate4 콘티 생성 시 대본 기반 자동 판단, Gate4/5 편집 모달에서 수동 토글 가능
+- 제품 자산: products 테이블(step25+step34). Gate3 제품 섹션(**항상 표시**, isAd 조건 제거) — [제품 추가] 모달(사진+들고사진→[분석]→이름·한글이름·색·라벨글자·형태·크기 칩 자동선택→저장). 누끼 카드+칩. 일러스트 시트(1패킷). 컷별 has_product 플래그로 제품 등장 컷만 시트 참조+프롬프트 주입. Gate4 "📦 제품 등장/없음" 배지+요약, Gate5 📦 배지+RegenDropdown, Gate4/5 편집 토글. 콘티 자동 검출+수동 override. 빠른 한 컷 product_photo
 - 제품 레이어: product_items(spec JSON). ProductLayer 컴포넌트 — 제품 실사 사진 오버레이. CutEditor 드래그·회전·크기·투명도 편집. 레이어 순서: 이미지→제품→효과→SVG말풍선→PNG말풍선→효과음. 뷰어+내보내기 4경로 Base64 인라인
 - 생성 재시도: gemini_image.py·gemini.py 최대 2회 재시도(3초 간격). 패킷은 최종 성공 시에만 차감. Gate3/5 에러 문구 통일+"패킷 미차감" 안내
 - 말풍선: 12종 SVG + CutEditor 드래그 편집 + SFX 효과음 + 커스텀 폰트 (효과음 5종 + 말풍선 2종) + 특수 말풍선 PNG 5종(pngbubble_items, svg-text 글자, bubbles_meta.json 카탈로그)
@@ -223,6 +231,7 @@ WEBTOON/
 - [x] 아이디어 정리 단락 바꾸기 1·2단계 (완료 2026-10-15, 도입·전개·전환·결말 개별 재생성·되돌리기 1단계·stale 보완·단락별 칩 세트, 0패킷)
 - [x] 재포지셔닝 1차 (완료 2026-10-20, 가격 팩 4종·1회 결제·패킷 사용처·환영 3패킷·환불 230원 통일, 랜딩 결과물 우선·헤드라인 A·3단계 흐름·용도 탭·비용 비교·차별점·릴스 영상·경량 릴스·showcase reel API)
 - [x] 빠른 한 컷 (완료 2026-10-22, 프리셋 6종·1컷 생성·인스타 공유·말풍선 편집·이야기 만들기 expand, 고스트 클릭 3겹 방어·다시 그리기 확인 단계)
+- [x] 제품 자산 2단계 (완료 2026-10-27, Gate3 모달·Gate4 토글·Gate5 배지·빠른 컷 제품·size_ratio 교차검증·name_ko·step34 name_ko)
 - [ ] **다음:** E 오픈 준비 1 셀프 청소
 - [ ] 모바일 레이아웃 1차 (`docs/지시서-모바일레이아웃-1차.md`, 0단계 조사부터) → 2차(랜딩·게이트1~3·편집기)
 - [ ] C 이미지 모델 선택 (에피소드 단위 모델 잠금, openai_image.py 어댑터)
@@ -281,6 +290,8 @@ WEBTOON/
 - **모션 웹툰:** `cuts.spec.motion` JSON 확장(DB 마이그레이션 없음). `app/motion/`(service·router·prompts). Veo lite(`veo-3.1-lite-generate-preview`) 4초 생성→ffmpeg 앞 3초 트림, 비율별 패딩·크롭(1:1→16:9 패딩→크롭, 9:16 그대로, 3:4→9:16 패딩). 프롬프트에 캐릭터 **외모 설명**(appearance_en 시각 특징) 지칭 — **이름(한글·영문) 절대 금지**(Veo 안전필터 celebrity 거부). 후보 2개 순차(서버 전역 세마포어 1), 격자 몽타주(원본+5프레임 한 장) Gemini flash 비전 검사 → 1회 재생성(`MOTION_MAX_RETRY`). **4패킷** 선차감(`packet_transactions.reason='generation'` + `description='motion ...'`), 전부 실패 시 환불+알림. BackgroundTasks에는 **ORM 객체 대신 id·값을 변수로 미리 추출**(세션 닫힘 방지). 실사 캐릭터 컷 제외(400). 이미지 재생성 시 motion 자동 삭제(`images/service.py`). export = `compose_dialogue_on_image(return_overlay=True)` RGBA PNG + ffmpeg overlay → 말풍선 합성 mp4(`export_path`). select 시 자동 생성, 다운로드·인스타 모두 export_path 사용. 뷰어·미리보기는 DOM 오버레이(BubbleOverlay 그대로). 배포 전 `Motion prompt:` 후 알림 없는 진행 중 motion job 확인. **릴스 영상:** `gate_status.reel` JSON(마이그레이션 없음), `app/motion/reel.py`. 정지 컷 = blurred pillarbox + zoompan(1.0→1.05) 3초, 영상 컷 = export_path 재사용 + pillarbox. 말풍선 = `compose_dialogue_on_image(return_overlay=True)` RGBA + ffmpeg overlay(원본 좌표계 먼저 합성). 1080×1920 blurred pillarbox. concat demuxer + 무음 AAC + faststart. 끝 크레딧 1초(Pillow). **1패킷**, `source_hash`로 stale 판정 — **`_compute_source_hash`는 nested `{"image_url":…, "motion":{"selected":…, "export_path":…}}` 구조** 필수(flat 키 불일치 주의). stale일 때 Clapperboard 아이콘 위 오렌지 점 + 드롭다운 맨 위 안내 텍스트. 인스타 공유 3택(이미지·릴스·뷰어 링크). 배포 전 `Reel start`/`Reel done` 로그 쌍 확인
 - **인스타 공유:** Web Share API(`navigator.share({files})`) — `share()`는 **`onClick`에서 동기 호출**(await·pointerdown 금지, user activation 소실), 이미지는 모달 열릴 때 사전 렌더. JPEG q0.9 1080×1080 letterbox, 20장 한도(인스타 캐러셀). 캡션은 복사 방식(인스타가 텍스트 무시), 피드 선택 안내 한 줄. 페이지 형식이면 페이지/컷별 토글(localStorage `insta_share_mode`). 크레딧 `© 닉네임 · EziToon`은 **인스타 경로만**(공유+ZIP, 기본 ON, localStorage `insta_credit`) — letterbox 흰 여백이면 검은 글씨, 이미지 위면 흰+외곽선. 뷰어 공유는 링크만(`share({url})` / clipboard 폴백), 이미지 공유는 작가(게이트5)만. 공식 Graph API 자동 발행은 백로그
 - **빠른 한 컷:** `/quick` 페이지(`QuickPage.jsx`) — 프리셋 캐릭터 6종 + 한 줄 장면 + 대사(선택) + 스타일/비율 → 1컷 생성. 유저당 '빠른 컷' 프로젝트 1개(`is_quick`, `single_page` 형식, gate 1~4 자동 done), 에피소드는 매 생성 시 새로 생성. **프리셋 = `is_preset` 캐릭터**(시스템 프로젝트 id=7, 캐릭터 53~58 **삭제 금지**) — link로 복사 사용, 시트·표정 참조 포함. 생성은 기존 `generate_cut_image`·`regenerate_single_cut` 재사용, **1패킷 후차감**(`source='quick'`). 결과 화면: composed_image_url 우선 표시, [인스타 공유]·[PNG 저장]·[말풍선 고치기]·[다시 그리기 · 1패킷]·[이야기 만들기]. **expand** = `POST /quick/{episode_id}/expand` — 새 프로젝트·에피소드 생성(원본 컷·캐릭터·장소 복사, gate_status 초기화 gate1 done, `revert` 금지). 입구 3곳: 랜딩 아웃라인 버튼·대시보드 카드·GNB 드로어. 배포 전 quick job 확인(`/tmp/uvicorn.log`)
+
+- **제품 자산:** `products`(+`description`·`shape`·`size_hint`·`size_ratio`·`holding_photo_url`·`label_text`·`name_ko`), step34. **analyze** 0패킷(gemini flash 비전) — name·name_ko·colors·label_text·shape·size_hint·description 추출. 들고 사진 있으면 **size_ratio = product_px ÷ hand_px**(손목~중지끝) 교차검증(직접 계산 우선, `parse_ai_json` 실패 시 정규식 폴백). 프롬프트 `app/prompts/product.py` `build_product_clause` 한 곳. **has_product 컷 참조 2순위** 고정(캐릭터 시트 다음, 2인이면 표정 1장으로 축소). `generation_logs.refs`에 제품 포함 기록. **수동 override** = `cut.spec.has_product`(null=자동 검출, true/false=수동) 단일 소스 — Gate4 배지·요약·Gate5 배지·RegenDropdown 모두 이 값 참조. **비광고 허용** — isAd 조건 제거, 아무 에피소드에서 제품 등록 가능. **빠른 한 컷** product_photo → FormData 분기. **product_items** = 실사 오버레이(디테일 컷용, 기존 기능). **합성(마스크·마젠타) 보류**. **ep30 실행 금지**(랜딩 참조 에피소드), 제품 테스트는 **ep71**(project 12)
 
 ## 배포 명령 참고
 
