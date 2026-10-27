@@ -70,6 +70,13 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
 
   // 제품 자산 (광고)
   const isAd = gateStatus?.is_ad || false;
+  const purpose = gateStatus?.purpose || 'story';
+  const isAdPurpose = ['onecut_ad', 'instatoon_ad', 'brand_series'].includes(purpose);
+
+  // 참고 광고 상태
+  const [refAds, setRefAds] = useState(gateStatus?.reference_ads || []);
+  const [refAdUploading, setRefAdUploading] = useState(false);
+  const [refAdModal, setRefAdModal] = useState(false);
   const [products, setProducts] = useState([]);
   const [productName, setProductName] = useState('');
   const [productFeatures, setProductFeatures] = useState('');
@@ -312,6 +319,20 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
   };
 
   const { loading: initialLoading, error: loadError, retry: retryLoad } = useGateLoad(loadAssets);
+
+  // 분위기→스타일 자동 선택 (광고 purpose, 스타일 미선택 시)
+  const MOOD_STYLE_MAP = { premium: 'emotional_romance', webtoon: 'korean_webtoon', humor: 'korean_webtoon', emotional: 'emotional_romance', photo_real: 'korean_webtoon' };
+  useEffect(() => {
+    if (!isAdPurpose || styles || initialLoading) return;
+    const mood = gateStatus?.idea_brief?.ad_brief_result?.mood || gateStatus?.idea_brief?.mood;
+    const mapped = mood && MOOD_STYLE_MAP[mood];
+    if (mapped) {
+      api.post(`/projects/${projectId}/episodes/${episodeId}/style`, { style_key: mapped })
+        .then(({ data }) => setStyles(data))
+        .catch(() => {});
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdPurpose, styles, initialLoading]);
 
   const [skippedInfo, setSkippedInfo] = useState(null);
   // 대본(기획) 등장인물 — 시트 생성 대상·실사 추가 선택지
@@ -982,6 +1003,199 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
     );
   };
 
+  // ── 제품 섹션 렌더 (광고: 캐릭터 위 / story: 장소 뒤) ──
+  const renderProductSection = () => (
+    <ErrorBoundary label="제품 자산">
+    <div className="glass-card p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2">
+          <Package size={20} className="text-amber-500" /> 제품
+          {isAd && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">광고</span>}
+        </h2>
+        {products.length === 0 && (
+          <button onClick={() => openProductModal()}
+            className="flex items-center gap-1 px-3 py-2 text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/40 rounded-full transition-colors">
+            <Plus size={12} /> 제품 추가
+          </button>
+        )}
+      </div>
+      {products.length > 0 ? (
+        <div className="space-y-3">
+          {products.map((p) => (
+            <div key={p.id} className="border-2 border-border dark:border-zinc-700 rounded-xl p-3 bg-white/50 dark:bg-zinc-800/50">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0">
+                  {p.photo_url ? (
+                    <img src={imageUrl(p.photo_url)} alt={p.name}
+                      className="w-16 h-16 object-contain rounded-lg border border-border dark:border-zinc-700 cursor-pointer bg-[url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%228%22 height=%228%22><rect width=%224%22 height=%224%22 fill=%22%23ccc%22/><rect x=%224%22 y=%224%22 width=%224%22 height=%224%22 fill=%22%23ccc%22/></svg>')]"
+                      onClick={() => setLightbox({ url: imageUrl(p.photo_url), label: `${p.name} 사진` })} />
+                  ) : (
+                    <div className="w-16 h-16 border-2 border-dashed border-gray-300 dark:border-zinc-600 rounded-lg flex items-center justify-center">
+                      <Camera size={16} className="text-gray-400" />
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-sm text-ink-black dark:text-white">{p.name}</div>
+                  {p.name_ko && p.name_ko !== p.name && (
+                    <div className="text-xs text-gray-500 dark:text-gray-400">{p.name_ko}</div>
+                  )}
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {p.shape && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400">
+                        {SHAPE_CHIPS.find(s => s.key === p.shape)?.label || p.shape}
+                      </span>
+                    )}
+                    {p.size_hint && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400">
+                        {SIZE_CHIPS.find(s => s.key === p.size_hint)?.label || p.size_hint}
+                        {p.size_ratio ? ` · ${p.size_ratio}×` : ''}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex gap-1 flex-shrink-0">
+                  <button onClick={() => openProductModal(p)} className="p-1.5 text-gray-400 hover:text-amber-500 dark:hover:text-amber-400 transition-colors" title="편집"><Edit3 size={14} /></button>
+                  <button onClick={() => deleteProduct(p.id)} className="p-1.5 text-gray-300 hover:text-red-500 dark:text-zinc-600 dark:hover:text-red-400 transition-colors" title="삭제"><Trash2 size={14} /></button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-gray-400 dark:text-gray-500">
+          제품 사진을 올리면 웹툰 컷에 제품이 참조로 들어가요{!isAd && ' (선택)'}
+        </p>
+      )}
+    </div>
+    </ErrorBoundary>
+  );
+
+  // ── 참고 광고 섹션 렌더 ──
+  const renderRefAdsSection = () => {
+    if (!isAdPurpose) return null;
+
+    const handleRefAdUpload = async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      setRefAdUploading(true);
+      try {
+        const fd = new FormData();
+        fd.append('image', file);
+        const { data } = await api.post(
+          `/projects/${projectId}/episodes/${episodeId}/reference-ads`,
+          fd, { headers: { 'Content-Type': 'multipart/form-data' } }
+        );
+        setRefAds(data.reference_ads || [...refAds, data]);
+        setRefAdModal(false);
+        await onRefresh();
+      } catch (err) {
+        alert(err.response?.data?.detail || '참고 광고 업로드에 실패했어요');
+      } finally {
+        setRefAdUploading(false);
+      }
+    };
+
+    const toggleFollowLayout = async (idx) => {
+      try {
+        const ad = refAds[idx];
+        const { data } = await api.put(
+          `/projects/${projectId}/episodes/${episodeId}/reference-ads/${idx}`,
+          { follow_layout: !ad.follow_layout }
+        );
+        setRefAds(data.reference_ads || refAds.map((a, i) => i === idx ? { ...a, follow_layout: !a.follow_layout } : a));
+      } catch (err) {
+        alert(err.response?.data?.detail || '변경에 실패했어요');
+      }
+    };
+
+    const deleteRefAd = async (idx) => {
+      if (!window.confirm('이 참고 광고를 삭제할까요?')) return;
+      try {
+        await api.delete(`/projects/${projectId}/episodes/${episodeId}/reference-ads/${idx}`);
+        setRefAds(refAds.filter((_, i) => i !== idx));
+        await onRefresh();
+      } catch (err) {
+        alert(err.response?.data?.detail || '삭제에 실패했어요');
+      }
+    };
+
+    return (
+      <div className="glass-card p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2">
+            <Sparkles size={20} className="text-purple-500" /> 참고 광고
+          </h2>
+          {refAds.length < 2 && (
+            <button onClick={() => setRefAdModal(true)}
+              className="flex items-center gap-1 px-3 py-2 text-xs font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 hover:bg-purple-100 dark:hover:bg-purple-900/40 rounded-full transition-colors">
+              <Plus size={12} /> 참고 광고 추가
+            </button>
+          )}
+        </div>
+
+        {refAds.length > 0 ? (
+          <div className="space-y-3">
+            {refAds.map((ad, idx) => (
+              <div key={idx} className="border-2 border-border dark:border-zinc-700 rounded-xl p-3 bg-white/50 dark:bg-zinc-800/50">
+                <div className="flex items-start gap-3">
+                  {ad.image_url && (
+                    <img src={imageUrl(ad.image_url)} alt="참고 광고"
+                      className="w-16 h-20 object-cover rounded-lg border border-border dark:border-zinc-700 cursor-pointer flex-shrink-0"
+                      onClick={() => setLightbox({ url: imageUrl(ad.image_url), label: '참고 광고' })} />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    {ad.analysis && (
+                      <div className="flex flex-wrap gap-1 mb-2">
+                        {ad.analysis.mood && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400">{ad.analysis.mood}</span>}
+                        {ad.analysis.layout && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400">{ad.analysis.layout}</span>}
+                        {ad.analysis.color_tone && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-pink-50 dark:bg-pink-900/20 text-pink-700 dark:text-pink-400">{ad.analysis.color_tone}</span>}
+                      </div>
+                    )}
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={!!ad.follow_layout}
+                        onChange={() => toggleFollowLayout(idx)}
+                        className="w-4 h-4 rounded border-zinc-300 dark:border-zinc-600 text-purple-600 focus:ring-purple-500" />
+                      <span className="text-xs text-zinc-600 dark:text-zinc-400">레이아웃 따라가기</span>
+                    </label>
+                  </div>
+                  <button onClick={() => deleteRefAd(idx)}
+                    className="p-1.5 text-gray-300 hover:text-red-500 dark:text-zinc-600 dark:hover:text-red-400 transition-colors flex-shrink-0" title="삭제">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-400 dark:text-gray-500">
+            참고할 광고 이미지를 올리면 분위기·구도를 분석해요 (선택, 최대 2장)
+          </p>
+        )}
+
+        {/* 참고 광고 업로드 모달 */}
+        {refAdModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => !refAdUploading && setRefAdModal(false)}>
+            <div className="bg-white dark:bg-night-card rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6" onClick={e => e.stopPropagation()}>
+              <h3 className="text-base font-bold text-ink-black dark:text-white mb-3">참고 광고 이미지</h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-4 leading-relaxed">
+                분위기·구도만 참고해요.<br />글자·로고·실제 인물은 재현하지 않아요.
+              </p>
+              <label className="flex items-center justify-center gap-2 w-full py-3 border-2 border-dashed border-purple-300 dark:border-purple-700 rounded-xl text-sm font-bold text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 cursor-pointer transition-colors">
+                <Upload size={16} /> {refAdUploading ? '업로드 중…' : '이미지 선택'}
+                <input type="file" accept="image/*" className="hidden" onChange={handleRefAdUpload} disabled={refAdUploading} />
+              </label>
+              <button onClick={() => setRefAdModal(false)} disabled={refAdUploading}
+                className="mt-3 w-full text-center text-sm text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">
+                취소
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   if (initialLoading) return <GateSkeleton lines={4} />;
   if (loadError) return <GateLoadError message={loadError} onRetry={retryLoad} />;
 
@@ -1179,6 +1393,9 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
 
       {/* 연출 강도 */}
       <DramaLevelSelector projectId={projectId} episodeId={episodeId} gateStatus={gateStatus} onRefresh={onRefresh} />
+
+      {/* 제품 자산 — 광고: 캐릭터(모델) 위에 배치 */}
+      {isAdPurpose && renderProductSection()}
 
       {/* 캐릭터 */}
       {skippedInfo && (
@@ -1661,80 +1878,11 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
         )}
       </div>
 
-      {/* 제품 자산 */}
-      <ErrorBoundary label="제품 자산">
-      <div className="glass-card p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2">
-            <Package size={20} className="text-amber-500" /> 제품
-            {isAd && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">광고</span>}
-          </h2>
-          {products.length === 0 && (
-            <button
-              onClick={() => openProductModal()}
-              className="flex items-center gap-1 px-3 py-2 text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/40 rounded-full transition-colors"
-            >
-              <Plus size={12} /> 제품 추가
-            </button>
-          )}
-        </div>
+      {/* 제품 자산 — story: 기존 위치 (장소 뒤) */}
+      {!isAdPurpose && renderProductSection()}
 
-        {products.length > 0 ? (
-          <div className="space-y-3">
-            {products.map((p) => (
-              <div key={p.id} className="border-2 border-border dark:border-zinc-700 rounded-xl p-3 bg-white/50 dark:bg-zinc-800/50">
-                <div className="flex items-start gap-3">
-                  {/* 누끼 썸네일 */}
-                  <div className="flex-shrink-0">
-                    {p.photo_url ? (
-                      <img
-                        src={imageUrl(p.photo_url)}
-                        alt={p.name}
-                        className="w-16 h-16 object-contain rounded-lg border border-border dark:border-zinc-700 cursor-pointer bg-[url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%228%22 height=%228%22><rect width=%224%22 height=%224%22 fill=%22%23ccc%22/><rect x=%224%22 y=%224%22 width=%224%22 height=%224%22 fill=%22%23ccc%22/></svg>')]"
-                        onClick={() => setLightbox({ url: imageUrl(p.photo_url), label: `${p.name} 사진` })}
-                      />
-                    ) : (
-                      <div className="w-16 h-16 border-2 border-dashed border-gray-300 dark:border-zinc-600 rounded-lg flex items-center justify-center">
-                        <Camera size={16} className="text-gray-400" />
-                      </div>
-                    )}
-                  </div>
-                  {/* 정보 */}
-                  <div className="flex-1 min-w-0">
-                    <div className="font-bold text-sm text-ink-black dark:text-white">{p.name}</div>
-                    {p.name_ko && p.name_ko !== p.name && (
-                      <div className="text-xs text-gray-500 dark:text-gray-400">{p.name_ko}</div>
-                    )}
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {p.shape && (
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400">
-                          {SHAPE_CHIPS.find(s => s.key === p.shape)?.label || p.shape}
-                        </span>
-                      )}
-                      {p.size_hint && (
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400">
-                          {SIZE_CHIPS.find(s => s.key === p.size_hint)?.label || p.size_hint}
-                          {p.size_ratio ? ` · ${p.size_ratio}×` : ''}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  {/* 버튼 */}
-                  <div className="flex gap-1 flex-shrink-0">
-                    <button onClick={() => openProductModal(p)} className="p-1.5 text-gray-400 hover:text-amber-500 dark:hover:text-amber-400 transition-colors" title="편집"><Edit3 size={14} /></button>
-                    <button onClick={() => deleteProduct(p.id)} className="p-1.5 text-gray-300 hover:text-red-500 dark:text-zinc-600 dark:hover:text-red-400 transition-colors" title="삭제"><Trash2 size={14} /></button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-gray-400 dark:text-gray-500">
-            제품 사진을 올리면 웹툰 컷에 제품이 참조로 들어가요{!isAd && ' (선택)'}
-          </p>
-        )}
-      </div>
-      </ErrorBoundary>
+      {/* 참고 광고 — 광고 purpose만 */}
+      {renderRefAdsSection()}
 
       {/* ── 제품 추가/편집 모달 ── */}
       {productModal && (

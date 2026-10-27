@@ -8,15 +8,35 @@ import { createPortal } from 'react-dom';
 import { Check, Lock, AlertTriangle, Pencil, ChevronDown, ArrowRight } from 'lucide-react';
 
 // ── 단계 정의 (단일 소스) ──
-const STEPS = [
-  { n: 1, key: '1_planning',    name: '기획',     desc: '아이디어와 등장인물을 정리해요' },
-  { n: 2, key: '2_script',      name: '대본',     desc: '컷별 대사와 장면을 만들어요' },
-  { n: 3, key: '3_assets',      name: '자산 준비', desc: '캐릭터 시트·장소·스타일을 정해요' },
-  { n: 4, key: '4_storyboard',  name: '콘티·장소', desc: '컷 구성과 말풍선 배치를 확인해요' },
-  { n: 5, key: '5_review',      name: '웹툰 만들기', desc: '컷을 생성하고 공개·내보내요' },
+const STEPS_DEFAULT = [
+  { n: 1, key: '1_planning',    name: '기획',     desc: '아이디어와 등장인물을 정리해요', gates: [1] },
+  { n: 2, key: '2_script',      name: '대본',     desc: '컷별 대사와 장면을 만들어요', gates: [2] },
+  { n: 3, key: '3_assets',      name: '자산 준비', desc: '캐릭터 시트·장소·스타일을 정해요', gates: [3] },
+  { n: 4, key: '4_storyboard',  name: '콘티·장소', desc: '컷 구성과 말풍선 배치를 확인해요', gates: [4] },
+  { n: 5, key: '5_review',      name: '웹툰 만들기', desc: '컷을 생성하고 공개·내보내요', gates: [5] },
 ];
 
-export { STEPS };
+const STEPS_ONECUT = [
+  { n: 1, key: '1_planning',  name: '브리프',   desc: '광고 목적과 카피를 정해요', gates: [1, 2] },
+  { n: 2, key: '3_assets',    name: '준비',     desc: '모델·제품·스타일을 준비해요', gates: [3] },
+  { n: 3, key: '5_review',    name: '완성',     desc: '한 컷을 생성하고 공유해요', gates: [4, 5] },
+];
+
+function getSteps(purpose) {
+  return purpose === 'onecut_ad' ? STEPS_ONECUT : STEPS_DEFAULT;
+}
+
+// 게이트 번호 → 표시 스텝 번호 변환
+function gateToStepN(gateNumber, steps) {
+  for (const s of steps) {
+    if (s.gates.includes(gateNumber)) return s.n;
+  }
+  return steps[steps.length - 1].n;
+}
+
+// 기존 호환용 (외부에서 import { STEPS })
+const STEPS = STEPS_DEFAULT;
+export { STEPS, getSteps, gateToStepN };
 
 function getStatus(gateStatus, key) {
   return gateStatus?.gates?.[key]?.status || 'locked';
@@ -64,12 +84,15 @@ export default function StepHeader({ gateStatus, onGateClick, viewingGate }) {
   const closeFnRef = useRef(null);
   const [pos, setPos] = useState(null);
 
+  const purpose = gateStatus?.purpose || 'story';
+  const steps = getSteps(purpose);
   const currentGate = gateStatus?.current_gate || 1;
   const displayGate = viewingGate || currentGate;
-  const step = STEPS[displayGate - 1];
+  const displayStepN = gateToStepN(displayGate, steps);
+  const step = steps.find(s => s.n === displayStepN) || steps[0];
   const isViewing = viewingGate && viewingGate !== currentGate;
 
-  const approvedCount = STEPS.filter(s => getStatus(gateStatus, s.key) === 'approved').length;
+  const approvedCount = steps.filter(s => getStatus(gateStatus, s.key) === 'approved').length;
 
   // matchMedia로 모바일 판정 (리사이즈 반영)
   const isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches;
@@ -113,16 +136,17 @@ export default function StepHeader({ gateStatus, onGateClick, viewingGate }) {
   };
 
   // ── 메뉴 항목 렌더 ──
-  const renderItems = () => STEPS.map((s) => {
+  const renderItems = () => steps.map((s) => {
     const st = getStatus(gateStatus, s.key);
-    const isCurrent = s.n === currentGate;
+    const clickGate = s.gates[0]; // 클릭 시 이동할 게이트 번호
+    const isCurrent = s.gates.includes(currentGate);
     const isLocked = st === 'locked';
-    const isDisplay = s.n === displayGate;
+    const isDisplay = s.n === displayStepN;
 
     return (
       <button
         key={s.n}
-        onPointerDown={isLocked ? undefined : () => handleItemClick(s.n)}
+        onPointerDown={isLocked ? undefined : () => handleItemClick(clickGate)}
         disabled={isLocked}
         role="menuitem"
         aria-disabled={isLocked}
@@ -195,7 +219,7 @@ export default function StepHeader({ gateStatus, onGateClick, viewingGate }) {
               <StatusIcon status={displayStatus} size={13} />
             </span>
             <span className="text-xs font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
-              STEP {displayGate} / 5
+              STEP {displayStepN} / {steps.length}
             </span>
           </div>
           <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white">{step.name}</h2>
@@ -232,7 +256,7 @@ export default function StepHeader({ gateStatus, onGateClick, viewingGate }) {
         <div
           className="h-1.5 rounded-full transition-all duration-500"
           style={{
-            width: `${(approvedCount / 5) * 100}%`,
+            width: `${(approvedCount / steps.length) * 100}%`,
             background: 'linear-gradient(to right, var(--color-neon-from, #a855f7), var(--color-neon-to, #6366f1))',
           }}
         />

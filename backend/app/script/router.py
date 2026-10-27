@@ -91,9 +91,13 @@ async def create_script(
     first_product = db.query(Product).filter(Product.episode_id == episode.id).first()
     _product_name = first_product.name if first_product else None
 
+    from app.workflow.gate import get_purpose
+    _purpose = get_purpose(episode.gate_status)
+
     result = await generate_script(
         planning, series_context=series_context,
         is_ad=ad_flag, product_name=_product_name,
+        purpose=_purpose,
     )
 
     # 대본 저장

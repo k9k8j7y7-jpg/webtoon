@@ -215,16 +215,16 @@ export default function QuickPage() {
     a.click();
   };
 
-  // ── 이야기 만들기 (B안: 새 프로젝트 + 에피소드 생성, 원본 불변) ──
+  // ── 확장 (B안: 새 프로젝트 + 에피소드 생성, 원본 불변) ──
   const [expanding, setExpanding] = useState(false);
   const [toast, setToast] = useState('');
-  const handleExpandStory = async () => {
+  const handleExpand = async (expandPurpose = 'onecut_ad') => {
     if (!result || expanding) return;
     setExpanding(true);
     setError('');
-    setToast('새 프로젝트에 1화를 만들어요');
+    setToast(expandPurpose === 'story' ? '이야기 프로젝트를 만들어요' : '광고 프로젝트를 만들어요');
     try {
-      const { data } = await api.post(`/quick/${result.episode_id}/expand`);
+      const { data } = await api.post(`/quick/${result.episode_id}/expand?purpose=${expandPurpose}`);
       setTimeout(() => {
         navigate(`/projects/${data.project_id}/episodes/${data.episode_id}/workflow`);
       }, 1000);
@@ -279,19 +279,24 @@ export default function QuickPage() {
             )}
           </div>
 
-          {/* 이야기 만들기 CTA */}
+          {/* 한 컷 광고로 제대로 만들기 CTA */}
           <button
             type="button"
-            onClick={handleExpandStory}
+            onClick={() => handleExpand('onecut_ad')}
             disabled={expanding}
-            className="w-full flex items-center justify-center gap-2 px-6 py-4 rounded-2xl bg-gradient-to-r from-purple-600 to-cyan-500 hover:scale-[1.02] transition-transform text-base font-bold mb-4 disabled:opacity-60"
+            className="w-full flex items-center justify-center gap-2 px-6 py-4 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:scale-[1.02] transition-transform text-base font-bold mb-3 disabled:opacity-60"
             style={(instaOpen || modalShield) ? { pointerEvents: 'none' } : undefined}
           >
-            이 컷으로 이야기 만들기 <ArrowRight size={18} />
+            한 컷 광고로 제대로 만들기 <ArrowRight size={18} />
           </button>
 
-          <div className="text-center">
-            <button type="button" onClick={() => navigate(`/projects/${result.project_id}`)} className="text-sm text-gray-400 hover:text-white transition underline">
+          <div className="flex items-center justify-center gap-4">
+            <button type="button" onClick={() => handleExpand('story')} disabled={expanding}
+              className="text-sm text-gray-400 hover:text-white transition underline">
+              이야기로 만들기
+            </button>
+            <button type="button" onClick={() => navigate(`/projects/${result.project_id}`)}
+              className="text-sm text-gray-400 hover:text-white transition underline">
               내 작품에서 보기
             </button>
           </div>

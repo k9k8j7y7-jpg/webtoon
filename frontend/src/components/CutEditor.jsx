@@ -1480,30 +1480,26 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                                                         'bg-blue-900/40 text-blue-300'
                 }`}>
                   {selectedBubble.type === 'narration'
-                    ? (selectedBubble.bubble_style === 'box' ? '박스' : '띠')
+                    ? (selectedBubble.bubble_style === 'headcopy' ? '헤드카피' : selectedBubble.bubble_style === 'box' ? '박스' : '띠')
                     : selectedBubble.type === 'thought' ? '독백' : '대사'}
                 </span>
                 {selectedBubble.type === 'narration' && (
-                  <button
-                    onClick={() => {
-                      const isBox = selectedBubble.bubble_style === 'box';
-                      const updates = { bubble_style: isBox ? 'bar' : 'box' };
-                      if (!isBox) {
-                        // 띠→박스: 대각선 기본 layout
+                  <div className="flex gap-1">
+                    {[
+                      { style: 'box', label: '박스', layout: () => {
                         const narrIdx = bubbles.slice(0, selectedIdx).filter(b => b.type === 'narration' && b.bubble_style === 'box').length;
-                        updates.bubble_layout = narrIdx === 0
-                          ? { x: 0.04, y: 0.04, width: 0.44, tail_direction: 'none' }
-                          : { x: 0.52, y: 0.70, width: 0.44, tail_direction: 'none' };
-                      } else {
-                        // 박스→띠: 전폭 하단
-                        updates.bubble_layout = { x: 0.0, y: 0.82, width: 1.0, tail_direction: 'none' };
-                      }
-                      updateBubble(selectedIdx, updates);
-                    }}
-                    className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-zinc-700 text-zinc-300 hover:bg-zinc-600 transition-colors"
-                  >
-                    {selectedBubble.bubble_style === 'box' ? '→ 띠' : '→ 박스'}
-                  </button>
+                        return narrIdx === 0 ? { x: 0.04, y: 0.04, width: 0.44, tail_direction: 'none' } : { x: 0.52, y: 0.70, width: 0.44, tail_direction: 'none' };
+                      }},
+                      { style: 'bar', label: '띠', layout: () => ({ x: 0.0, y: 0.82, width: 1.0, tail_direction: 'none' }) },
+                      { style: 'headcopy', label: '헤드카피', layout: () => ({ x: 0.1, y: 0.15, width: 0.8, tail_direction: 'none', font_scale: 2.0 }) },
+                    ].filter(o => o.style !== selectedBubble.bubble_style).map(o => (
+                      <button key={o.style}
+                        onClick={() => updateBubble(selectedIdx, { bubble_style: o.style, bubble_layout: o.layout() })}
+                        className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-zinc-700 text-zinc-300 hover:bg-zinc-600 transition-colors">
+                        → {o.label}
+                      </button>
+                    ))}
+                  </div>
                 )}
                 {selectedBubble.type === 'narration' && onBatchNarrationStyle && (
                   <div className="flex sm:hidden items-center gap-1 ml-1">
@@ -1546,7 +1542,27 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                   </div>
                 </div>
 
-                {/* 최소 높이 슬라이더 (bar 나레이션 제외) */}
+                {/* 헤드카피 전용: 위치(상단/하단) */}
+                {selectedBubble.type === 'narration' && selectedBubble.bubble_style === 'headcopy' && (
+                  <div className="shrink-0">
+                    <p className="text-[10px] text-zinc-500 font-bold mb-1">위치</p>
+                    <div className="flex gap-1">
+                      {[{ y: 0.15, label: '상단' }, { y: 0.65, label: '하단' }].map(pos => {
+                        const curY = selectedBubble.bubble_layout?.y ?? 0.15;
+                        const isActive = Math.abs(curY - pos.y) < 0.1;
+                        return (
+                          <button key={pos.label}
+                            onClick={() => updateLayout(selectedIdx, { y: pos.y })}
+                            className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors ${isActive ? 'bg-purple-600 text-white' : 'bg-zinc-700 text-zinc-400 hover:bg-zinc-600'}`}>
+                            {pos.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* 최소 높이 슬라이더 (bar 나레이션·headcopy 제외) */}
                 {(selectedBubble.type !== 'narration' || selectedBubble.bubble_style === 'box') && (
                   <div className="shrink-0">
                     <p className="text-[10px] text-zinc-500 font-bold mb-1">

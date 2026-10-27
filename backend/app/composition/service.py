@@ -22,7 +22,7 @@ from app.composition.bubble_mapping import resolve_bubble_style
 
 # ── 렌더러 버전 — 말풍선 모양·레이아웃 로직이 바뀔 때마다 올린다 ──
 # Export 시 stale 판정에 사용. 이 값이 다르면 composed_image_url을 재생성한다.
-RENDERER_VERSION = "v3-box-2026-10"
+RENDERER_VERSION = "v4-headcopy-2026-10"
 
 # ── 공유 스펙 로드 ──
 _SPEC_PATH = Path(__file__).parent / "bubble_spec.json"
@@ -97,6 +97,7 @@ STYLE_FILL = {
     "shy":       (255, 220, 235, 220),
     "flustered": (255, 230, 238, 220),
     "realize":   (255, 255, 220, 230),
+    "headcopy":  (0,   0,   0,   0),
 }
 STYLE_STROKE = {
     "round":     (26,  26,  26),
@@ -112,6 +113,7 @@ STYLE_STROKE = {
     "shy":       (200, 96,  144),
     "flustered": (190, 80,  120),
     "realize":   (176, 160, 48),
+    "headcopy":  None,
 }
 TEXT_COLORS = {
     "round":     (26,  26,  26),
@@ -127,12 +129,14 @@ TEXT_COLORS = {
     "shy":       (150, 60,  90),
     "flustered": (140, 50,  80),
     "realize":   (90,  80,  20),
+    "headcopy":  (255, 255, 255),
 }
 FONT_SIZE_MULT = {
     "shout": 1.15, "angry": 1.15,
     "whisper": 0.85,
     "narration": 0.90,
     "box": 0.90,
+    "headcopy": 2.0,
 }
 
 # 스타일 분류
@@ -359,10 +363,13 @@ def _render_bubble_item(
     sp = _spec(style)
     font_mult  = FONT_SIZE_MULT.get(style, 1.0)
     font_size  = int(BASE_FONT_SIZE * font_mult)
-    # box 스타일: 패딩 = 글자 크기의 0.6배
+    # box/headcopy 스타일: 패딩 조정
     if style == "box":
         padding_x = int(font_size * 0.6)
         padding_y = int(font_size * 0.6)
+    elif style == "headcopy":
+        padding_x = int(font_size * 0.3)
+        padding_y = int(font_size * 0.3)
     else:
         padding_x = sp["paddingX"]
         padding_y = sp["paddingY"]
@@ -460,6 +467,10 @@ def _render_bubble_item(
         draw.rectangle([actual_bx, by, actual_bx + used_w, by + bubble_h],
                        fill=fill, outline=stroke, width=box_sw)
 
+    elif style == "headcopy":
+        # 투명 배경 — 텍스트만 (드롭쉐도우로 가독성 확보, 아래 텍스트 블록에서 처리)
+        pass
+
     elif style == "thought":
         draw.rounded_rectangle([actual_bx, by, actual_bx + used_w, by + bubble_h],
                                radius=24, fill=fill, outline=stroke, width=2)
@@ -480,6 +491,11 @@ def _render_bubble_item(
     for line in lines:
         lw = font.getbbox(line)[2] - font.getbbox(line)[0]
         tx = actual_bx + (used_w - lw) // 2
+        if style == "headcopy":
+            # 드롭쉐도우: 검은색 오프셋 2px
+            shadow_offset = max(2, font_size // 14)
+            draw.text((tx + shadow_offset, ty + shadow_offset), line,
+                      fill=(0, 0, 0, 200), font=font)
         draw.text((tx, ty), line, fill=text_color, font=font)
         ty += line_h
 

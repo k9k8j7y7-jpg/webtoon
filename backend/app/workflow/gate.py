@@ -1,20 +1,46 @@
 """게이트 상태 관리 — Backend-State-Model v1.0 기준"""
 
+# ── 용도별 프리셋 ──
+PURPOSE_PRESETS = {
+    "onecut_ad":    {"is_ad": True,  "aspect_ratio": "1:1",  "page_format": "single_page", "target_cuts": 1},
+    "instatoon_ad": {"is_ad": True,  "aspect_ratio": "1:1",  "page_format": "grid_2x2",    "target_cuts": 4},
+    "brand_series": {"is_ad": True,  "aspect_ratio": "9:16", "page_format": "vertical",     "target_cuts": None},
+    "story":        {"is_ad": False, "aspect_ratio": "9:16", "page_format": "vertical",     "target_cuts": None},
+}
+VALID_PURPOSES = set(PURPOSE_PRESETS.keys())
+
+
+def get_purpose(gate_status: dict) -> str:
+    """에피소드 용도. 없으면 'story' (기존 에피소드 호환)."""
+    return gate_status.get("purpose", "story")
+
+
+def is_ad_purpose(gate_status: dict) -> bool:
+    """광고 용도 3종 중 하나인지."""
+    return get_purpose(gate_status) in ("onecut_ad", "instatoon_ad", "brand_series")
+
 
 def create_initial_gate_status(
     is_ad: bool = False,
     idea: str = "",
     product_name: str = "",
     product_features: str = "",
+    purpose: str = "story",
 ) -> dict:
     """에피소드 생성 시 초기 gate_status JSON을 반환한다."""
+    if purpose not in VALID_PURPOSES:
+        purpose = "story"
+    preset = PURPOSE_PRESETS[purpose]
+    effective_is_ad = preset["is_ad"] if purpose != "story" else is_ad
+
     gs = {
         "current_gate": 1,
         "auto_advance": False,
-        "is_ad": is_ad,
-        "aspect_ratio": "9:16",
+        "purpose": purpose,
+        "is_ad": effective_is_ad,
+        "aspect_ratio": preset["aspect_ratio"],
         "aspect_ratio_locked": False,
-        "page_format": "vertical",
+        "page_format": preset["page_format"],
         "page_format_locked": False,
         "gates": {
             "1_planning": {"status": "draft", "approved_at": None},
@@ -24,10 +50,12 @@ def create_initial_gate_status(
             "5_review": {"status": "locked", "approved_at": None},
         },
     }
+    if preset["target_cuts"]:
+        gs["target_cuts"] = preset["target_cuts"]
     # idea_brief: 아이디어 정리 데이터 (Gate1 진입 시 LLM이 채움)
     if idea:
         brief: dict = {"raw": idea}
-        if is_ad and product_name:
+        if effective_is_ad and product_name:
             brief["product"] = {
                 "name": product_name,
                 "features": product_features or "",

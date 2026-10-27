@@ -42,6 +42,16 @@ const BUBBLE_CONFIGS = {
     position: 'top',
     fontSize: 0.9,
   },
+  headcopy: {
+    fill: 'transparent',
+    stroke: 'none',
+    strokeWidth: 0,
+    textColor: '#ffffff',
+    isNarrationBox: true,
+    position: 'top',
+    fontSize: 2.0,
+    dropShadow: true,
+  },
   thought: {
     fill: 'rgba(255,255,255,0.78)',
     stroke: '#969696',
@@ -144,7 +154,7 @@ const BUBBLE_CONFIGS = {
 };
 
 // ── 꼬리 없는 스타일 목록 ──
-export const NO_TAIL_STYLES = ['narration', 'box', 'shout', 'angry', 'surprised'];
+export const NO_TAIL_STYLES = ['narration', 'box', 'headcopy', 'shout', 'angry', 'surprised'];
 
 // ── 하드코딩 상수 (bubbleSpec.json 사용 금지 — 0.72 charWidth가 버그 원인) ──
 export const CHAR_WIDTH = 0.93;
@@ -767,17 +777,33 @@ export function SingleBubble({
     const boxH = Math.max(boxTextH + boxPad * 2, bubbleH || 0);
     const boxX = bubbleX + (bubbleW - boxW) / 2;
     const boxY = bubbleY;
-    elements.push(
-      <rect key="shape" x={boxX} y={boxY} width={boxW} height={boxH}
-        rx={0} ry={0} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={boxSw} />
-    );
+    // headcopy: 투명 배경(rect 그리지 않음), 일반 box: 흰 배경+테두리
+    if (!cfg.dropShadow) {
+      elements.push(
+        <rect key="shape" x={boxX} y={boxY} width={boxW} height={boxH}
+          rx={0} ry={0} fill={cfg.fill} stroke={cfg.stroke} strokeWidth={boxSw} />
+      );
+    }
     const textCX = boxX + boxW / 2;
     const textSY = boxY + (boxH - boxTextH) / 2;
+    const shadowOff = cfg.dropShadow ? Math.max(1.5, fontSize * 0.07) : 0;
     if (renderMode === 'svg-text') {
+      if (cfg.dropShadow) {
+        elements.push(
+          <text key="shadow" textAnchor="middle" fill="rgba(0,0,0,0.7)"
+            fontSize={fontSize} fontFamily={fontEntry.family}
+            fontWeight={700} letterSpacing="0.02em">
+            {lines.map((line, i) => (
+              <tspan key={i} x={textCX + shadowOff}
+                y={textSY + i * lineHeight + lineHeight * 0.72 + shadowOff}>{line}</tspan>
+            ))}
+          </text>
+        );
+      }
       elements.push(
         <text key="text" textAnchor="middle" fill={cfg.textColor}
           fontSize={fontSize} fontFamily={fontEntry.family}
-          fontWeight={400} letterSpacing="0.02em">
+          fontWeight={cfg.dropShadow ? 700 : 400} letterSpacing="0.02em">
           {lines.map((line, i) => (
             <tspan key={i} x={textCX}
               y={textSY + i * lineHeight + lineHeight * 0.72}>{line}</tspan>
@@ -787,7 +813,7 @@ export function SingleBubble({
     } else {
       elements.push(
         <foreignObject key="text" x={boxX} y={textSY}
-          width={boxW} height={boxTextH}>
+          width={boxW} height={boxTextH + (cfg.dropShadow ? shadowOff * 2 : 0)}>
           <div xmlns="http://www.w3.org/1999/xhtml"
             style={{
               width: '100%',
@@ -795,11 +821,12 @@ export function SingleBubble({
               fontSize: `${fontSize}px`,
               lineHeight: `${lineHeight}px`,
               fontFamily: fontEntry.family,
-              fontWeight: 400,
+              fontWeight: cfg.dropShadow ? 700 : 400,
               textAlign: 'center',
               whiteSpace: 'nowrap',
               overflow: 'visible',
               letterSpacing: '0.02em',
+              ...(cfg.dropShadow ? { textShadow: `${shadowOff}px ${shadowOff}px 3px rgba(0,0,0,0.7)` } : {}),
             }}>
             {lines.map((line, i) => <div key={i}>{line}</div>)}
           </div>
@@ -975,7 +1002,8 @@ export function SingleBubble({
 // ── 미니 말풍선 아이콘 (팔레트용, 32x28 SVG) ──
 
 const STYLE_LABELS = {
-  round: '라운드', narration: '나레이션', box: '내레이션 박스', thought: '생각', whisper: '속삭임',
+  round: '라운드', narration: '나레이션', box: '내레이션 박스', headcopy: '헤드카피',
+  thought: '생각', whisper: '속삭임',
   shout: '외침', angry: '화남', happy: '기쁨', sad: '슬픔',
   surprised: '놀람', shy: '부끄', flustered: '당황', realize: '깨달음',
 };

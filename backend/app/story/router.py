@@ -1,6 +1,6 @@
 """게이트 1 — 기획 엔드포인트. API-Spec 3장."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -375,3 +375,224 @@ def _get_episode_for_user(db: Session, project_id: int, episode_id: int, user_id
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode not found")
 
     return episode
+
+
+# ── 광고 기획안 ──
+
+class AdBriefRequest(BaseModel):
+    ad_purpose: str
+    key_message: str
+    mood: str = "ai_pick"
+    target_audience: str = ""
+    cta: str = ""
+    extras: dict | None = None
+
+
+class RewriteCopyRequest(BaseModel):
+    head: str
+    sub: str
+    direction: str
+    key_message: str = ""
+
+
+@router.post("/projects/{project_id}/episodes/{episode_id}/ad-brief")
+async def create_ad_brief(
+    project_id: int,
+    episode_id: int,
+    body: AdBriefRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """광고 기획안 생성 (0패킷). 카피 3·장면 3·추천 스타일."""
+    episode = _get_episode_for_user(db, project_id, episode_id, current_user.id)
+
+    import json as _json
+    from app.prompts.ad_brief import generate_ad_brief as _gen
+    from app.workflow.gate import set_idea_brief as _set_brief
+
+    gate_status = episode.gate_status
+    idea_brief = gate_status.get("idea_brief") or {}
+    product = idea_brief.get("product", {})
+
+    # 참고 광고 분석 텍스트 수집
+    ref_ads = gate_status.get("reference_ads", [])
+    ref_analysis = "; ".join(
+        a.get("analysis", {}).get("note", "")
+        for a in ref_ads if a.get("analysis", {}).get("note")
+    )
+
+    result = await _gen(
+        ad_purpose=body.ad_purpose,
+        key_message=body.key_message,
+        mood=body.mood,
+        target_audience=body.target_audience,
+        cta=body.cta,
+        product_name=product.get("name", ""),
+        product_features=product.get("features", ""),
+        reference_analysis=ref_analysis,
+        extras=body.extras,
+    )
+
+    # idea_brief에 광고 키 저장
+    idea_brief["ad_purpose"] = body.ad_purpose
+    idea_brief["key_message"] = body.key_message
+    idea_brief["mood"] = body.mood
+    idea_brief["target_audience"] = body.target_audience
+    idea_brief["cta"] = body.cta
+    if body.extras:
+        idea_brief["extras"] = body.extras
+    idea_brief["copy_candidates"] = result.get("copy_candidates", [])
+    idea_brief["scene_ideas"] = result.get("scene_ideas", [])
+    idea_brief["recommended_style"] = result.get("recommended_style", "korean_webtoon")
+    idea_brief["ad_brief_result"] = {
+        "key_message": result.get("key_message", ""),
+        "target_summary": result.get("target_summary", ""),
+    }
+
+    new_gs = _json.loads(_json.dumps(gate_status))
+    new_gs["idea_brief"] = idea_brief
+    episode.gate_status = new_gs
+    db.commit()
+
+    return result
+
+
+@router.post("/projects/{project_id}/episodes/{episode_id}/ad-brief/rewrite-copy")
+async def rewrite_copy_endpoint(
+    project_id: int,
+    episode_id: int,
+    body: RewriteCopyRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """카피 다시 쓰기 (0패킷)."""
+    _get_episode_for_user(db, project_id, episode_id, current_user.id)
+
+    from app.prompts.ad_brief import rewrite_copy
+    result = await rewrite_copy(
+        existing_head=body.head,
+        existing_sub=body.sub,
+        direction=body.direction,
+        key_message=body.key_message,
+    )
+    return result
+
+
+# ── 참고 광고 ──
+
+@router.post("/projects/{project_id}/episodes/{episode_id}/reference-ads")
+async def upload_reference_ad(
+    project_id: int,
+    episode_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """참고 광고 이미지 업로드 + 비전 분석 (0패킷, 최대 2장)."""
+    import json as _json
+    from app.image_util import validate_and_process
+    from app.storage import upload_image
+    from google.genai import types
+    from app.adapters.gemini import get_client, parse_ai_json, AI_TOKENS_SHORT
+
+    episode = _get_episode_for_user(db, project_id, episode_id, current_user.id)
+    gate_status = _json.loads(_json.dumps(episode.gate_status))
+    ref_ads = gate_status.get("reference_ads", [])
+    if len(ref_ads) >= 2:
+        raise HTTPException(status_code=400, detail="참고 광고는 최대 2장입니다")
+
+    raw = await file.read()
+    try:
+        processed, mime = validate_and_process(
+            raw, original_content_type=file.content_type or "",
+            original_filename=file.filename or "",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    ext = "jpg" if "jpeg" in mime else "png"
+    url = upload_image(
+        image_bytes=processed,
+        path_prefix=f"episodes/{episode_id}/reference_ads",
+        filename=f"ref_{len(ref_ads)}.{ext}",
+        mime_type=mime,
+    )
+
+    # 비전 분석
+    client = get_client()
+    vision_resp = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=[
+            types.Part.from_bytes(data=processed, mime_type=mime),
+            (
+                "Analyze this advertisement image. Return JSON:\n"
+                '{"mood": "one-word mood", "colors": "dominant color palette",'
+                ' "composition": "layout description (e.g. person left, product right)",'
+                ' "text_layout": "where text is placed (e.g. top center headline)",'
+                ' "lighting": "lighting description",'
+                ' "note": "Korean summary of overall mood/composition/colors in one sentence"}'
+            ),
+        ],
+        config=types.GenerateContentConfig(temperature=0.3, max_output_tokens=AI_TOKENS_SHORT),
+    )
+    try:
+        analysis = parse_ai_json(vision_resp.text)
+    except Exception:
+        analysis = {"note": "분석 실패"}
+
+    ref_entry = {"url": url, "analysis": analysis, "follow_layout": False}
+    ref_ads.append(ref_entry)
+    gate_status["reference_ads"] = ref_ads
+    episode.gate_status = gate_status
+    db.commit()
+
+    return ref_entry
+
+
+class RefAdUpdate(BaseModel):
+    analysis: dict | None = None
+    follow_layout: bool | None = None
+
+
+@router.put("/projects/{project_id}/episodes/{episode_id}/reference-ads/{index}")
+async def update_reference_ad(
+    project_id: int, episode_id: int, index: int,
+    body: RefAdUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """참고 광고 칩 수정·토글."""
+    import json as _json
+    episode = _get_episode_for_user(db, project_id, episode_id, current_user.id)
+    gate_status = _json.loads(_json.dumps(episode.gate_status))
+    ref_ads = gate_status.get("reference_ads", [])
+    if index < 0 or index >= len(ref_ads):
+        raise HTTPException(status_code=404, detail="참고 광고를 찾을 수 없습니다")
+    if body.analysis is not None:
+        ref_ads[index]["analysis"] = body.analysis
+    if body.follow_layout is not None:
+        ref_ads[index]["follow_layout"] = body.follow_layout
+    gate_status["reference_ads"] = ref_ads
+    episode.gate_status = gate_status
+    db.commit()
+    return ref_ads[index]
+
+
+@router.delete("/projects/{project_id}/episodes/{episode_id}/reference-ads/{index}")
+async def delete_reference_ad(
+    project_id: int, episode_id: int, index: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """참고 광고 삭제."""
+    import json as _json
+    episode = _get_episode_for_user(db, project_id, episode_id, current_user.id)
+    gate_status = _json.loads(_json.dumps(episode.gate_status))
+    ref_ads = gate_status.get("reference_ads", [])
+    if index < 0 or index >= len(ref_ads):
+        raise HTTPException(status_code=404, detail="참고 광고를 찾을 수 없습니다")
+    ref_ads.pop(index)
+    gate_status["reference_ads"] = ref_ads
+    episode.gate_status = gate_status
+    db.commit()
+    return {"deleted": True}

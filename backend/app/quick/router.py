@@ -359,6 +359,7 @@ async def quick_product_upload(
 @router.post("/quick/{episode_id}/expand")
 async def expand_quick_to_story(
     episode_id: int,
+    purpose: str = "onecut_ad",
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -393,9 +394,14 @@ async def expand_quick_to_story(
     db.add(new_project)
     db.flush()
 
-    # 2. 새 에피소드 (gate 1 draft)
-    new_gs = create_initial_gate_status()
+    # 2. 새 에피소드 — purpose에 따라 분기
+    from app.workflow.gate import PURPOSE_PRESETS, VALID_PURPOSES
+    if purpose not in VALID_PURPOSES:
+        purpose = "onecut_ad"
+    preset = PURPOSE_PRESETS.get(purpose, PURPOSE_PRESETS["onecut_ad"])
+    new_gs = create_initial_gate_status(purpose=purpose, is_ad=preset["is_ad"])
     new_gs["idea_brief"] = idea_brief
+    new_gs["idea_brief"]["key_message"] = raw_prompt  # 장면 문장 미리 채움
     new_gs["planning_draft"] = planning_draft
 
     new_ep = Episode(
@@ -443,6 +449,20 @@ async def expand_quick_to_story(
             ))
 
         db.add(EpisodeCharacter(episode_id=new_ep.id, character_id=clone.id))
+
+    # 4. 제품 복사 (빠른 컷에서 등록한 제품)
+    from app.products.models import Product as ProductModel
+    src_products = db.query(ProductModel).filter(ProductModel.episode_id == episode_id).all()
+    for sp in src_products:
+        clone_p = ProductModel(
+            episode_id=new_ep.id, name=sp.name, name_ko=sp.name_ko,
+            features=sp.features, description=sp.description,
+            shape=sp.shape, size_hint=sp.size_hint, size_ratio=sp.size_ratio,
+            label_text=sp.label_text, photo_url=sp.photo_url,
+            sheet_url=sp.sheet_url, holding_photo_url=sp.holding_photo_url,
+            status=sp.status,
+        )
+        db.add(clone_p)
 
     db.commit()
 

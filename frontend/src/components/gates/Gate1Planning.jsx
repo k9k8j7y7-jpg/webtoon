@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import api from '../../api/client';
 import useGateLoad from '../../hooks/useGateLoad';
 import { GateSkeleton, GateLoadError } from '../GateLoadFallback';
-import { Lightbulb, Check, RefreshCw, Pencil, Save, Plus, Trash2, Sparkles, UserPlus, ChevronDown, ChevronUp, Send } from 'lucide-react';
+import { Lightbulb, Check, RefreshCw, Pencil, Save, Plus, Trash2, Sparkles, UserPlus, ChevronDown, ChevronUp, Send, FileText, Eye } from 'lucide-react';
+import AdBriefForm from './AdBriefForm';
 
 // --- 3축 옵션 정의 ---
 const GENRE_OPTIONS = [
@@ -73,6 +74,13 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
   const [customDirection, setCustomDirection] = useState('');  // 직접 입력 텍스트
   const [showCustomInput, setShowCustomInput] = useState(null); // 직접 입력 표시 중인 단락 키
 
+  // onecut_ad 대본 상태
+  const [adScript, setAdScript] = useState(null);
+  const [adScriptEditing, setAdScriptEditing] = useState(false);
+  const [adScriptForm, setAdScriptForm] = useState(null);
+  const [adScriptSaving, setAdScriptSaving] = useState(false);
+  const [adScriptApproving, setAdScriptApproving] = useState(false);
+
   const [characters, setCharacters] = useState([]);
   const [charTouched, setCharTouched] = useState(false); // 등장인물 user_touched
   const [planning, setPlanning] = useState(null);
@@ -109,6 +117,18 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
       setRawEdit(brief.raw || '');
     }
   }, [gateStatus?.idea_brief]);
+
+  // onecut_ad: 기존 대본 로드 (Gate2 draft/approved 상태)
+  useEffect(() => {
+    const p = gateStatus?.purpose;
+    if (p !== 'onecut_ad') return;
+    const g2 = gateStatus?.gates?.['2_script']?.status;
+    if (g2 === 'draft' || g2 === 'approved') {
+      api.get(`/projects/${projectId}/episodes/${episodeId}/script`)
+        .then(({ data }) => { if (data) setAdScript(data?.scenes ? data : data?.script || data); })
+        .catch(() => {});
+    }
+  }, [gateStatus?.purpose, gateStatus?.gates?.['2_script']?.status, projectId, episodeId]);
 
   // planning_draft 복원 (gate_status에서)
   useEffect(() => {
@@ -715,7 +735,218 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
     );
   }
 
-  // ── 편집 모드 ──
+  // ── 광고 브리프 모드 ──
+  const purpose = gateStatus?.purpose || 'story';
+  const isAdPurpose = ['onecut_ad', 'instatoon_ad', 'brand_series'].includes(purpose);
+
+  // ── onecut_ad 대본 편집 핸들러 ──
+  const SHOT_LABELS = { long: '롱샷', full: '풀샷', bust: '버스트', close_up: '클로즈업' };
+  const SHOT_OPTIONS = ['long', 'full', 'bust', 'close_up'];
+
+  const startAdScriptEdit = () => {
+    if (!adScript?.scenes?.[0]?.cuts?.[0]) return;
+    const cut = adScript.scenes[0].cuts[0];
+    setAdScriptForm({
+      shot: cut.shot || 'bust',
+      action: cut.action || '',
+      dialogue: (cut.dialogue || []).map(d => ({ ...d })),
+    });
+    setAdScriptEditing(true);
+  };
+
+  const saveAdScript = async () => {
+    if (!adScriptForm || !adScript) return;
+    setAdScriptSaving(true);
+    try {
+      const newScript = JSON.parse(JSON.stringify(adScript));
+      const cut = newScript.scenes[0].cuts[0];
+      cut.shot = adScriptForm.shot;
+      cut.action = adScriptForm.action;
+      cut.dialogue = adScriptForm.dialogue;
+      const { data } = await api.put(
+        `/projects/${projectId}/episodes/${episodeId}/script`,
+        { script: newScript },
+      );
+      setAdScript(data.script || newScript);
+      setAdScriptEditing(false);
+    } catch (err) {
+      alert(err.response?.data?.detail || '대본 저장에 실패했어요');
+    } finally {
+      setAdScriptSaving(false);
+    }
+  };
+
+  const approveAdScript = async () => {
+    setAdScriptApproving(true);
+    try {
+      await api.post(`/projects/${projectId}/episodes/${episodeId}/script/approve`, { auto_advance: false });
+      await onRefresh?.();
+    } catch (err) {
+      alert(err.response?.data?.detail || '승인에 실패했어요');
+    } finally {
+      setAdScriptApproving(false);
+    }
+  };
+
+  if (isAdPurpose) {
+    const cut = adScript?.scenes?.[0]?.cuts?.[0];
+    const headcopy = cut?.dialogue?.find(d => d.bubble_style === 'headcopy');
+    const subcopy = cut?.dialogue?.find(d => d.bubble_style === 'box' && d.type === 'narration');
+    const speeches = cut?.dialogue?.filter(d => d.type === 'speech') || [];
+
+    return (
+      <div className="space-y-4">
+        <AdBriefForm
+          projectId={projectId}
+          episodeId={episodeId}
+          gateStatus={gateStatus}
+          onBriefDone={async ({ selectedCopy, selectedScene, briefResult }) => {
+            try {
+              const gs = gateStatus;
+              const ib = gs?.idea_brief || {};
+              ib.copy_selected = selectedCopy;
+              ib.scene_selected = selectedScene;
+              await api.put(`/projects/${projectId}/episodes/${episodeId}/planning-draft`, {
+                brief_story: ib,
+              });
+
+              const scene = briefResult?.scene_ideas?.[selectedScene];
+              await api.post(`/projects/${projectId}/episodes/${episodeId}/planning`, {
+                idea: scene?.scene || '',
+                characters: [],
+                options: {},
+              });
+
+              // Gate1 승인
+              await api.post(`/projects/${projectId}/episodes/${episodeId}/planning/approve`, {});
+
+              // onecut_ad: 대본 생성만 (승인은 사용자가)
+              if (purpose === 'onecut_ad') {
+                const { data } = await api.post(`/projects/${projectId}/episodes/${episodeId}/script`, {});
+                setAdScript(data?.scenes ? data : data?.script || data);
+              }
+
+              onRefresh?.();
+            } catch (err) {
+              alert(err.response?.data?.detail || '진행에 실패했어요');
+            }
+          }}
+        />
+
+        {/* onecut_ad 대본 카드 */}
+        {purpose === 'onecut_ad' && adScript && cut && (
+          <div className="glass-card p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold font-serif text-ink-black dark:text-white flex items-center gap-2">
+                <FileText size={18} className="text-comic-blue" />
+                한 컷 대본
+              </h3>
+              {!adScriptEditing && !readOnly && (
+                <button onClick={startAdScriptEdit}
+                  className="flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-comic-blue border border-comic-blue/30 hover:bg-comic-blue/10 rounded-lg transition-colors">
+                  <Pencil size={11} /> 편집
+                </button>
+              )}
+            </div>
+
+            {adScriptEditing && adScriptForm ? (
+              /* ── 편집 모드 ── */
+              <div className="space-y-3">
+                {/* 장면 지문 */}
+                <div>
+                  <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 mb-1 block">장면 지문</label>
+                  <textarea value={adScriptForm.action}
+                    onChange={e => setAdScriptForm(p => ({ ...p, action: e.target.value }))}
+                    rows={2}
+                    className="w-full rounded-lg border border-border dark:border-night-border bg-white dark:bg-night-bg px-3 py-2 text-sm text-ink-black dark:text-white" />
+                </div>
+                {/* 샷/앵글 */}
+                <div>
+                  <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 mb-1 block">샷 / 앵글</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {SHOT_OPTIONS.map(s => (
+                      <button key={s} onClick={() => setAdScriptForm(p => ({ ...p, shot: s }))}
+                        className={`px-2.5 py-1 text-xs font-bold rounded-full border transition-colors ${adScriptForm.shot === s
+                          ? 'bg-comic-blue text-white border-comic-blue'
+                          : 'border-zinc-300 dark:border-zinc-600 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}>
+                        {SHOT_LABELS[s]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* 대사 목록 */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400">대사 · 카피</label>
+                  {adScriptForm.dialogue.map((d, i) => (
+                    <div key={i} className="flex items-start gap-2 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg p-2">
+                      <span className="shrink-0 mt-1.5 text-[10px] font-bold bg-zinc-200 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400 px-1.5 py-0.5 rounded">
+                        {d.bubble_style === 'headcopy' ? '헤드카피' : d.bubble_style === 'box' ? '서브카피' : d.type === 'speech' ? '말풍선' : '나레이션'}
+                      </span>
+                      <input value={d.text}
+                        onChange={e => {
+                          const dlg = [...adScriptForm.dialogue];
+                          dlg[i] = { ...dlg[i], text: e.target.value };
+                          setAdScriptForm(p => ({ ...p, dialogue: dlg }));
+                        }}
+                        className="flex-1 rounded border border-border dark:border-night-border bg-white dark:bg-night-bg px-2 py-1 text-sm text-ink-black dark:text-white" />
+                    </div>
+                  ))}
+                </div>
+                {/* 저장/취소 */}
+                <div className="flex gap-2 pt-1">
+                  <button onClick={saveAdScript} disabled={adScriptSaving}
+                    className="flex items-center gap-1 px-4 py-2 text-sm font-bold text-white bg-comic-blue rounded-full hover:bg-comic-blue/90 disabled:opacity-50 transition-colors">
+                    <Save size={13} /> {adScriptSaving ? '저장 중…' : '저장'}
+                  </button>
+                  <button onClick={() => setAdScriptEditing(false)}
+                    className="px-4 py-2 text-sm font-bold text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors">
+                    취소
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* ── 보기 모드 ── */
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+                  <span className="bg-comic-blue/10 text-comic-blue px-1.5 py-0.5 rounded font-bold">{SHOT_LABELS[cut.shot] || cut.shot}</span>
+                  {cut.characters?.map(c => (
+                    <span key={typeof c === 'string' ? c : c.character_id} className="text-zinc-400 dark:text-zinc-500">
+                      {typeof c === 'string' ? c : c.character_id}
+                    </span>
+                  ))}
+                </div>
+                <p className="text-sm text-zinc-700 dark:text-zinc-300">{cut.action}</p>
+
+                {headcopy && (
+                  <div className="bg-zinc-900 dark:bg-zinc-900 text-white rounded-lg px-4 py-3 text-center">
+                    <p className="text-lg font-black tracking-tight">{headcopy.text}</p>
+                    {subcopy && <p className="text-xs mt-1 text-zinc-300">{subcopy.text}</p>}
+                  </div>
+                )}
+
+                {speeches.map((d, i) => (
+                  <p key={i} className="text-sm italic text-zinc-600 dark:text-zinc-400">
+                    <span className="not-italic text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-500 px-1 py-0.5 rounded mr-1">말풍선</span>
+                    {d.speaker ? `${d.speaker}: ` : ''}{d.text}
+                  </p>
+                ))}
+              </div>
+            )}
+
+            {/* 승인 버튼 */}
+            {!readOnly && !adScriptEditing && (
+              <button onClick={approveAdScript} disabled={adScriptApproving}
+                className="neon-btn w-full flex items-center justify-center gap-1.5 px-5 py-2.5 text-sm font-bold rounded-full disabled:opacity-50">
+                <Check size={14} /> {adScriptApproving ? '승인 중…' : '승인하고 준비 단계로 →'}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── 편집 모드 (story) ──
   return (
     <div className="space-y-4">
 

@@ -31,7 +31,7 @@ VALID_STYLES = {
     "round", "narration", "thought", "whisper",
     "shout", "angry", "happy", "sad", "surprised",
     "shy", "flustered", "realize",
-    "box", "bar",
+    "box", "bar", "headcopy",
 }
 
 

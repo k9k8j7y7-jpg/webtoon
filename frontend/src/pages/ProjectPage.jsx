@@ -40,8 +40,11 @@ export default function ProjectPage() {
   const [modalStoryOptions, setModalStoryOptions] = useState(null);
   const [modalChips, setModalChips] = useState([]);
   const [isAdMode, setIsAdMode] = useState(false);
+  const [modalPurpose, setModalPurpose] = useState('story');
   const [modalProductName, setModalProductName] = useState('');
   const [modalProductFeatures, setModalProductFeatures] = useState('');
+  // 용도 선택 모달
+  const [showPurposeModal, setShowPurposeModal] = useState(false);
 
   // 연작 모달
   const [showSeriesModal, setShowSeriesModal] = useState(false);
@@ -65,15 +68,17 @@ export default function ProjectPage() {
 
   // ── 단편 에피소드 ──
 
-  const openModal = (chip = null, adMode = false) => {
+  const openModal = (chip = null, adMode = false, purpose = 'story') => {
     setModalTitle('');
     setModalIdea(chip?.text || '');
     setModalStoryOptions(chip ? { genre: chip.genre, mood: chip.mood, development: chip.development } : null);
     setModalChips(pickRandomChips(3));
-    setIsAdMode(adMode);
+    setIsAdMode(adMode || purpose !== 'story');
+    setModalPurpose(purpose);
     setModalProductName('');
     setModalProductFeatures('');
     setShowModal(true);
+    setShowPurposeModal(false);
   };
 
   const handleCreateEpisode = async () => {
@@ -85,6 +90,7 @@ export default function ProjectPage() {
         title: modalTitle.trim(),
         idea: modalIdea || '',
         is_ad: isAdMode,
+        purpose: modalPurpose,
         product_name: isAdMode ? modalProductName.trim() : '',
         product_features: isAdMode ? modalProductFeatures.trim() : '',
       });
@@ -188,29 +194,13 @@ export default function ProjectPage() {
 
       <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
         <h1 className="text-2xl font-bold font-serif text-ink-black dark:text-white">{project.title}</h1>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => openModal()}
-            disabled={creating}
-            className="neon-btn flex items-center gap-1.5 !px-4 !py-2 !rounded-full text-sm disabled:opacity-50"
-          >
-            <Plus size={16} /> 단편
-          </button>
-          <button
-            onClick={openSeriesModal}
-            disabled={creating || seriesCreating}
-            className="flex items-center gap-1.5 px-4 py-2 bg-purple-600 text-white rounded-full text-sm font-bold hover:bg-purple-700 hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50"
-          >
-            <BookOpen size={16} /> 연작
-          </button>
-          <button
-            onClick={() => openModal(null, true)}
-            disabled={creating}
-            className="flex items-center gap-1.5 px-4 py-2 bg-amber-500 text-white rounded-full text-sm font-bold hover:bg-amber-600 hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50"
-          >
-            <Sparkles size={16} /> 광고
-          </button>
-        </div>
+        <button
+          onClick={() => setShowPurposeModal(true)}
+          disabled={creating}
+          className="neon-btn flex items-center gap-1.5 !px-4 !py-2 !rounded-full text-sm disabled:opacity-50"
+        >
+          <Plus size={16} /> 새 에피소드
+        </button>
       </div>
 
       {!hasContent ? (
@@ -345,6 +335,43 @@ export default function ProjectPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* 용도 선택 모달 */}
+      {showPurposeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowPurposeModal(false)}>
+          <div className="glass-card p-6 w-full max-w-lg mx-4 shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white">무엇을 만들까요?</h2>
+              <button onClick={() => setShowPurposeModal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"><X size={20} /></button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+              {[
+                { purpose: 'onecut_ad', icon: '📸', title: '한 컷 광고', desc: '제품·가게 홍보 한 장', color: 'border-amber-400 dark:border-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20' },
+                { purpose: 'instatoon_ad', icon: '📱', title: '인스타툰 광고', desc: '4~8컷 캐러셀 + 릴스', color: 'border-purple-400 dark:border-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20' },
+                { purpose: 'brand_series', icon: '📚', title: '브랜드 연재툰', desc: '매주 이어지는 이야기', color: 'border-blue-400 dark:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20' },
+              ].map(c => (
+                <button
+                  key={c.purpose}
+                  onClick={() => openModal(null, true, c.purpose)}
+                  className={`flex flex-col items-center gap-2 p-5 border-2 rounded-2xl transition-all cursor-pointer ${c.color} bg-white/50 dark:bg-zinc-800/50`}
+                >
+                  <span className="text-3xl">{c.icon}</span>
+                  <span className="font-bold text-sm text-ink-black dark:text-white">{c.title}</span>
+                  <span className="text-[11px] text-gray-500 dark:text-gray-400 text-center">{c.desc}</span>
+                </button>
+              ))}
+            </div>
+            <div className="text-center">
+              <button
+                onClick={() => openModal(null, false, 'story')}
+                className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 underline transition-colors"
+              >
+                광고가 아니에요 → 일상툰·이야기로 만들기
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

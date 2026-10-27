@@ -74,18 +74,21 @@ async def generate_script(
     series_context: dict | None = None,
     is_ad: bool = False,
     product_name: str | None = None,
+    purpose: str = "story",
 ) -> dict:
     """기획안으로부터 대본을 생성한다.
 
     series_context가 있으면 연작 컨텍스트를 프롬프트에 주입한다.
     is_ad가 True면 광고 웹툰 지침을 적용한다.
     product_name이 있으면 제품 소품 등장 지시를 추가한다.
+    purpose가 onecut_ad면 1컷 대본 전용 addon 적용.
     """
     from app.script.prompt_fragments import (
         build_series_context_block,
         SERIES_SCRIPT_INSTRUCTION_ADDON,
         STANDALONE_SCRIPT_INSTRUCTION_ADDON,
         AD_SCRIPT_INSTRUCTION_ADDON,
+        ONECUT_AD_SCRIPT_INSTRUCTION_ADDON,
     )
 
     # 연작 컨텍스트 블록
@@ -129,13 +132,17 @@ async def generate_script(
 
 위 기획안으로 웹툰 {ep_label} 대본을 JSON으로 만들어줘."""
 
-    system = SYSTEM_INSTRUCTION
-    if series_context:
-        system += SERIES_SCRIPT_INSTRUCTION_ADDON
-    elif is_ad:
-        system += AD_SCRIPT_INSTRUCTION_ADDON
+    if purpose == "onecut_ad":
+        from app.script.prompt_fragments import ONECUT_AD_SYSTEM_INSTRUCTION
+        system = ONECUT_AD_SYSTEM_INSTRUCTION
     else:
-        system += STANDALONE_SCRIPT_INSTRUCTION_ADDON
+        system = SYSTEM_INSTRUCTION
+        if series_context:
+            system += SERIES_SCRIPT_INSTRUCTION_ADDON
+        elif is_ad:
+            system += AD_SCRIPT_INSTRUCTION_ADDON
+        else:
+            system += STANDALONE_SCRIPT_INSTRUCTION_ADDON
 
     raw = await generate_text(
         prompt=prompt,

@@ -359,6 +359,27 @@ async def generate_cut_image(
         else:
             logger.info("Cut %s location_ref: text_only shot=%s", cut.cut_id, shot_type)
 
+    # 2.5. 참고 광고 레퍼런스 (follow_layout ON이면 이미지 첨부, 3순위)
+    ref_ad_analysis = ""
+    episode_for_refads = db.query(Episode).filter(Episode.id == episode_id).first()
+    ref_ads = (episode_for_refads.gate_status or {}).get("reference_ads", [])
+    for ra in ref_ads:
+        note = (ra.get("analysis") or {}).get("note", "")
+        if note:
+            ref_ad_analysis += note + " "
+        if ra.get("follow_layout") and ra.get("url") and len(ref_images) < MAX_REF_IMAGES:
+            ra_bytes = _load_image_bytes(ra["url"])
+            if ra_bytes:
+                ra_bytes = _downscale_image(ra_bytes, max_long_side=768)
+                ref_images.append(ra_bytes)
+                ref_labels.append(
+                    "Advertisement reference — match mood/colors/composition ONLY, "
+                    "do NOT reproduce any text, logo, or real person from this image"
+                )
+                ref_tracking.append({"type": "reference_ad", "label": "ref_ad"})
+                logger.info("Cut %s ref_ad: attached (follow_layout ON)", cut.cut_id)
+    ref_ad_analysis = ref_ad_analysis.strip()
+
     # refs 추적 로그
     logger.info("Cut %s refs(%d/%d): %s",
                 cut.cut_id, len(ref_images), MAX_REF_IMAGES,
@@ -405,6 +426,14 @@ async def generate_cut_image(
         logger.info("Cut %s drama: level=%s category=%s motions=%s", cut.cut_id, drama_level, drama_category, drama_motions)
 
     # 5. 프롬프트 조립 (Prompt Engine)
+    # 참고 광고 분석 텍스트는 제품 설명 뒤에 삽입
+    full_product_desc = product_desc
+    if ref_ad_analysis:
+        full_product_desc += (
+            f" Reference ad mood/composition: {ref_ad_analysis}. "
+            "Match the mood, colors, and composition described above. "
+            "Do NOT reproduce any text, logo, or real person from references."
+        )
     prompt = build_cut_prompt(
         cut_spec=spec,
         character_descs=char_descs,
@@ -414,7 +443,7 @@ async def generate_cut_image(
         loc_is_photo=loc_is_photo,
         loc_image_attached=loc_image_attached,
         aspect_ratio=ep_aspect_ratio,
-        product_desc=product_desc,
+        product_desc=full_product_desc,
         has_photo_real_char=use_gpt,
         extra_prompt=drama_extra,
     )

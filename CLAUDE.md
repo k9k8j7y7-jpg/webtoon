@@ -242,6 +242,7 @@ WEBTOON/
 
 ## 개발 규칙
 
+- **캡처 검증은 파일을 Read로 열지 말고 경로·수치만 보고** (컨텍스트 보호)
 - **문서대로 구현.** 설계 문서(`docs/`)가 기준. 즉흥 이탈 금지
 - **git 안전:** (1) 테스트 통과마다 커밋 (2) 큰 구조 변경 전 커밋 (3) `git checkout`/`git reset` 등 파괴적 명령 전 사용자 확인
 - **BubbleOverlay 상수:** `CHAR_WIDTH=0.93`(기본, pretendard), `REF_WIDTH=800`, `LINE_HEIGHT_RATIO=1.45`, `BASE_FONT_SIZE=14`, `BASE_PADDING_X=14`, `BASE_PADDING_Y=10`. 폰트별 charWidth는 FONT_CATALOG 참조. `bubbleSpec.json`의 `charWidth: 0.72` 사용 금지

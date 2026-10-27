@@ -118,6 +118,7 @@ def create_episode(
             idea=body.idea,
             product_name=body.product_name,
             product_features=body.product_features,
+            purpose=body.purpose,
         ),
     )
     db.add(episode)

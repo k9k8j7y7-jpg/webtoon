@@ -38,6 +38,7 @@ class EpisodeCreate(BaseModel):
     idea: str = ""
     mood: str | None = None
     is_ad: bool = False
+    purpose: str = "story"
     product_name: str = ""
     product_features: str = ""
 
