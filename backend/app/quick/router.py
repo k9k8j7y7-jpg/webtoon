@@ -48,14 +48,41 @@ class QuickRequest(BaseModel):
     product_description: str | None = Field(default=None)
 
 
+from fastapi import Form, Request
+
+
+async def _parse_quick_request(request: Request) -> tuple["QuickRequest", UploadFile | None]:
+    """JSON body와 FormData(제품 사진 포함) 둘 다 지원."""
+    content_type = request.headers.get("content-type", "")
+    if "multipart/form-data" in content_type:
+        form = await request.form()
+        product_file = form.get("product_photo")
+        body = QuickRequest(
+            prompt=form.get("prompt", ""),
+            preset_ref=form.get("preset_ref", ""),
+            style=form.get("style", "korean_webtoon"),
+            aspect_ratio=form.get("aspect_ratio", "9:16"),
+            shot=form.get("shot", "full"),
+            dialogue=form.get("dialogue", ""),
+        )
+        from starlette.datastructures import UploadFile as StarletteUploadFile
+        is_file = isinstance(product_file, (UploadFile, StarletteUploadFile))
+        return body, product_file if is_file else None
+    else:
+        body = QuickRequest(**(await request.json()))
+        return body, None
+
+
 @router.post("/quick", status_code=202)
 async def create_quick_cut(
-    body: QuickRequest,
+    request: Request,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     """빠른 컷 생성: 프리셋 복사 → 프로젝트·에피소드 자동 생성 → 1컷 이미지."""
+
+    body, product_file = await _parse_quick_request(request)
 
     # 1. 스타일·비율 검증
     if body.style not in QUICK_STYLES:
@@ -71,6 +98,72 @@ async def create_quick_cut(
     )
     if not preset:
         raise HTTPException(404, "프리셋 캐릭터를 찾을 수 없습니다")
+
+    # 2.5. 제품 사진 인라인 처리 (FormData에 product_photo가 있을 때)
+    product_warning = None
+    if product_file and not body.product_photo_url:
+        try:
+            from app.image_util import validate_and_process, composite_on_white
+            from app.storage import upload_image
+            import uuid as _uuid
+
+            raw = await product_file.read()
+            processed, mime = validate_and_process(
+                raw,
+                original_content_type=product_file.content_type or "",
+                original_filename=product_file.filename or "",
+            )
+            tmp_key = _uuid.uuid4().hex[:12]
+            url = upload_image(
+                image_bytes=processed,
+                path_prefix=f"quick/tmp/{tmp_key}",
+                filename="photo.jpg",
+                mime_type=mime,
+            )
+            body.product_photo_url = url
+
+            # 비전 분석 (실패해도 진행)
+            try:
+                from google.genai import types
+                from app.adapters.gemini import get_client, AI_TOKENS_SHORT, parse_ai_json
+                ref_bytes = composite_on_white(processed)
+                client = get_client()
+                resp = client.models.generate_content(
+                    model="gemini-2.5-flash",
+                    contents=[
+                        types.Part.from_bytes(data=ref_bytes, mime_type="image/jpeg"),
+                        (
+                            "Analyze this product image. Return JSON: "
+                            '{"name": "...", "label_text": "...", "shape": "...", '
+                            '"size_hint": "...", "description": "..."}. '
+                            "name=product name on label, label_text=ALL text on label, "
+                            "shape=bottle/can/box/tube/flat/pouch/other, "
+                            "size_hint=palm/one_hand/two_hands/tabletop/large, "
+                            "description=visual description under 80 words. ONLY JSON."
+                        ),
+                    ],
+                    config=types.GenerateContentConfig(temperature=0.2, max_output_tokens=AI_TOKENS_SHORT),
+                )
+                analysis = parse_ai_json(resp.text)
+                body.product_name = analysis.get("name", "제품")
+                body.product_shape = analysis.get("shape", "other")
+                body.product_size_hint = analysis.get("size_hint", "one_hand")
+                body.product_label_text = analysis.get("label_text")
+                body.product_description = analysis.get("description")
+            except Exception as e:
+                logger.warning("Quick product analyze failed (continuing without): %s", e)
+                body.product_name = "제품"
+                product_warning = "제품 분석 실패 — 사진만 사용"
+
+        except ValueError as e:
+            # 이미지 형식/크기 문제: 제품 없이 진행 + 경고
+            logger.warning("Quick product photo invalid: %s", e)
+            product_warning = str(e)
+            body.product_photo_url = None
+        except Exception as e:
+            logger.exception("Quick product photo processing failed")
+            product_warning = "제품 사진을 처리하지 못했어요"
+            body.product_photo_url = None
 
     # 3. 패킷 사전 확인 (1컷 = 1패킷)
     user_id = current_user.id
@@ -265,13 +358,16 @@ async def create_quick_cut(
 
     run_job_in_background(background_tasks, job.job_id, _generate())
 
-    return {
+    resp = {
         "job_id": job.job_id,
         "project_id": project.id,
         "episode_id": episode.id,
         "cut_id": cut_id,
         "packets_will_charge": 1,
     }
+    if product_warning:
+        resp["product_warning"] = product_warning
+    return resp
 
 
 @router.get("/quick/{job_id}")

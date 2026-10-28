@@ -79,6 +79,71 @@ async def get_idea_brief_endpoint(
     return get_idea_brief(episode.gate_status)
 
 
+@router.put("/projects/{project_id}/episodes/{episode_id}/idea-brief/selection")
+async def update_idea_brief_selection(
+    project_id: int,
+    episode_id: int,
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """idea_brief에 copy_selected·scene_selected 저장 + 광고 모델 1명 planning 설정 — 게이트 무관."""
+    episode = _get_episode_for_user(db, project_id, episode_id, current_user.id)
+    gs = dict(episode.gate_status or {})
+    ib = dict(gs.get("idea_brief") or {})
+    if "copy_selected" in body:
+        ib["copy_selected"] = body["copy_selected"]
+    if "scene_selected" in body:
+        ib["scene_selected"] = body["scene_selected"]
+    gs["idea_brief"] = ib
+
+    # 광고 purpose: 모델 1명 planning 자동 설정 (이야기형 planning 대체)
+    purpose = gs.get("purpose", "story")
+    if purpose in ("onecut_ad", "instatoon_ad", "brand_series"):
+        # 장면 아이디어에서 모델 추출, 없으면 기본
+        scene_sel = ib.get("scene_selected", 0)
+        scenes = ib.get("scene_ideas", [])
+        scene = scenes[scene_sel] if isinstance(scene_sel, int) and scene_sel < len(scenes) else {}
+        scene_text = scene.get("scene", "")
+        # 브리프에서 타깃 요약으로 성별·나이 추정
+        target = ib.get("ad_brief_result", {}).get("target_summary", "")
+        model_name = "모델"
+        model_gender = "여성"
+        model_age = "20대"
+        if "남" in target and "여" not in target:
+            model_gender = "남성"
+        if "30" in target:
+            model_age = "30대"
+        elif "40" in target:
+            model_age = "40대"
+        model_desc = f"{model_age} {model_gender}, {scene_text}" if scene_text else f"{model_age} {model_gender} 모델"
+        model_char = {
+            "name": model_name,
+            "ref_key": "model",
+            "gender": model_gender,
+            "age": model_age,
+            "description": model_desc,
+        }
+        # planning에 모델 1명만 (이야기형 캐릭터 덮어씀)
+        script_data = dict(episode.script) if episode.script else {}
+        planning = dict(script_data.get("planning") or {})
+        planning["characters"] = [model_char]
+        # 이야기형 기획 필드 최소화
+        copy_sel = ib.get("copy_selected", 0)
+        copies = ib.get("copy_candidates", [])
+        chosen = copies[copy_sel] if isinstance(copy_sel, int) and copy_sel < len(copies) else {}
+        planning["logline"] = chosen.get("head", "")
+        planning["synopsis"] = ""
+        planning["title"] = episode.title or ""
+        script_data["planning"] = planning
+        episode.script = script_data
+        gs["planning_draft"] = {"characters": [model_char]}
+
+    episode.gate_status = gs
+    db.commit()
+    return {"status": "saved"}
+
+
 @router.post("/projects/{project_id}/episodes/{episode_id}/idea-brief")
 async def create_idea_brief(
     project_id: int,

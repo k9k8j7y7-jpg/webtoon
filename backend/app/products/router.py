@@ -246,7 +246,7 @@ async def analyze_product(
                 "- name: product name visible on the label (in its original language)\n"
                 "- name_ko: product name in Korean (translate if label is in another language, "
                 "or Korean brand alias if commonly known — e.g. '밀본 엘루쥬다' for 'MILBON Elujuda')\n"
-                "- colors: comma-separated list of dominant colors\n"
+                "- colors: comma-separated list of dominant colors IN KOREAN (예: 흰색, 주황색, 베이지)\n"
                 "- label_text: ALL text visible on the product label, transcribed exactly as printed "
                 "(line breaks as \\n)\n"
                 "- shape: one of: bottle, can, box, tube, flat, pouch, other\n"

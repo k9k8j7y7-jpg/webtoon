@@ -48,7 +48,9 @@ def build_product_clause(product) -> str:
         "Draw the product matching the provided product reference image. "
         "NEVER make the product giant or background-sized. "
         "Show it naturally held, placed on a surface, or used by a character. "
-        "Do not redesign the packaging."
+        "Do not redesign the packaging. "
+        "No text anywhere in the image except the product's own label; "
+        "no slogans, signs, or posters with words."
     )
 
     return " ".join(parts)

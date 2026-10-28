@@ -320,19 +320,20 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
 
   const { loading: initialLoading, error: loadError, retry: retryLoad } = useGateLoad(loadAssets);
 
-  // 분위기→스타일 자동 선택 (광고 purpose, 스타일 미선택 시)
-  const MOOD_STYLE_MAP = { premium: 'emotional_romance', webtoon: 'korean_webtoon', humor: 'korean_webtoon', emotional: 'emotional_romance', photo_real: 'korean_webtoon' };
+  // ⑧ 분위기→스타일 자동 선택 (광고 purpose, 스타일 미선택 시)
+  const MOOD_STYLE_MAP = { premium: 'emotional_romance', webtoon: 'korean_webtoon', humor: 'korean_webtoon', emotional: 'emotional_romance', photo_real: 'korean_webtoon', ai_pick: 'korean_webtoon' };
   useEffect(() => {
-    if (!isAdPurpose || styles || initialLoading) return;
+    if (!isAdPurpose || initialLoading) return;
+    // 스타일이 이미 선택되어 있으면 스킵
+    if (styles?.preset_key) return;
+    const recommended = gateStatus?.idea_brief?.recommended_style;
     const mood = gateStatus?.idea_brief?.ad_brief_result?.mood || gateStatus?.idea_brief?.mood;
-    const mapped = mood && MOOD_STYLE_MAP[mood];
-    if (mapped) {
-      api.post(`/projects/${projectId}/episodes/${episodeId}/style`, { style_key: mapped })
-        .then(({ data }) => setStyles(data))
-        .catch(() => {});
-    }
+    const mapped = recommended || (mood && MOOD_STYLE_MAP[mood]) || 'korean_webtoon';
+    api.put(`/projects/${projectId}/episodes/${episodeId}/style`, { preset_key: mapped })
+      .then(({ data }) => setStyles(data))
+      .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdPurpose, styles, initialLoading]);
+  }, [isAdPurpose, styles?.preset_key, initialLoading]);
 
   const [skippedInfo, setSkippedInfo] = useState(null);
   // 대본(기획) 등장인물 — 시트 생성 대상·실사 추가 선택지
@@ -1049,7 +1050,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
                     {p.size_hint && (
                       <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400">
                         {SIZE_CHIPS.find(s => s.key === p.size_hint)?.label || p.size_hint}
-                        {p.size_ratio ? ` · ${p.size_ratio}×` : ''}
+                        {p.size_ratio && p.holding_photo_url ? ` · ${p.size_ratio}×` : ''}
                       </span>
                     )}
                   </div>
@@ -1081,16 +1082,18 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
       setRefAdUploading(true);
       try {
         const fd = new FormData();
-        fd.append('image', file);
+        fd.append('file', file);
         const { data } = await api.post(
           `/projects/${projectId}/episodes/${episodeId}/reference-ads`,
           fd, { headers: { 'Content-Type': 'multipart/form-data' } }
         );
-        setRefAds(data.reference_ads || [...refAds, data]);
+        setRefAds(prev => [...prev, data]);
         setRefAdModal(false);
         await onRefresh();
       } catch (err) {
-        alert(err.response?.data?.detail || '참고 광고 업로드에 실패했어요');
+        const detail = err.response?.data?.detail;
+        const msg = typeof detail === 'string' ? detail : '참고 광고 업로드에 실패했어요';
+        alert(msg);
       } finally {
         setRefAdUploading(false);
       }
@@ -1409,22 +1412,22 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
       )}
       {job && phase === 'characters' && <JobProgress job={job} label="캐릭터 시트 생성" />}
       <div className="glass-card p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2">
+        <div className="mb-4">
+          <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2 mb-3">
             <Users size={20} className="text-purple-500" /> 캐릭터 시트
           </h2>
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2">
             <button
               onClick={openPicker}
               disabled={!!job}
-              className="flex items-center gap-1 px-3 py-2 text-xs font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 hover:bg-purple-100 dark:hover:bg-purple-900/40 rounded-full transition-colors disabled:opacity-50"
+              className="flex items-center justify-center gap-1 px-3 py-2 text-xs font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 hover:bg-purple-100 dark:hover:bg-purple-900/40 rounded-full transition-colors disabled:opacity-50"
             >
               <Link size={12} /> 캐릭터 불러오기
             </button>
             <button
               onClick={generateCharacters}
               disabled={!!job || !hasStyle}
-              className="flex items-center gap-1 px-4 py-2 bg-purple-600 text-white rounded-full text-xs font-bold hover:bg-purple-700 hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50"
+              className="flex items-center justify-center gap-1 px-4 py-2 bg-purple-600 text-white rounded-full text-xs font-bold hover:bg-purple-700 hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50"
             >
               {hasCharacters ? <><RefreshCw size={12} /> 재생성 (1인 2패킷)</> : '등장 캐릭터 자동 생성 (1인 2패킷)'}
             </button>
@@ -2050,7 +2053,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
           disabled={approving}
           className="flex items-center gap-1.5 px-5 py-2.5 bg-green-600 dark:bg-green-600 text-white rounded-full text-sm font-bold hover:bg-green-700 hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50"
         >
-          <Check size={14} /> {approving ? '승인 중...' : '승인하고 STEP 4 콘티·장소로 →'}
+          <Check size={14} /> {approving ? '승인 중...' : purpose === 'onecut_ad' ? '승인하고 완성 단계로 →' : '승인하고 STEP 4 콘티·장소로 →'}
         </button>
       )}
 

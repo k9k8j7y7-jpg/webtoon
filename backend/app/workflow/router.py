@@ -1,5 +1,6 @@
 """워크플로우 엔드포인트 — 게이트 3 승인 + Job 폴링. API-Spec 5장, 9장."""
 
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -11,6 +12,7 @@ from app.projects.models import Project, Episode
 from app.characters.models import Character, EpisodeCharacter
 from app.locations.models import Location
 from app.storyboard.models import Cut
+from app.products.models import Product
 from app.workflow.gate import (
     approve_gate, get_gate_number,
     get_aspect_ratio, is_aspect_ratio_locked,
@@ -20,6 +22,7 @@ from app.workflow.gate import (
 from app.workflow.page_formats import PAGE_FORMATS, FORMAT_KEYS
 from app.jobs import get_job
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["workflow"])
 
 
@@ -61,8 +64,42 @@ async def approve_assets(
     if body and body.auto_advance:
         new_status["auto_advance"] = True
     episode.gate_status = new_status
-
     db.commit()
+
+    # ⑲ 한 컷 광고: 콘티 1컷 자동 생성 + gate 4 자동 승인 → gate 5 직행
+    purpose = new_status.get("purpose", "story")
+    if purpose == "onecut_ad":
+        from app.storyboard.service import create_cuts_from_script
+        script_data = (episode.script or {}).get("script", {})
+        if script_data.get("scenes"):
+            # 기존 컷 삭제
+            from app.storyboard.models import Cut
+            db.query(Cut).filter(Cut.episode_id == episode_id).delete()
+            # 제품 이름
+            products = db.query(Product).filter(Product.episode_id == episode_id).all()
+            product_names = [p.name for p in products if p.name]
+            # 장소 자동 생성
+            script_locations = script_data.get("locations", [])
+            for loc_data in script_locations:
+                rk = loc_data.get("ref_key", "")
+                existing = db.query(Location).filter(
+                    Location.episode_id == episode_id, Location.ref_key == rk
+                ).first()
+                if not existing and rk:
+                    db.add(Location(
+                        episode_id=episode_id, ref_key=rk,
+                        name=loc_data.get("name", rk),
+                        description=loc_data.get("description", ""),
+                        status="approved",
+                    ))
+            cuts = create_cuts_from_script(episode_id, script_data, db, product_names=product_names)
+            db.flush()
+            # gate 4 자동 승인
+            new_status = approve_gate(episode.gate_status, 4)
+            episode.gate_status = new_status
+            db.commit()
+            logger.info("onecut_ad auto storyboard: ep=%d, cuts=%d → gate 5", episode_id, len(cuts))
+
     db.refresh(episode)
 
     return {

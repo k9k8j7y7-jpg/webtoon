@@ -70,13 +70,16 @@ async def create_storyboard(
 
     target = body.target_cut_count if body else None
 
-    # 목표 컷 수가 있으면 하한·상한 검증
+    # 목표 컷 수가 있으면 하한·상한 검증 (광고 purpose는 target_cuts 기준 완화)
+    from app.workflow.gate import get_purpose
+    _purpose = get_purpose(episode.gate_status)
     if target:
         rec = recommend_cut_count(script_data)
-        if target < rec["absolute_min"]:
+        ad_min = 1 if _purpose == "onecut_ad" else (4 if _purpose in ("instatoon_ad", "brand_series") else rec["absolute_min"])
+        if target < ad_min:
             raise HTTPException(
                 status_code=400,
-                detail=f"이 대본은 최소 {rec['absolute_min']}컷이 필요합니다. 컷을 더 줄이려면 대본(이야기)을 줄여주세요.",
+                detail=f"이 대본은 최소 {ad_min}컷이 필요합니다.",
             )
         if target > rec["recommended_max"]:
             raise HTTPException(

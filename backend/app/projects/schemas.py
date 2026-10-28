@@ -41,6 +41,7 @@ class EpisodeCreate(BaseModel):
     purpose: str = "story"
     product_name: str = ""
     product_features: str = ""
+    page_format_override: str | None = None
 
 
 class EpisodeResponse(BaseModel):

@@ -163,6 +163,11 @@ export default function QuickPage() {
         if (dialogue.trim()) body.dialogue = dialogue.trim();
         ({ data } = await api.post('/quick', body));
       }
+      if (data.product_warning) {
+        setError(data.product_warning === '제품 분석 실패 — 사진만 사용'
+          ? '제품 분석에 실패해 사진만 참조했어요'
+          : '제품 사진을 처리하지 못했어요 — 다른 사진으로 해보세요');
+      }
       const job = await pollJob(data.job_id, null, 1500);
       const r = {
         ...job.result,
@@ -178,7 +183,7 @@ export default function QuickPage() {
       } else if (err.response?.status === 409) {
         setError('이미 생성 중입니다. 잠시 후 다시 시도해주세요.');
       } else {
-        setError(err.message || '생성에 실패했어요. 다시 시도해주세요.');
+        setError(err.response?.data?.detail || err.message || '생성에 실패했어요. 다시 시도해주세요.');
       }
     } finally {
       setGenerating(false);

@@ -152,6 +152,13 @@ WEBTOON/
 - **단점:** 안경 오삽입 2/6 (시트에 없는 안경 추가). 화풍이 Gemini(수채풍)와 확연히 다름 → 에피소드 단위 모델 고정 필수. 제품 라벨 텍스트 재현 불가(양쪽 다 — 제품 레이어로 해결이 정답)
 - **결정:** C(모델 선택 구조)는 형식/레이아웃 기능 완성 이후. GPT 칸 분할 실험은 레이아웃 기능 완성 후 "우리 합성 vs GPT 한 방" 비교로 진행
 
+**제품 컷 모델 규칙 (2026-10-28):** `scratch/product/out/photoreal/` P1·P2·P3 × Gemini·GPT 6장 비교 결과
+- **제품 컷(has_product=true) = GPT 기본.** Gemini는 라벨 뭉개짐(실사감 2/5), GPT는 milbon·SCALP SUPPORT OIL+·170g 전부 판독 가능(3/5). `images/service.py`에서 `cut_has_product → use_gpt=True` 자동 전환
+- **프롬프트로 실사 질감 불가** — "photorealistic product" / "photo pasted" 지시는 양쪽 모델 모두 효과 없음. 모델 관성이 전체 화풍을 일관시킴
+- **GPT 고유 문제:** 배경에 슬로건 문구 자체 삽입(Healthy Scalp Happier You) → `build_product_clause`에 "no text except product label" 추가로 대응
+- **정밀 합성 E(실사 사진 오버레이 마스킹)는 백로그** — 프롬프트 접근 한계 확인, 합성이 유일한 확실한 해법
+- 빠른 한 컷 제품 있을 때도 GPT 동일 적용. RegenDropdown "GPT 권장" 표시(수동 변경은 향후 C 모델 선택 구조에서)
+
 **교훈:** Gemini 2.5-flash의 image-to-image 스타일 변환은 불신뢰 (플랜 A: 프롬프트 강화 실패, 플랜 B: 참조 이미지 변환 실패 → 사진풍 유지). 플랜 C(비전 텍스트 추출→텍스트→이미지)로 해결 — 참조 이미지를 전달하지 않아 사진풍 오염 원천 차단. Pro 모델의 image-to-image는 1-5 모델 실험에서 재도전 가능.
 
 **이미지 모델 전환 (2026-09-11):** `gemini-2.5-flash-image` → `gemini-3.1-flash-image` 완료. 2.5는 2026-10-02 종료 예정이었음. `IMAGE_MODEL` 환경변수로 관리 — 롤백은 `.env` 한 줄 변경 + touch main.py. 신모델 특성: 9:16 비율을 실제 준수(2.5는 정사각 출력이었음 — 새 컷부터 세로 비율), JPEG 출력(PNG 대비 30~60% 작음), generate_content API 호환 확인됨, 참조 5장 통과. 이미지당 원가 $0.039→$0.067.

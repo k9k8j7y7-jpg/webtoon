@@ -105,11 +105,12 @@ export default function WorkflowPage() {
     }
   };
 
+  const purpose = gateStatus?.purpose || 'story';
   const gateComponents = {
     1: Gate1Planning,
-    2: Gate2Script,
+    2: purpose === 'onecut_ad' ? Gate1Planning : Gate2Script,
     3: Gate3Assets,
-    4: Gate4Storyboard,
+    4: purpose === 'onecut_ad' ? Gate5Review : Gate4Storyboard,  // onecut_ad: gate4 스킵 → Gate5 직행
     5: Gate5Review,
   };
   const GateComponent = gateComponents[displayGate];

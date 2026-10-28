@@ -45,6 +45,11 @@ export default function ProjectPage() {
   const [modalProductFeatures, setModalProductFeatures] = useState('');
   // 용도 선택 모달
   const [showPurposeModal, setShowPurposeModal] = useState(false);
+  // 광고 간단 모달 (제목만)
+  const [showAdTitleModal, setShowAdTitleModal] = useState(false);
+  const [adTitlePurpose, setAdTitlePurpose] = useState('onecut_ad');
+  const [adTitle, setAdTitle] = useState('');
+  const [adFormat, setAdFormat] = useState('grid_2x2'); // instatoon_ad 전용
 
   // 연작 모달
   const [showSeriesModal, setShowSeriesModal] = useState(false);
@@ -98,6 +103,28 @@ export default function ProjectPage() {
       navigate(`/projects/${projectId}/episodes/${data.id}/workflow`);
     } catch (e) {
       alert('에피소드 생성에 실패했습니다.');
+      setCreating(false);
+    }
+  };
+
+  const handleCreateAdEpisode = async () => {
+    if (!adTitle.trim()) return;
+    setCreating(true);
+    try {
+      const body = {
+        episode_no: episodes.length + 1,
+        title: adTitle.trim(),
+        is_ad: true,
+        purpose: adTitlePurpose,
+      };
+      if (adTitlePurpose === 'instatoon_ad' && adFormat === 'vertical') {
+        body.page_format_override = 'vertical';
+      }
+      const { data } = await api.post(`/projects/${projectId}/episodes`, body);
+      setShowAdTitleModal(false);
+      navigate(`/projects/${projectId}/episodes/${data.id}/workflow`);
+    } catch (e) {
+      alert(e.response?.data?.detail || '에피소드 생성에 실패했습니다.');
       setCreating(false);
     }
   };
@@ -180,8 +207,13 @@ export default function ProjectPage() {
     if (!gs) return '시작 전';
     if (isEpisodeCompleted(gs)) return null;
     const g = gs.current_gate;
-    const labels = { 1: '기획', 2: '대본', 3: '자산', 4: '콘티&장소', 5: '이미지' };
-    return `게이트 ${g} — ${labels[g]}`;
+    const purpose = gs.purpose || 'story';
+    if (purpose === 'onecut_ad') {
+      const stepMap = { 1: 'STEP 1 브리프', 2: 'STEP 1 브리프', 3: 'STEP 2 준비', 4: 'STEP 3 완성', 5: 'STEP 3 완성' };
+      return stepMap[g] || `STEP ${g}`;
+    }
+    const labels = { 1: 'STEP 1 기획', 2: 'STEP 2 대본', 3: 'STEP 3 자산 준비', 4: 'STEP 4 콘티·장소', 5: 'STEP 5 웹툰 만들기' };
+    return labels[g] || `STEP ${g}`;
   };
 
   const hasContent = episodes.length > 0 || seriesList.length > 0;
@@ -354,7 +386,13 @@ export default function ProjectPage() {
               ].map(c => (
                 <button
                   key={c.purpose}
-                  onClick={() => openModal(null, true, c.purpose)}
+                  onClick={() => {
+                    setAdTitlePurpose(c.purpose);
+                    setAdTitle('');
+                    setAdFormat('grid_2x2');
+                    setShowAdTitleModal(true);
+                    setShowPurposeModal(false);
+                  }}
                   className={`flex flex-col items-center gap-2 p-5 border-2 rounded-2xl transition-all cursor-pointer ${c.color} bg-white/50 dark:bg-zinc-800/50`}
                 >
                   <span className="text-3xl">{c.icon}</span>
@@ -366,7 +404,7 @@ export default function ProjectPage() {
             <div className="text-center">
               <button
                 onClick={() => openModal(null, false, 'story')}
-                className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 underline transition-colors"
+                className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 underline transition-colors"
               >
                 광고가 아니에요 → 일상툰·이야기로 만들기
               </button>
@@ -375,7 +413,61 @@ export default function ProjectPage() {
         </div>
       )}
 
-      {/* 단편/광고 에피소드 생성 모달 */}
+      {/* 광고 간단 모달 (제목만 → 바로 브리프) */}
+      {showAdTitleModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => !creating && setShowAdTitleModal(false)}>
+          <div className="glass-card p-6 w-full max-w-sm mx-4 shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white">
+                {adTitlePurpose === 'onecut_ad' ? '📸 한 컷 광고' : adTitlePurpose === 'instatoon_ad' ? '📱 인스타툰 광고' : '📚 브랜드 연재툰'}
+              </h2>
+              <button onClick={() => setShowAdTitleModal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"><X size={20} /></button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">에피소드 제목</label>
+                <input
+                  type="text" value={adTitle} onChange={e => setAdTitle(e.target.value)}
+                  placeholder="예: 밀본 오일 홍보"
+                  className="w-full px-4 py-2.5 border-2 border-border dark:border-zinc-700 rounded-xl bg-white dark:bg-zinc-800 text-ink-black dark:text-white placeholder-gray-400 focus:border-comic-orange focus:outline-none transition-colors font-bold"
+                  autoFocus
+                  onKeyDown={e => e.key === 'Enter' && adTitle.trim() && handleCreateAdEpisode()}
+                />
+              </div>
+              {adTitlePurpose === 'instatoon_ad' && (
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1.5">레이아웃</label>
+                  <div className="flex gap-2">
+                    {[
+                      { value: 'grid_2x2', label: '2×2 격자', desc: '4컷' },
+                      { value: 'vertical', label: '세로 스크롤', desc: '4~8컷' },
+                    ].map(f => (
+                      <button key={f.value} onClick={() => setAdFormat(f.value)}
+                        className={`flex-1 py-2 px-3 rounded-xl border-2 text-xs font-bold transition-colors ${adFormat === f.value
+                          ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300'
+                          : 'border-border dark:border-zinc-700 text-gray-500 dark:text-gray-400 hover:border-purple-300'}`}>
+                        {f.label} <span className="text-[10px] font-normal text-gray-400 block">{f.desc}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="flex gap-3 mt-5">
+              <button onClick={() => setShowAdTitleModal(false)}
+                className="flex-1 py-2.5 border-2 border-border dark:border-white/10 rounded-full font-bold text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5 transition-all">
+                취소
+              </button>
+              <button onClick={handleCreateAdEpisode} disabled={!adTitle.trim() || creating}
+                className="neon-btn flex-1 !py-2.5 !rounded-full disabled:opacity-50">
+                {creating ? '생성 중...' : '시작하기'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 단편 에피소드 생성 모달 (story 전용) */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowModal(false)}>
           <div
@@ -383,7 +475,7 @@ export default function ProjectPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white">{isAdMode ? '광고 웹툰 만들기' : '단편 에피소드 만들기'}</h2>
+              <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white">단편 에피소드 만들기</h2>
               <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
                 <X size={20} />
               </button>

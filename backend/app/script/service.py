@@ -132,6 +132,37 @@ async def generate_script(
 
 위 기획안으로 웹툰 {ep_label} 대본을 JSON으로 만들어줘."""
 
+    # 광고 3종 공통: 선택한 카피·장면을 프롬프트에 주입
+    if purpose in ("onecut_ad", "instatoon_ad", "brand_series"):
+        ib = planning.get("idea_brief") or {}
+        copy_sel = ib.get("copy_selected", 0)
+        scene_sel = ib.get("scene_selected", 0)
+        copies = ib.get("copy_candidates", [])
+        scenes = ib.get("scene_ideas", [])
+        chosen_copy = copies[copy_sel] if isinstance(copy_sel, int) and copy_sel < len(copies) else (copies[0] if copies else {})
+        chosen_scene = scenes[scene_sel] if isinstance(scene_sel, int) and scene_sel < len(scenes) else (scenes[0] if scenes else {})
+        head = chosen_copy.get("head", "")
+        sub = chosen_copy.get("sub", "")
+        scene_desc = chosen_scene.get("scene", "")
+        scene_shot = chosen_scene.get("shot", "bust")
+        # 브리프 요약
+        brief_result = ib.get("ad_brief_result", {})
+        key_msg = brief_result.get("key_message") or ib.get("key_message", "")
+        target = brief_result.get("target_summary", "")
+        if head or scene_desc or key_msg:
+            prompt += f"""
+광고 브리프:
+- 핵심 메시지: {key_msg}
+- 타깃: {target}
+- 헤드카피: "{head}"
+- 서브카피: "{sub}"
+- 장면 아이디어: {scene_desc}
+- 샷 타입: {scene_shot}
+
+첫 컷 또는 마지막 컷에 위 헤드카피·서브카피를 dialogue narration(headcopy/box)으로 넣어라.
+등장인물은 모델 1명(필요 시 조연 1명까지). 새 인물을 여럿 만들지 마라.
+"""
+
     if purpose == "onecut_ad":
         from app.script.prompt_fragments import ONECUT_AD_SYSTEM_INSTRUCTION
         system = ONECUT_AD_SYSTEM_INSTRUCTION

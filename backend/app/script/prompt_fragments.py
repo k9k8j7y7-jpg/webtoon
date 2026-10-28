@@ -117,13 +117,15 @@ STANDALONE_SCRIPT_INSTRUCTION_ADDON = """
 AD_SCRIPT_INSTRUCTION_ADDON = """
 추가 원칙 (광고 웹툰 — 완결 필수 + 제품 자연 노출):
 - 이 에피소드는 광고 웹툰이다. 하나의 완결된 이야기를 만들어야 한다.
+- 컷 수: 4~8컷. 상황→문제→해결→CTA(마무리) 구조.
 - 마지막 씬은 반드시 갈등이 해소된 결말로 마무리하라. 여운·감동·교훈 등으로 끝낼 것.
 - "과연 ~할 수 있을까?", "이야기는 계속된다", 다음 화 예고, 미해결 떡밥은 절대 금지.
-- 구조: 도입(상황 설정) → 전개(갈등 심화) → 클라이맥스(전환점) → 결말(해소·마무리). 이 네 단계가 모두 포함되어야 한다.
 - 제품/브랜드를 스토리에 자연스럽게 녹여라. 노골적 광고 문구("지금 구매하세요!", "최고의 제품!")는 절대 금지.
 - 캐릭터가 제품을 실제로 사용하거나 경험하는 장면을 통해 제품의 가치를 보여줘라.
-- 마지막 씬에서 제품이 자연스럽게 어필되도록 마무리하라 (강제 삽입 아닌 스토리 흐름 안에서).
-- 시놉시스의 아크가 크면 시간 경과 연출('3개월 후' 등)을 써서 압축하라.
+- 등장인물: 모델 1명(character_id는 기획안 등장인물의 ref_key 또는 "model") + 필요 시 조연 1명까지. 3명 이상 금지.
+- 첫 컷 또는 마지막 컷에 헤드카피·서브카피를 dialogue에 넣어라:
+  {"type": "narration", "speaker": null, "text": "헤드카피", "bubble_style": "headcopy"}
+  {"type": "narration", "speaker": null, "text": "서브카피", "bubble_style": "box"}
 """
 
 
@@ -142,6 +144,8 @@ ONECUT_AD_SYSTEM_INSTRUCTION = """너는 SNS 한 컷 광고 대본 작가야.
 
 핵심 원칙:
 - 반드시 씬 1개, 컷 1개만. 여러 컷을 만들지 마라.
+- 등장인물은 모델 1명만. character_id는 기획안의 등장인물 ref_key를 그대로 써라 (없으면 "model").
+- 새 등장인물을 만들지 마라. 기획안에 주어진 인물만 써라.
 - 헤드카피(짧은 광고 문구)와 서브카피를 dialogue에 넣어라.
 - 제품을 장면에 자연스럽게 녹여라. 노골적 광고 문구 금지.
 
@@ -153,19 +157,19 @@ ONECUT_AD_SYSTEM_INSTRUCTION = """너는 SNS 한 컷 광고 대본 작가야.
       "scene_id": "s01",
       "scene_no": 1,
       "summary": "장면 요약",
-      "location": "장소 (영문 식별자, 예: bathroom_morning)",
+      "location": "장소 (영문 식별자, 예: beauty_shop)",
       "cuts": [
         {
           "cut_number": 1,
           "characters": [
             {
-              "character_id": "인물 ref_key",
+              "character_id": "model",
               "emotion": "smile",
-              "pose": "제품을 손에 들고 두피에 바르는 중",
+              "pose": "제품을 손에 들고 사용하는 중",
               "outfit": "default"
             }
           ],
-          "location_id": "bathroom_morning",
+          "location_id": "beauty_shop",
           "shot": "bust",
           "action": "장면 지문",
           "dialogue": [
@@ -180,9 +184,9 @@ ONECUT_AD_SYSTEM_INSTRUCTION = """너는 SNS 한 컷 광고 대본 작가야.
   ],
   "locations": [
     {
-      "ref_key": "bathroom_morning",
-      "name": "아침 욕실",
-      "description": "깨끗하고 밝은 욕실"
+      "ref_key": "beauty_shop",
+      "name": "뷰티숍",
+      "description": "밝고 깨끗한 매장"
     }
   ]
 }

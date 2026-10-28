@@ -266,8 +266,25 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
     } catch { /* 무시 */ }
   };
 
+  const [autoStoryboarding, setAutoStoryboarding] = useState(false);
+
   const loadAllData = async () => {
-    await loadCuts();
+    const { data: cutsData } = await api.get(`/projects/${projectId}/episodes/${episodeId}/cuts`);
+    setCuts(cutsData);
+
+    // onecut_ad: cuts=0이면 자동 콘티 생성 (gate4에서 빠진 경우 방지)
+    const purpose = gateStatus?.purpose;
+    if (purpose === 'onecut_ad' && cutsData.length === 0) {
+      setAutoStoryboarding(true);
+      try {
+        await api.post(`/projects/${projectId}/episodes/${episodeId}/storyboard`, { target_cut_count: 1 });
+        await api.post(`/projects/${projectId}/episodes/${episodeId}/storyboard/approve`);
+        const { data: refreshed } = await api.get(`/projects/${projectId}/episodes/${episodeId}/cuts`);
+        setCuts(refreshed);
+      } catch (e) { console.error('auto storyboard failed:', e); }
+      finally { setAutoStoryboarding(false); }
+    }
+
     loadProducts();
     loadEpMeta();
     loadCharacters();
@@ -728,6 +745,11 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                 {gateStatus?.has_photo_real_char && (
                   <span className="text-[10px] font-bold text-blue-500 dark:text-blue-400">
                     실사 캐릭터 포함 — 컷당 약 30~40초
+                  </span>
+                )}
+                {!gateStatus?.has_photo_real_char && cuts.some(c => c.has_product) && (
+                  <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">
+                    제품 컷은 더 정교하게 그려서 40초쯤 걸려요
                   </span>
                 )}
               </div>
@@ -1810,7 +1832,7 @@ function RegenDropdown({ cutId, cutSpec, disabled, onRegenerate, epDramaLevel, h
           {hasProduct && (
             <div className="flex items-center gap-2 px-4 py-2 mb-1 bg-amber-50 dark:bg-amber-900/10 rounded-xl">
               <span className="text-xs font-bold text-amber-700 dark:text-amber-400">📦 제품 참조 포함</span>
-              <Check size={12} className="text-amber-500 ml-auto" />
+              <span className="text-[10px] text-amber-600/70 dark:text-amber-400/60 ml-auto">GPT 권장</span>
             </div>
           )}
           {['light', 'normal', 'strong'].map((level) => {
@@ -1843,7 +1865,7 @@ function RegenDropdown({ cutId, cutSpec, disabled, onRegenerate, epDramaLevel, h
         <p className="px-3 pt-2 pb-1 text-[10px] font-bold text-gray-400">연출 강도 재생성</p>
         {hasProduct && (
           <div className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/10">
-            📦 제품 참조 포함 <Check size={10} className="text-amber-500 ml-auto" />
+            📦 제품 참조 포함 <span className="text-amber-500/70 ml-auto">GPT 권장</span>
           </div>
         )}
         {['light', 'normal', 'strong'].map((level) => {

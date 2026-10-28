@@ -109,17 +109,24 @@ def create_episode(
 ):
     _get_user_project(db, project_id, current_user.id)
 
+    gs = create_initial_gate_status(
+        is_ad=body.is_ad,
+        idea=body.idea,
+        product_name=body.product_name,
+        product_features=body.product_features,
+        purpose=body.purpose,
+    )
+    # 인스타툰 광고 레이아웃 오버라이드 (vertical 선택 시)
+    if body.page_format_override and body.page_format_override in ("vertical", "grid_2x2"):
+        gs["page_format"] = body.page_format_override
+        if body.page_format_override == "vertical":
+            gs.pop("target_cuts", None)  # 세로는 컷 수 자유
+
     episode = Episode(
         project_id=project_id,
         episode_no=body.episode_no,
         title=body.title,
-        gate_status=create_initial_gate_status(
-            is_ad=body.is_ad,
-            idea=body.idea,
-            product_name=body.product_name,
-            product_features=body.product_features,
-            purpose=body.purpose,
-        ),
+        gate_status=gs,
     )
     db.add(episode)
     db.commit()

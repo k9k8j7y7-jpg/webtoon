@@ -310,7 +310,7 @@ export default function AdBriefForm({ projectId, episodeId, gateStatus, onBriefD
           <button onClick={handleProceed}
             className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 transition-colors"
           >
-            <Check size={14} /> 이대로 진행
+            <Check size={14} /> {(gateStatus?.current_gate || 1) >= 2 ? '이 카피로 대본 다시 만들기' : '이대로 진행'}
           </button>
         </div>
       )}

@@ -288,7 +288,12 @@ async def generate_cut_image(
 ) -> dict:
     """단일 컷의 이미지를 생성한다. 레퍼런스 주입 포함."""
     # 실사 캐릭터 포함 에피소드 → GPT 어댑터
+    # 제품 컷(has_product)도 GPT 기본 — Gemini는 라벨 뭉개짐 (scratch photoreal 10-28)
     use_gpt = _episode_has_photo_real_char(episode_id, db)
+    cut_has_product_flag = (cut.spec or {}).get("has_product", False)
+    if cut_has_product_flag and not use_gpt:
+        use_gpt = True
+        logger.info("Cut %s: product cut → GPT adapter", cut.cut_id)
     adapter = get_openai_image_adapter() if use_gpt else get_image_adapter()
     spec = cut.spec
 

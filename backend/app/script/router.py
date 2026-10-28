@@ -94,6 +94,11 @@ async def create_script(
     from app.workflow.gate import get_purpose
     _purpose = get_purpose(episode.gate_status)
 
+    # 광고 3종: idea_brief(카피·장면·브리프)를 planning에 합쳐 전달
+    if _purpose in ("onecut_ad", "instatoon_ad", "brand_series"):
+        gs = episode.gate_status or {}
+        planning["idea_brief"] = gs.get("idea_brief", {})
+
     result = await generate_script(
         planning, series_context=series_context,
         is_ad=ad_flag, product_name=_product_name,

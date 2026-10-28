@@ -80,6 +80,8 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
   const [adScriptForm, setAdScriptForm] = useState(null);
   const [adScriptSaving, setAdScriptSaving] = useState(false);
   const [adScriptApproving, setAdScriptApproving] = useState(false);
+  const [adScriptGenerating, setAdScriptGenerating] = useState(false);
+  const [adScriptHighlight, setAdScriptHighlight] = useState(false);
 
   const [characters, setCharacters] = useState([]);
   const [charTouched, setCharTouched] = useState(false); // 등장인물 user_touched
@@ -801,41 +803,54 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
           episodeId={episodeId}
           gateStatus={gateStatus}
           onBriefDone={async ({ selectedCopy, selectedScene, briefResult }) => {
+            setAdScriptGenerating(true);
             try {
-              const gs = gateStatus;
-              const ib = gs?.idea_brief || {};
-              ib.copy_selected = selectedCopy;
-              ib.scene_selected = selectedScene;
-              await api.put(`/projects/${projectId}/episodes/${episodeId}/planning-draft`, {
-                brief_story: ib,
-              });
+              const currentGate = gateStatus?.current_gate || 1;
 
-              const scene = briefResult?.scene_ideas?.[selectedScene];
-              await api.post(`/projects/${projectId}/episodes/${episodeId}/planning`, {
-                idea: scene?.scene || '',
-                characters: [],
-                options: {},
-              });
+              // 1) 선택 + 모델 설정 저장
+              const ib = { ...(gateStatus?.idea_brief || {}), copy_selected: selectedCopy, scene_selected: selectedScene };
+              await api.put(`/projects/${projectId}/episodes/${episodeId}/idea-brief/selection`, ib);
 
-              // Gate1 승인
-              await api.post(`/projects/${projectId}/episodes/${episodeId}/planning/approve`, {});
+              // 2) gate 1 승인 — 광고 3종은 이야기형 POST /planning 금지 (idea-brief/selection이 모델·기획안 설정)
+              if (currentGate === 1) {
+                await api.post(`/projects/${projectId}/episodes/${episodeId}/planning/approve`, {});
+              }
 
-              // onecut_ad: 대본 생성만 (승인은 사용자가)
+              // 3) onecut_ad: 대본 생성/재생성
               if (purpose === 'onecut_ad') {
                 const { data } = await api.post(`/projects/${projectId}/episodes/${episodeId}/script`, {});
                 setAdScript(data?.scenes ? data : data?.script || data);
+                setAdScriptHighlight(true);
+                setTimeout(() => {
+                  setAdScriptHighlight(false);
+                  document.getElementById('ad-script-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 300);
               }
 
               onRefresh?.();
             } catch (err) {
-              alert(err.response?.data?.detail || '진행에 실패했어요');
+              console.error('onBriefDone error:', err.response?.data || err.message);
+            } finally {
+              setAdScriptGenerating(false);
             }
           }}
         />
 
+        {/* ① 대본 생성 중 스켈레톤 */}
+        {purpose === 'onecut_ad' && adScriptGenerating && (
+          <div className="glass-card p-5 space-y-3 animate-pulse">
+            <div className="flex items-center gap-2 text-sm font-bold text-comic-blue">
+              <RefreshCw size={14} className="animate-spin" /> 대본을 다시 쓰는 중… 10초쯤
+            </div>
+            <div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded w-3/4" />
+            <div className="h-12 bg-zinc-200 dark:bg-zinc-700 rounded" />
+            <div className="h-4 bg-zinc-200 dark:bg-zinc-700 rounded w-1/2" />
+          </div>
+        )}
+
         {/* onecut_ad 대본 카드 */}
-        {purpose === 'onecut_ad' && adScript && cut && (
-          <div className="glass-card p-5 space-y-3">
+        {purpose === 'onecut_ad' && adScript && cut && !adScriptGenerating && (
+          <div id="ad-script-card" className={`glass-card p-5 space-y-3 transition-all duration-500 ${adScriptHighlight ? 'ring-2 ring-comic-blue/50' : ''}`}>
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold font-serif text-ink-black dark:text-white flex items-center gap-2">
                 <FileText size={18} className="text-comic-blue" />
@@ -852,7 +867,6 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
             {adScriptEditing && adScriptForm ? (
               /* ── 편집 모드 ── */
               <div className="space-y-3">
-                {/* 장면 지문 */}
                 <div>
                   <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 mb-1 block">장면 지문</label>
                   <textarea value={adScriptForm.action}
@@ -860,7 +874,6 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                     rows={2}
                     className="w-full rounded-lg border border-border dark:border-night-border bg-white dark:bg-night-bg px-3 py-2 text-sm text-ink-black dark:text-white" />
                 </div>
-                {/* 샷/앵글 */}
                 <div>
                   <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 mb-1 block">샷 / 앵글</label>
                   <div className="flex flex-wrap gap-1.5">
@@ -874,7 +887,6 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                     ))}
                   </div>
                 </div>
-                {/* 대사 목록 */}
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400">대사 · 카피</label>
                   {adScriptForm.dialogue.map((d, i) => (
@@ -892,7 +904,6 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                     </div>
                   ))}
                 </div>
-                {/* 저장/취소 */}
                 <div className="flex gap-2 pt-1">
                   <button onClick={saveAdScript} disabled={adScriptSaving}
                     className="flex items-center gap-1 px-4 py-2 text-sm font-bold text-white bg-comic-blue rounded-full hover:bg-comic-blue/90 disabled:opacity-50 transition-colors">
@@ -905,31 +916,48 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                 </div>
               </div>
             ) : (
-              /* ── 보기 모드 ── */
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+              /* ── 보기 모드 (② 라벨 + ③ 캐릭터명 한글) ── */
+              <div className="space-y-2.5">
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="font-bold text-zinc-400 dark:text-zinc-500">샷</span>
                   <span className="bg-comic-blue/10 text-comic-blue px-1.5 py-0.5 rounded font-bold">{SHOT_LABELS[cut.shot] || cut.shot}</span>
-                  {cut.characters?.map(c => (
-                    <span key={typeof c === 'string' ? c : c.character_id} className="text-zinc-400 dark:text-zinc-500">
-                      {typeof c === 'string' ? c : c.character_id}
-                    </span>
-                  ))}
+                  <span className="font-bold text-zinc-400 dark:text-zinc-500 ml-2">모델</span>
+                  {cut.characters?.map((c, ci) => {
+                    const cid = typeof c === 'string' ? c : c.character_id;
+                    const planChars = planning?.characters || gateStatus?.planning_draft?.characters || [];
+                    const found = planChars.find(pc => pc.ref_key === cid || pc.character_id === cid);
+                    const displayName = found?.name || (ci === 0 && planChars[0]?.name) || cid;
+                    return <span key={cid} className="text-zinc-600 dark:text-zinc-300 font-bold">{displayName}</span>;
+                  })}
                 </div>
-                <p className="text-sm text-zinc-700 dark:text-zinc-300">{cut.action}</p>
+                <div>
+                  <p className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 mb-0.5">장면</p>
+                  <p className="text-sm text-zinc-700 dark:text-zinc-300">{cut.action}</p>
+                </div>
 
                 {headcopy && (
                   <div className="bg-zinc-900 dark:bg-zinc-900 text-white rounded-lg px-4 py-3 text-center">
+                    <p className="text-[10px] font-bold text-zinc-500 mb-1">헤드카피</p>
                     <p className="text-lg font-black tracking-tight">{headcopy.text}</p>
-                    {subcopy && <p className="text-xs mt-1 text-zinc-300">{subcopy.text}</p>}
+                    {subcopy && <>
+                      <p className="text-[10px] font-bold text-zinc-500 mt-2 mb-0.5">서브카피</p>
+                      <p className="text-xs text-zinc-300">{subcopy.text}</p>
+                    </>}
                   </div>
                 )}
 
-                {speeches.map((d, i) => (
-                  <p key={i} className="text-sm italic text-zinc-600 dark:text-zinc-400">
-                    <span className="not-italic text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-500 px-1 py-0.5 rounded mr-1">말풍선</span>
-                    {d.speaker ? `${d.speaker}: ` : ''}{d.text}
-                  </p>
-                ))}
+                {speeches.length > 0 ? speeches.map((d, i) => {
+                  const planChars = planning?.characters || gateStatus?.planning_draft?.characters || [];
+                  const speakerName = d.speaker && planChars.find(pc => pc.ref_key === d.speaker)?.name || d.speaker;
+                  return (
+                    <p key={i} className="text-sm italic text-zinc-600 dark:text-zinc-400">
+                      <span className="not-italic text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-500 px-1 py-0.5 rounded mr-1">말풍선</span>
+                      {speakerName ? `${speakerName}: ` : ''}{d.text}
+                    </p>
+                  );
+                }) : (
+                  <p className="text-xs text-zinc-400 dark:text-zinc-500">말풍선: 없음</p>
+                )}
               </div>
             )}
 
