@@ -251,6 +251,130 @@ async def revert_cut(
     return {"cut_id": cut_id, "reverted": True, "image_url": cut.image_url}
 
 
+@router.post("/cuts/{cut_id}/copy-report")
+async def copy_report(
+    cut_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """카피 글자 오류 신고: 비전 검사 → 틀림이면 환불 + 재생성, 맞으면 200."""
+    cut = db.query(Cut).filter(Cut.cut_id == cut_id).first()
+    if not cut:
+        raise HTTPException(status_code=404, detail="Cut not found")
+
+    episode = db.query(Episode).filter(Episode.id == cut.episode_id).first()
+    if not episode:
+        raise HTTPException(status_code=404, detail="Episode not found")
+
+    # 프로젝트 소유 확인
+    project = db.query(Project).filter(
+        Project.id == episode.project_id, Project.user_id == current_user.id
+    ).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # onecut_ad 전용
+    from app.workflow.gate import get_purpose, get_idea_brief
+    purpose = get_purpose(episode.gate_status)
+    if purpose != "onecut_ad":
+        raise HTTPException(status_code=400, detail="카피 신고는 한 컷 광고만 가능합니다")
+
+    # 같은 버전에 신고 1회만 (중복 환불 방지)
+    spec = cut.spec or {}
+    gen = spec.get("generation", {})
+    version = gen.get("version", cut.version or 1)
+    reported_versions = spec.get("copy_reported_versions", [])
+    if version in reported_versions:
+        raise HTTPException(status_code=409, detail="이 버전은 이미 신고했습니다")
+
+    # 기대 카피 텍스트 추출
+    ib = get_idea_brief(episode.gate_status) or {}
+    copy_sel = ib.get("copy_selected", 0)
+    copies = ib.get("copy_candidates", [])
+    chosen = copies[copy_sel] if isinstance(copy_sel, int) and copy_sel < len(copies) else (copies[0] if copies else {})
+    head = chosen.get("head", "")
+    sub = chosen.get("sub", "")
+
+    if not head and not sub:
+        raise HTTPException(status_code=400, detail="카피가 없습니다")
+
+    # 비전 검사
+    from app.prompts.copy_render import check_copy_text
+    from app.images.service import _load_image_bytes
+
+    img_url = cut.image_url
+    img_bytes = _load_image_bytes(img_url) if img_url else None
+    if not img_bytes:
+        raise HTTPException(status_code=400, detail="이미지를 찾을 수 없습니다")
+
+    check = check_copy_text(img_bytes, head, sub)
+
+    # 신고 버전 기록 (검사 결과와 무관하게)
+    updated_spec = dict(spec)
+    reported = list(reported_versions)
+    reported.append(version)
+    updated_spec["copy_reported_versions"] = reported
+    cut.spec = updated_spec
+    db.flush()
+
+    if check.get("head_ok", True) and check.get("sub_ok", True):
+        # 글자가 맞음
+        db.commit()
+        return {"ok": True, "message": "글자는 정확해요", "check": check}
+
+    # 글자 틀림 → 1패킷 환불 + 재생성
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.warning(
+        "Copy report: cut=%s version=%d MISMATCH → refund + regen. check=%s",
+        cut_id, version, check,
+    )
+
+    from app.packets.service import grant_packets
+    grant_packets(current_user.id, 1, db)
+    logger.warning(
+        "Copy error refund: user=%d cut=%s version=%d (admin_grant 1 packet)",
+        current_user.id, cut_id, version,
+    )
+
+    # 재생성 (1패킷 재차감 → 결과적으로 무료)
+    require_packets(current_user.id, 1, db)
+    db.commit()
+
+    regen_episode_id = cut.episode_id
+    regen_project_id = episode.project_id
+    regen_user_id = current_user.id
+
+    job = create_job(total=1)
+
+    async def _regen():
+        bg_db = SessionLocal()
+        try:
+            bg_cut = bg_db.query(Cut).filter(Cut.cut_id == cut_id).first()
+            bg_cut.seed = None  # 새 시드
+            result = await generate_cut_image(
+                cut=bg_cut,
+                episode_id=regen_episode_id,
+                project_id=regen_project_id,
+                user_id=regen_user_id,
+                db=bg_db,
+            )
+            bg_db.commit()
+            return result
+        finally:
+            bg_db.close()
+
+    run_job_in_background(background_tasks, job.job_id, _regen())
+
+    return {
+        "ok": False,
+        "message": "글자 오류 확인 — 패킷을 돌려드리고 다시 그려요",
+        "job_id": job.job_id,
+        "check": check,
+    }
+
+
 def _get_episode_for_user(db, project_id, episode_id, user_id):
     project = db.query(Project).filter(Project.id == project_id, Project.user_id == user_id, Project.deleted_at.is_(None)).first()
     if not project:

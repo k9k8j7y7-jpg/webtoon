@@ -23,7 +23,7 @@ from app.storage import upload_image, LOCAL_STORAGE_DIR
 from app.jobs import get_job, update_job, Job
 from app.billing.service import charge_generation  # legacy — 비활성화 (3단계)
 from app.packets.service import charge_packets, refund_packets
-from app.workflow.gate import get_aspect_ratio, is_aspect_ratio_locked, lock_aspect_ratio, get_page_format
+from app.workflow.gate import get_aspect_ratio, is_aspect_ratio_locked, lock_aspect_ratio, get_page_format, get_purpose, get_idea_brief
 from app.workflow.page_formats import PAGE_FORMATS
 
 logger = logging.getLogger(__name__)
@@ -287,13 +287,21 @@ async def generate_cut_image(
     source: str | None = None,
 ) -> dict:
     """단일 컷의 이미지를 생성한다. 레퍼런스 주입 포함."""
+    # 에피소드 용도 확인 (onecut_ad는 GPT 고정 + 카피 렌더)
+    _ep_for_purpose = db.query(Episode).filter(Episode.id == episode_id).first()
+    _ep_purpose = get_purpose(_ep_for_purpose.gate_status) if _ep_for_purpose else "story"
+
     # 실사 캐릭터 포함 에피소드 → GPT 어댑터
     # 제품 컷(has_product)도 GPT 기본 — Gemini는 라벨 뭉개짐 (scratch photoreal 10-28)
+    # onecut_ad는 카피 렌더 품질을 위해 GPT 고정
     use_gpt = _episode_has_photo_real_char(episode_id, db)
     cut_has_product_flag = (cut.spec or {}).get("has_product", False)
     if cut_has_product_flag and not use_gpt:
         use_gpt = True
         logger.info("Cut %s: product cut → GPT adapter", cut.cut_id)
+    if _ep_purpose == "onecut_ad" and not use_gpt:
+        use_gpt = True
+        logger.info("Cut %s: onecut_ad → GPT adapter (copy render)", cut.cut_id)
     adapter = get_openai_image_adapter() if use_gpt else get_image_adapter()
     spec = cut.spec
 
@@ -439,6 +447,24 @@ async def generate_cut_image(
             "Match the mood, colors, and composition described above. "
             "Do NOT reproduce any text, logo, or real person from references."
         )
+
+    # 5.5. 카피 렌더 (onecut_ad 전용: 헤드카피·서브카피를 그림에 직접)
+    copy_clause = ""
+    _copy_head = ""
+    _copy_sub = ""
+    if _ep_purpose == "onecut_ad":
+        ib = get_idea_brief(_ep_for_purpose.gate_status) or {}
+        copy_sel = ib.get("copy_selected", 0)
+        copies = ib.get("copy_candidates", [])
+        chosen = copies[copy_sel] if isinstance(copy_sel, int) and copy_sel < len(copies) else (copies[0] if copies else {})
+        _copy_head = chosen.get("head", "")
+        _copy_sub = chosen.get("sub", "")
+        copy_design = ib.get("copy_design")
+        if _copy_head or _copy_sub:
+            from app.prompts.copy_render import build_copy_clause
+            copy_clause = build_copy_clause(_copy_head, _copy_sub, copy_design)
+            logger.info("Cut %s copy_clause: head='%s' sub='%s' design=%s", cut.cut_id, _copy_head, _copy_sub, copy_design)
+
     prompt = build_cut_prompt(
         cut_spec=spec,
         character_descs=char_descs,
@@ -451,6 +477,7 @@ async def generate_cut_image(
         product_desc=full_product_desc,
         has_photo_real_char=use_gpt,
         extra_prompt=drama_extra,
+        copy_clause=copy_clause,
     )
 
     # 6. 이미지 생성 (레퍼런스 주입 + 앵커링!)
@@ -461,6 +488,31 @@ async def generate_cut_image(
         seed=cut.seed,
         aspect_ratio=ep_aspect_ratio,
     )
+
+    # 6.3. 카피 렌더 글자 검사 + 자동 재시도 1회 (onecut_ad, 0패킷)
+    _copy_check_result = None
+    _copy_retried = False
+    if copy_clause and (_copy_head or _copy_sub):
+        from app.prompts.copy_render import check_copy_text
+        _copy_check_result = check_copy_text(result.image_bytes, _copy_head, _copy_sub)
+        logger.info("Cut %s copy_check: %s", cut.cut_id, _copy_check_result)
+
+        if not (_copy_check_result.get("head_ok", True) and _copy_check_result.get("sub_ok", True)):
+            # 불일치 → 자동 재시도 1회 (같은 프롬프트, 새 시드)
+            logger.warning("Cut %s copy_check MISMATCH → retry once", cut.cut_id)
+            _copy_retried = True
+            try:
+                result = await adapter.generate_image(
+                    prompt=prompt,
+                    reference_images=ref_images if ref_images else None,
+                    reference_labels=ref_labels if ref_labels else None,
+                    seed=None,  # 새 시드
+                    aspect_ratio=ep_aspect_ratio,
+                )
+                _copy_check_result = check_copy_text(result.image_bytes, _copy_head, _copy_sub)
+                logger.info("Cut %s copy_check retry: %s", cut.cut_id, _copy_check_result)
+            except Exception as e:
+                logger.warning("Cut %s copy retry failed (using first result): %s", cut.cut_id, e)
 
     # 6.5. 첫 이미지 생성 시 비율 잠금
     if not is_aspect_ratio_locked(episode.gate_status):
@@ -487,6 +539,20 @@ async def generate_cut_image(
     from datetime import datetime, timezone
     from app.composition.service import compose_cut, RENDERER_VERSION
     dialogue = spec.get("dialogue", [])
+
+    # onecut_ad: 카피가 그림에 직접 렌더되므로 headcopy 레이어 제거
+    # headcopy = bubble_style "headcopy", subcopy = narration "box" 중 sub 텍스트 일치분
+    if _ep_purpose == "onecut_ad" and copy_clause:
+        def _is_copy_layer(d):
+            if d.get("bubble_style") == "headcopy":
+                return True
+            if d.get("type") == "narration" and d.get("bubble_style") == "box" and _copy_sub and d.get("text", "").strip() == _copy_sub.strip():
+                return True
+            return False
+        dialogue = [d for d in dialogue if not _is_copy_layer(d)]
+        spec["dialogue"] = [d for d in spec.get("dialogue", []) if not _is_copy_layer(d)]
+        logger.info("Cut %s onecut_ad: headcopy/subcopy layers removed from dialogue", cut.cut_id)
+
     composed_url = compose_cut(url, dialogue, episode_id, cut.cut_id, cut_spec=spec)
     cut.composed_image_url = composed_url
     cut.composed_renderer_version = RENDERER_VERSION
@@ -500,7 +566,7 @@ async def generate_cut_image(
     if style:
         used_refs.append(f"style:{style.preset_key}")
 
-    updated_spec["generation"] = {
+    gen_info = {
         "image_url": url,
         "previous_image_url": cut.prev_image_url,
         "seed": result.seed,
@@ -509,6 +575,11 @@ async def generate_cut_image(
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "version": version,
     }
+    # 카피 렌더 검사 결과 기록
+    if _copy_check_result is not None:
+        gen_info["copy_check"] = _copy_check_result
+        gen_info["copy_retried"] = _copy_retried
+    updated_spec["generation"] = gen_info
     updated_spec["status"] = "approved"
 
     # 이미지 재생성 → motion 자동 삭제 (이미지 불일치 방지)

@@ -95,6 +95,13 @@ async def update_idea_brief_selection(
         ib["copy_selected"] = body["copy_selected"]
     if "scene_selected" in body:
         ib["scene_selected"] = body["scene_selected"]
+    if "copy_design" in body:
+        cd = body["copy_design"] or {}
+        ib["copy_design"] = {
+            "font": cd.get("font", "handwritten") if cd.get("font") in ("handwritten", "bold_gothic", "clean_gothic") else "handwritten",
+            "position": cd.get("position", "auto") if cd.get("position") in ("auto", "top", "bottom") else "auto",
+            "emphasis": cd.get("emphasis") or None,
+        }
     gs["idea_brief"] = ib
 
     # 광고 purpose: 모델 1명 planning 자동 설정 (이야기형 planning 대체)

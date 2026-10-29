@@ -82,6 +82,8 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
   const [adScriptApproving, setAdScriptApproving] = useState(false);
   const [adScriptGenerating, setAdScriptGenerating] = useState(false);
   const [adScriptHighlight, setAdScriptHighlight] = useState(false);
+  // 카피 디자인 (onecut_ad 전용)
+  const [copyDesign, setCopyDesign] = useState(() => gateStatus?.idea_brief?.copy_design || { font: 'handwritten', position: 'auto', emphasis: null });
 
   const [characters, setCharacters] = useState([]);
   const [charTouched, setCharTouched] = useState(false); // 등장인물 user_touched
@@ -807,8 +809,9 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
             try {
               const currentGate = gateStatus?.current_gate || 1;
 
-              // 1) 선택 + 모델 설정 저장
+              // 1) 선택 + 모델 설정 + 카피 디자인 저장
               const ib = { ...(gateStatus?.idea_brief || {}), copy_selected: selectedCopy, scene_selected: selectedScene };
+              if (purpose === 'onecut_ad') ib.copy_design = copyDesign;
               await api.put(`/projects/${projectId}/episodes/${episodeId}/idea-brief/selection`, ib);
 
               // 2) gate 1 승인 — 광고 3종은 이야기형 POST /planning 금지 (idea-brief/selection이 모델·기획안 설정)
@@ -945,6 +948,78 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                     </>}
                   </div>
                 )}
+
+                {/* 카피 디자인 (onecut_ad 전용) */}
+                {purpose === 'onecut_ad' && headcopy && !readOnly && (() => {
+                  const FONTS = [
+                    { key: 'handwritten', label: '손글씨' },
+                    { key: 'bold_gothic', label: '굵은 고딕' },
+                    { key: 'clean_gothic', label: '깔끔한 고딕' },
+                  ];
+                  const POSITIONS = [
+                    { key: 'auto', label: '자동' },
+                    { key: 'top', label: '상단' },
+                    { key: 'bottom', label: '하단' },
+                  ];
+                  const headWords = headcopy.text ? headcopy.text.split(/\s+/).filter(Boolean) : [];
+                  const saveCopyDesign = (next) => {
+                    setCopyDesign(next);
+                    api.put(`/projects/${projectId}/episodes/${episodeId}/idea-brief/selection`, {
+                      ...(gateStatus?.idea_brief || {}),
+                      copy_design: next,
+                    }).catch(() => {});
+                  };
+                  return (
+                    <div className="bg-zinc-50 dark:bg-zinc-800/50 rounded-lg px-3 py-2.5 space-y-2">
+                      <p className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500">카피 디자인</p>
+                      {/* 글씨체 */}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[10px] text-zinc-400 dark:text-zinc-500 shrink-0">글씨체</span>
+                        {FONTS.map(f => (
+                          <button key={f.key}
+                            onClick={() => saveCopyDesign({ ...copyDesign, font: f.key })}
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors ${
+                              copyDesign.font === f.key
+                                ? 'bg-amber-500 text-white'
+                                : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-300 dark:hover:bg-zinc-600'
+                            }`}
+                          >{f.label}</button>
+                        ))}
+                      </div>
+                      {/* 위치 */}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[10px] text-zinc-400 dark:text-zinc-500 shrink-0">위치</span>
+                        {POSITIONS.map(p => (
+                          <button key={p.key}
+                            onClick={() => saveCopyDesign({ ...copyDesign, position: p.key })}
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors ${
+                              copyDesign.position === p.key
+                                ? 'bg-purple-500 text-white'
+                                : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-300 dark:hover:bg-zinc-600'
+                            }`}
+                          >{p.label}</button>
+                        ))}
+                      </div>
+                      {/* 강조 단어 */}
+                      {headWords.length > 0 && (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] text-zinc-400 dark:text-zinc-500 shrink-0">강조</span>
+                          {headWords.map(w => (
+                            <button key={w}
+                              onClick={() => saveCopyDesign({ ...copyDesign, emphasis: copyDesign.emphasis === w ? null : w })}
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors ${
+                                copyDesign.emphasis === w
+                                  ? 'bg-rose-500 text-white'
+                                  : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-300 dark:hover:bg-zinc-600'
+                              }`}
+                            >{w}</button>
+                          ))}
+                          <span className="text-[9px] text-zinc-400 dark:text-zinc-500">비워두면 AI가 골라요</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {speeches.length > 0 ? speeches.map((d, i) => {
                   const planChars = planning?.characters || gateStatus?.planning_draft?.characters || [];

@@ -752,6 +752,11 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                     제품 컷은 더 정교하게 그려서 40초쯤 걸려요
                   </span>
                 )}
+                {gateStatus?.purpose === 'onecut_ad' && (
+                  <span className="text-[10px] font-bold text-indigo-500 dark:text-indigo-400">
+                    모델·제품·카피를 한 장에 그려요 — 60초쯤
+                  </span>
+                )}
               </div>
             )}
             {/* 페이지 미리보기 토글 (vertical이 아닐 때만) */}
@@ -1113,7 +1118,9 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                     <RegenDropdown cutId={cut.cut_id} cutSpec={cut} disabled={!!job}
                       onRegenerate={handleRegenerate}
                       epDramaLevel={gateStatus?.drama_level || (gateStatus?.is_ad ? 'light' : 'normal')}
-                      hasProduct={cut.has_product && products.length > 0} />
+                      hasProduct={cut.has_product && products.length > 0}
+                      purpose={gateStatus?.purpose}
+                      projectId={projectId} episodeId={episodeId} />
                     <button
                       onClick={(e) => { e.stopPropagation(); handleRevert(cut.cut_id); }}
                       title="되돌리기"
@@ -1222,6 +1229,45 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                     </button>
                   );
                 })()}
+                {/* 카피 신고 (onecut_ad, 이미지 있는 컷만) */}
+                {gateStatus?.purpose === 'onecut_ad' && cut.image_url && !cut.spec?.copy_reported_versions?.includes(cut.spec?.generation?.version ?? cut.version) && (
+                  <div className="mt-1.5 text-[10px] text-zinc-400 dark:text-zinc-500">
+                    글자가 틀리면 패킷을 돌려드려요 ·{' '}
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        try {
+                          setError('');
+                          const { data } = await api.post(`/cuts/${cut.cut_id}/copy-report`);
+                          if (data.ok) {
+                            alert('글자는 정확해요. 다른 이유면 다시 그리기(1패킷)로 새로 만들어 보세요!');
+                          } else {
+                            alert('글자 오류 확인 — 패킷을 돌려드리고 다시 그려요');
+                            if (data.job_id) {
+                              setJob({ job_id: data.job_id, status: 'processing', progress: { done: 0, total: 1 } });
+                              await pollJob(data.job_id, setJob);
+                              setJob(null);
+                              setCacheBuster(Date.now());
+                              await loadCuts();
+                              window.dispatchEvent(new Event('packets:refresh'));
+                            }
+                          }
+                        } catch (err) {
+                          const msg = err.response?.data?.detail || '검사에 실패했어요';
+                          alert(msg);
+                        }
+                      }}
+                      className="text-indigo-500 dark:text-indigo-400 hover:underline font-bold"
+                    >
+                      글자가 틀렸나요?
+                    </button>
+                  </div>
+                )}
+                {gateStatus?.purpose === 'onecut_ad' && cut.image_url && cut.spec?.copy_reported_versions?.includes(cut.spec?.generation?.version ?? cut.version) && (
+                  <div className="mt-1.5 text-[9px] text-zinc-400 dark:text-zinc-500">
+                    이 버전은 이미 검사했어요
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -1653,6 +1699,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
             imageUrl={imageUrl(getCutImageUrl(cut))}
             characters={cut.characters || []}
             charNameMap={charNameMap}
+            purpose={gateStatus?.purpose}
             onClose={() => setEditCutIndex(null)}
             onSave={async () => {
               setCacheBuster(Date.now());
@@ -1794,7 +1841,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
 const DRAMA_LABELS = { light: '담백', normal: '보통', strong: '과장' };
 const DRAMA_DESC = { light: '효과 없이 깔끔', normal: '감정 효과 2~3개', strong: '집중선·과장까지' };
 
-function RegenDropdown({ cutId, cutSpec, disabled, onRegenerate, epDramaLevel, hasProduct }) {
+function RegenDropdown({ cutId, cutSpec, disabled, onRegenerate, epDramaLevel, hasProduct, purpose, projectId, episodeId }) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef(null);
   const [pos, setPos] = useState(null);
@@ -1853,6 +1900,14 @@ function RegenDropdown({ cutId, cutSpec, disabled, onRegenerate, epDramaLevel, h
               </button>
             );
           })}
+          {purpose === 'onecut_ad' && projectId && episodeId && (
+            <button
+              onClick={() => { setOpen(false); window.location.hash = ''; window.location.href = `/WEBTOON/projects/${projectId}/episodes/${episodeId}/workflow?gate=1`; }}
+              className="flex items-center gap-1 w-full px-4 py-2.5 mt-1 rounded-xl text-xs font-bold text-indigo-500 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
+            >
+              카피 디자인 바꾸기 → 대본 카드로
+            </button>
+          )}
           <button onClick={() => setOpen(false)} className="w-full mt-2 h-11 rounded-xl text-sm font-bold bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300">닫기</button>
         </div>
       </div>
@@ -1881,6 +1936,14 @@ function RegenDropdown({ cutId, cutSpec, disabled, onRegenerate, epDramaLevel, h
             </button>
           );
         })}
+        {purpose === 'onecut_ad' && projectId && episodeId && (
+          <button
+            onClick={() => { setOpen(false); window.location.href = `/WEBTOON/projects/${projectId}/episodes/${episodeId}/workflow?gate=1`; }}
+            className="w-full px-3 py-2 text-[10px] font-bold text-left text-indigo-500 dark:text-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition-colors border-t border-border dark:border-night-border"
+          >
+            카피 디자인 바꾸기 →
+          </button>
+        )}
       </div>
     ),
     document.body

@@ -87,7 +87,7 @@ function sfxHitBox(text, imgW, fontScale) {
 //  메인 컴포넌트
 // ──────────────────────────────────────────────────────────────
 
-export default function CutEditor({ cut, imageUrl, characters = [], charNameMap = {}, products = [], onClose, onSave, onPrev, onNext, cutIndex, totalCuts, onBatchNarrationStyle, initialMode = 'view', initialTool }) {
+export default function CutEditor({ cut, imageUrl, characters = [], charNameMap = {}, products = [], onClose, onSave, onPrev, onNext, cutIndex, totalCuts, onBatchNarrationStyle, initialMode = 'view', initialTool, purpose }) {
   const [mode, setMode] = useState(initialMode);
   // initialMode="edit" → computeInitialLayouts 적용 (enterEditMode과 동일)
   const [bubbles, setBubbles] = useState(() =>
@@ -1492,7 +1492,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
                       }},
                       { style: 'bar', label: '띠', layout: () => ({ x: 0.0, y: 0.82, width: 1.0, tail_direction: 'none' }) },
                       { style: 'headcopy', label: '헤드카피', layout: () => ({ x: 0.1, y: 0.15, width: 0.8, tail_direction: 'none', font_scale: 2.0 }) },
-                    ].filter(o => o.style !== selectedBubble.bubble_style).map(o => (
+                    ].filter(o => o.style !== selectedBubble.bubble_style && !(o.style === 'headcopy' && purpose === 'onecut_ad')).map(o => (
                       <button key={o.style}
                         onClick={() => updateBubble(selectedIdx, { bubble_style: o.style, bubble_layout: o.layout() })}
                         className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-zinc-700 text-zinc-300 hover:bg-zinc-600 transition-colors">

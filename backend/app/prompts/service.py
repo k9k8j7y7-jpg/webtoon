@@ -69,6 +69,7 @@ def build_cut_prompt(
     product_desc: str = "",
     has_photo_real_char: bool = False,
     extra_prompt: str = "",
+    copy_clause: str = "",
 ) -> str:
     """컷 명세로부터 이미지 생성 프롬프트를 조립한다.
 
@@ -214,6 +215,10 @@ def build_cut_prompt(
     if product_desc:
         parts.append(product_desc)
 
+    # ── 3.6. 카피 렌더 (onecut_ad: 헤드카피·서브카피를 그림에 직접) ──
+    if copy_clause:
+        parts.append(copy_clause)
+
     # ── 4. 스타일 (얼굴 정체성을 덮지 않는 선에서) ──
     if has_photo_real_char:
         parts.append(
@@ -262,10 +267,18 @@ def build_cut_prompt(
         )
     else:
         format_desc = "square format"
-    parts.append(
-        f"A single illustration, {format_desc}, clean composition. "
-        "DO NOT render any text, letters, words, or speech bubbles in the image. "
-        "No Korean text, no English text, no signs, no captions. Pure illustration only"
-    )
+    if copy_clause:
+        # 카피 렌더 모드: 지정된 카피만 허용, 그 외 텍스트 금지
+        parts.append(
+            f"A single illustration, {format_desc}, clean composition. "
+            "No speech bubbles. No text except the headline/subline specified above "
+            "and the product's own label"
+        )
+    else:
+        parts.append(
+            f"A single illustration, {format_desc}, clean composition. "
+            "DO NOT render any text, letters, words, or speech bubbles in the image. "
+            "No Korean text, no English text, no signs, no captions. Pure illustration only"
+        )
 
     return ". ".join(parts)
