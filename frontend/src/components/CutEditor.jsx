@@ -2152,6 +2152,7 @@ export default function CutEditor({ cut, imageUrl, characters = [], charNameMap 
             maxHeight: '60vh',
             overflowY: 'auto',
           }}
+          onPointerDown={e => e.stopPropagation()}
           onClick={e => e.stopPropagation()}
         >
           <p className="text-[10px] font-bold text-zinc-400 mb-1.5">기본</p>

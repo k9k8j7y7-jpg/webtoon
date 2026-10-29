@@ -21,8 +21,11 @@ export default function Gate2Script({ projectId, episodeId, onRefresh, readOnly 
   const [editForm, setEditForm] = useState({ shot: 'bust', action: '', dialogue: [] });
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [toneGenerating, setToneGenerating] = useState(false);
 
   const isInvalidated = gateStatus?.gates?.['2_script']?.status === 'invalidated';
+  const purpose = gateStatus?.purpose || 'story';
+  const isAdScript = ['instatoon_ad', 'brand_series'].includes(purpose);
 
   const loadScript = async () => {
     const { data } = await api.get(`/projects/${projectId}/episodes/${episodeId}/script`);
@@ -45,6 +48,19 @@ export default function Gate2Script({ projectId, episodeId, onRefresh, readOnly 
       setError(err.response?.data?.detail || '대본 생성에 실패했습니다.');
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const handleToneRegenerate = async (tone) => {
+    setToneGenerating(true);
+    setError('');
+    try {
+      const { data } = await api.post(`/projects/${projectId}/episodes/${episodeId}/script`, { tone });
+      setScript(data);
+    } catch (err) {
+      setError(err.response?.data?.detail || '대본 생성에 실패했어요');
+    } finally {
+      setToneGenerating(false);
     }
   };
 
@@ -183,10 +199,34 @@ export default function Gate2Script({ projectId, episodeId, onRefresh, readOnly 
   return (
     <div className="space-y-4">
       <div className="glass-card p-6">
-        <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2 mb-4">
-          <FileText size={20} className="text-comic-blue" />
-          게이트 2 — 대본
-        </h2>
+        {!isAdScript && (
+          <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2 mb-4">
+            <FileText size={20} className="text-comic-blue" />
+            대본
+          </h2>
+        )}
+        {isAdScript && script?.scenes && (
+          <div className="mb-4">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <p className="text-sm font-bold text-ink-black dark:text-white">
+                {(() => { let n = 0; script.scenes.forEach(s => { n += s.cuts?.length || 0; }); return n; })()}컷 대본 — <span className="text-zinc-400 font-normal">AI가 만든 대본이에요</span>
+              </p>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button onClick={handleGenerate} disabled={generating || toneGenerating}
+                  className="px-3 py-1.5 text-xs font-bold text-comic-blue border border-comic-blue/30 rounded-full hover:bg-comic-blue/10 disabled:opacity-50 transition-colors">
+                  {generating ? '다시 쓰는 중…' : '다시 만들기'}
+                </button>
+                {['shorter', 'impact', 'emotional', 'humor', 'trust'].map(tone => (
+                  <button key={tone} onClick={() => handleToneRegenerate(tone)} disabled={toneGenerating || generating}
+                    className="px-2.5 py-1 text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-50 transition-colors">
+                    {{ shorter: '더 짧게', impact: '임팩트', emotional: '감성', humor: '유머', trust: '신뢰' }[tone]}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {toneGenerating && <p className="text-xs text-comic-blue animate-pulse mt-2">톤에 맞게 다시 쓰는 중…</p>}
+          </div>
+        )}
 
         {/* 무효화 상태 + 아직 재생성 안 함: 재생성 필요 경고 */}
         {isInvalidated && !readOnly && !regenerated && (

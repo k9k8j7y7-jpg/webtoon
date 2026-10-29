@@ -450,11 +450,24 @@ async def generate_cut_image(
             "Do NOT reproduce any text, logo, or real person from references."
         )
 
-    # 5.5. 카피 렌더 (onecut_ad 전용: 헤드카피·서브카피를 그림에 직접)
+    # 5.5. 카피 렌더 (헤드카피·서브카피를 그림에 직접)
+    # onecut_ad: 모든 컷 (1컷뿐)
+    # instatoon_ad: 첫 컷(훅)과 마지막 컷(CTA)만
     copy_clause = ""
     _copy_head = ""
     _copy_sub = ""
+    _should_copy_render = False
     if _ep_purpose == "onecut_ad":
+        _should_copy_render = True
+    elif _ep_purpose == "instatoon_ad":
+        # 첫 컷 또는 마지막 컷인지 확인
+        _cut_num = spec.get("cut_number", 0)
+        _total_cuts_q = db.query(Cut).filter(Cut.episode_id == episode_id).count()
+        if _cut_num == 1 or _cut_num == _total_cuts_q:
+            _should_copy_render = True
+            logger.info("Cut %s instatoon_ad: copy render (cut %d/%d)", cut.cut_id, _cut_num, _total_cuts_q)
+
+    if _should_copy_render:
         ib = get_idea_brief(_ep_for_purpose.gate_status) or {}
         copy_sel = ib.get("copy_selected", 0)
         copies = ib.get("copy_candidates", [])
@@ -543,9 +556,9 @@ async def generate_cut_image(
     from app.composition.service import compose_cut, RENDERER_VERSION
     dialogue = spec.get("dialogue", [])
 
-    # onecut_ad: 카피가 그림에 직접 렌더되므로 headcopy 레이어 제거
-    # headcopy = bubble_style "headcopy", subcopy = narration "box" 중 sub 텍스트 일치분
-    if _ep_purpose == "onecut_ad" and copy_clause:
+    # 카피 렌더 컷: headcopy 레이어 제거 (그림에 직접 렌더됨)
+    # onecut_ad: 전 컷, instatoon_ad: 첫/마지막 컷 (copy_clause가 있는 컷만)
+    if copy_clause and _should_copy_render:
         def _is_copy_layer(d):
             if d.get("bubble_style") == "headcopy":
                 return True

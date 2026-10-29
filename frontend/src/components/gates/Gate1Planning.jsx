@@ -865,7 +865,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                 await api.post(`/projects/${projectId}/episodes/${episodeId}/planning/approve`, {});
               }
 
-              // 3) onecut_ad: 대본 생성/재생성
+              // 3) onecut_ad: 대본 생성/재생성 (대본 카드에 표시)
               if (purpose === 'onecut_ad') {
                 const { data } = await api.post(`/projects/${projectId}/episodes/${episodeId}/script`, {});
                 setAdScript(data?.scenes ? data : data?.script || data);
@@ -874,6 +874,15 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                   setAdScriptHighlight(false);
                   document.getElementById('ad-script-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }, 300);
+              }
+
+              // 4) instatoon_ad·brand_series: 대본 자동 생성 (gate2에서 바로 보이도록)
+              if (purpose === 'instatoon_ad' || purpose === 'brand_series') {
+                try {
+                  await api.post(`/projects/${projectId}/episodes/${episodeId}/script`, {});
+                } catch (e) {
+                  console.warn('Auto script generation failed:', e.response?.data?.detail || e.message);
+                }
               }
 
               onRefresh?.();

@@ -255,8 +255,9 @@ export default function AdBriefForm({ projectId, episodeId, gateStatus, onBriefD
                   <div className="flex gap-1">
                     <textarea value={enrichResult[key]}
                       onChange={e => setEnrichResult(prev => ({ ...prev, [key]: e.target.value }))}
-                      rows={2}
-                      className="flex-1 px-2 py-1.5 text-xs rounded-lg border border-indigo-200 dark:border-indigo-700 bg-white dark:bg-zinc-800 text-ink-black dark:text-white resize-none focus:outline-none focus:border-indigo-400" />
+                      rows={Math.max(2, Math.min(8, (enrichResult[key] || '').split('\n').length + 1))}
+                      style={{ minHeight: '4rem', height: 'auto' }}
+                      className="flex-1 px-2 py-1.5 text-xs rounded-lg border border-indigo-200 dark:border-indigo-700 bg-white dark:bg-zinc-800 text-ink-black dark:text-white resize-vertical focus:outline-none focus:border-indigo-400" />
                     <button onClick={() => setEnrichResult(prev => ({ ...prev, [key]: '' }))}
                       title="제외"
                       className="self-start px-1.5 py-1.5 text-gray-400 hover:text-red-500 transition-colors">×</button>
