@@ -57,6 +57,14 @@ export default function AdBriefForm({ projectId, episodeId, gateStatus, onBriefD
   const [selectedScene, setSelectedScene] = useState(0);
   const [rewriting, setRewriting] = useState(false);
 
+  // 제품 정보
+  const [productName, setProductName] = useState('');
+  const [productInfo, setProductInfo] = useState('');
+  const [enriching, setEnriching] = useState(false);
+  const [enrichResult, setEnrichResult] = useState(null);
+  const [enrichApplied, setEnrichApplied] = useState(false); // 반영 후 접힘
+  const [enrichExpanded, setEnrichExpanded] = useState(false); // 접힌 후 다시 펼침
+
   // placeholder 로테이션
   const [phIdx, setPhIdx] = useState(0);
   useEffect(() => {
@@ -78,6 +86,8 @@ export default function AdBriefForm({ projectId, episodeId, gateStatus, onBriefD
         setAvoid(ib.extras.avoid || '');
         if (ib.extras.brand_colors || ib.extras.avoid) setShowExtras(true);
       }
+      if (ib.product_name) setProductName(ib.product_name);
+      if (ib.product_info) setProductInfo(ib.product_info);
       if (ib.copy_candidates?.length) {
         setBriefResult({
           key_message: ib.ad_brief_result?.key_message || '',
@@ -130,13 +140,45 @@ export default function AdBriefForm({ projectId, episodeId, gateStatus, onBriefD
     finally { setRewriting(false); }
   };
 
+  const handleEnrichProduct = async () => {
+    if (!productName.trim()) return;
+    setEnriching(true);
+    setEnrichResult(null);
+    setEnrichApplied(false);
+    setEnrichExpanded(false);
+    try {
+      const { data } = await api.post(`/projects/${projectId}/episodes/${episodeId}/ad-brief/enrich-product`, {
+        name: productName.trim(),
+        info: productInfo.trim(),
+      });
+      setEnrichResult(data);
+    } catch {
+      setEnrichResult({ error: '지금은 보완하지 못했어요' });
+    } finally {
+      setEnriching(false);
+    }
+  };
+
+  const handleApplyEnrich = () => {
+    if (!enrichResult) return;
+    const parts = [productInfo];
+    if (enrichResult.features) parts.push(`특징: ${enrichResult.features}`);
+    if (enrichResult.ingredients) parts.push(`성분: ${enrichResult.ingredients}`);
+    if (enrichResult.usage) parts.push(`활용법: ${enrichResult.usage}`);
+    setProductInfo(parts.filter(Boolean).join('\n'));
+    setEnrichApplied(true);
+    setEnrichExpanded(false);
+  };
+
   const handleProceed = () => {
-    // copy_selected, scene_selected 저장 후 진행
     onBriefDone?.({
       selectedCopy,
       selectedScene,
       briefResult,
       adPurpose, keyMessage, mood,
+      productName: productName.trim(),
+      productInfo: productInfo.trim(),
+      productInfoWeb: enrichResult && !enrichResult.error ? [enrichResult.features, enrichResult.ingredients, enrichResult.usage].filter(Boolean).join('\n') : '',
     });
   };
 
@@ -173,6 +215,79 @@ export default function AdBriefForm({ projectId, episodeId, gateStatus, onBriefD
             rows={2}
             className="w-full px-3 py-2.5 border-2 border-border dark:border-zinc-700 rounded-xl bg-white dark:bg-zinc-800 text-sm text-ink-black dark:text-white placeholder-gray-400 focus:border-amber-500 focus:outline-none resize-none"
           />
+        </div>
+
+        {/* 제품 정보 */}
+        <div className="space-y-2">
+          <label className="text-xs font-bold text-gray-500 dark:text-gray-400 block">제품</label>
+          <input type="text" value={productName} onChange={e => setProductName(e.target.value)}
+            placeholder="제품명 (예: MILBON SCALP SUPPORT OIL+)"
+            className="w-full px-3 py-2 border border-border dark:border-zinc-700 rounded-xl bg-white dark:bg-zinc-800 text-ink-black dark:text-white placeholder-gray-400 text-sm focus:outline-none focus:border-amber-400" />
+          <textarea value={productInfo} onChange={e => setProductInfo(e.target.value)}
+            placeholder="제품 특징·활용법 (상세페이지 문구를 붙여 넣어도 돼요)"
+            rows={3}
+            className="w-full px-3 py-2 border border-border dark:border-zinc-700 rounded-xl bg-white dark:bg-zinc-800 text-ink-black dark:text-white placeholder-gray-400 text-sm focus:outline-none focus:border-amber-400 resize-none" />
+          <div className="flex gap-2">
+            <button onClick={handleEnrichProduct} disabled={enriching || !productName.trim()}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700 rounded-full hover:bg-indigo-100 dark:hover:bg-indigo-900/30 disabled:opacity-50 transition-colors">
+              {enriching ? '검색 중…' : '웹에서 보완'}
+            </button>
+          </div>
+          {/* 반영 후 접힌 상태 */}
+          {enrichApplied && !enrichExpanded && (
+            <div className="flex items-center gap-2 text-xs text-green-600 dark:text-green-400 font-bold">
+              <span>✓ 웹 정보 반영됨</span>
+              <button onClick={() => setEnrichExpanded(true)}
+                className="text-indigo-500 dark:text-indigo-400 hover:underline font-bold">보기·수정</button>
+            </div>
+          )}
+          {/* 결과 카드 (미반영 또는 펼침) */}
+          {enrichResult && !enrichResult.error && (!enrichApplied || enrichExpanded) && (
+            <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700 rounded-xl p-3 space-y-2 text-xs">
+              <p className="text-[11px] text-indigo-600 dark:text-indigo-400 font-bold">웹에서 찾은 정보예요 — 맞는지 확인하고 틀린 건 고쳐주세요</p>
+              {[
+                { key: 'features', label: '특징' },
+                { key: 'ingredients', label: '성분' },
+                { key: 'usage', label: '활용법' },
+              ].map(({ key, label }) => enrichResult[key] ? (
+                <div key={key} className="relative">
+                  <label className="text-[10px] font-bold text-indigo-500 dark:text-indigo-400 block mb-0.5">{label}</label>
+                  <div className="flex gap-1">
+                    <textarea value={enrichResult[key]}
+                      onChange={e => setEnrichResult(prev => ({ ...prev, [key]: e.target.value }))}
+                      rows={2}
+                      className="flex-1 px-2 py-1.5 text-xs rounded-lg border border-indigo-200 dark:border-indigo-700 bg-white dark:bg-zinc-800 text-ink-black dark:text-white resize-none focus:outline-none focus:border-indigo-400" />
+                    <button onClick={() => setEnrichResult(prev => ({ ...prev, [key]: '' }))}
+                      title="제외"
+                      className="self-start px-1.5 py-1.5 text-gray-400 hover:text-red-500 transition-colors">×</button>
+                  </div>
+                </div>
+              ) : null)}
+              {enrichResult.sources?.length > 0 && (
+                <p className="text-[10px] text-gray-400">
+                  출처: {enrichResult.sources.slice(0, 3).map((url, i) => {
+                    try {
+                      const hostname = new URL(url).hostname.replace(/^www\./, '');
+                      // Google 그라운딩 리다이렉트 URL은 도메인 대신 "출처 N"
+                      const label = hostname.includes('vertexaisearch') || hostname.includes('googleapis') ? `출처 ${i + 1}` : hostname;
+                      return <span key={i}>{i > 0 && ' · '}<a href={url} target="_blank" rel="noopener" className="text-indigo-400 hover:underline">{label}</a></span>;
+                    } catch {
+                      return <span key={i}>{i > 0 && ' · '}출처 {i + 1}</span>;
+                    }
+                  })}
+                </p>
+              )}
+              <div className="flex gap-2 mt-1">
+                <button onClick={handleApplyEnrich}
+                  className="px-3 py-1 text-xs font-bold text-white bg-indigo-500 rounded-full hover:bg-indigo-600 transition-colors">반영</button>
+                <button onClick={() => { setEnrichResult(null); setEnrichApplied(false); }}
+                  className="px-3 py-1 text-xs font-bold text-gray-500 bg-gray-100 dark:bg-zinc-700 rounded-full hover:bg-gray-200 transition-colors">무시</button>
+              </div>
+            </div>
+          )}
+          {enrichResult?.error && (
+            <p className="text-xs text-amber-600 dark:text-amber-400">{enrichResult.error}</p>
+          )}
         </div>
 
         {/* 분위기 */}

@@ -50,6 +50,7 @@ export default function ProjectPage() {
   const [adTitlePurpose, setAdTitlePurpose] = useState('onecut_ad');
   const [adTitle, setAdTitle] = useState('');
   const [adFormat, setAdFormat] = useState('grid_2x2'); // instatoon_ad 전용
+  const [adCutCount, setAdCutCount] = useState(4); // instatoon_ad 컷 수 (4/6/8)
 
   // 연작 모달
   const [showSeriesModal, setShowSeriesModal] = useState(false);
@@ -117,10 +118,13 @@ export default function ProjectPage() {
         is_ad: true,
         purpose: adTitlePurpose,
       };
-      if (adTitlePurpose === 'instatoon_ad' && adFormat === 'vertical') {
-        body.page_format_override = 'vertical';
-      }
       const { data } = await api.post(`/projects/${projectId}/episodes`, body);
+      // 인스타툰: 컷 수를 gate_status에 저장
+      if (adTitlePurpose === 'instatoon_ad' && adCutCount !== 4) {
+        await api.put(`/projects/${projectId}/episodes/${data.id}/idea-brief/selection`, {
+          target_cuts: adCutCount,
+        }).catch(() => {});
+      }
       setShowAdTitleModal(false);
       navigate(`/projects/${projectId}/episodes/${data.id}/workflow`);
     } catch (e) {
@@ -210,6 +214,10 @@ export default function ProjectPage() {
     const purpose = gs.purpose || 'story';
     if (purpose === 'onecut_ad') {
       const stepMap = { 1: 'STEP 1 브리프', 2: 'STEP 1 브리프', 3: 'STEP 2 준비', 4: 'STEP 3 완성', 5: 'STEP 3 완성' };
+      return stepMap[g] || `STEP ${g}`;
+    }
+    if (purpose === 'instatoon_ad' || purpose === 'brand_series') {
+      const stepMap = { 1: 'STEP 1 브리프', 2: 'STEP 2 대본', 3: 'STEP 3 준비', 4: 'STEP 4 완성', 5: 'STEP 4 완성' };
       return stepMap[g] || `STEP ${g}`;
     }
     const labels = { 1: 'STEP 1 기획', 2: 'STEP 2 대본', 3: 'STEP 3 자산 준비', 4: 'STEP 4 콘티·장소', 5: 'STEP 5 웹툰 만들기' };
@@ -436,14 +444,15 @@ export default function ProjectPage() {
               </div>
               {adTitlePurpose === 'instatoon_ad' && (
                 <div>
-                  <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1.5">레이아웃</label>
+                  <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1.5">몇 컷으로 만들까요?</label>
                   <div className="flex gap-2">
                     {[
-                      { value: 'grid_2x2', label: '2×2 격자', desc: '4컷' },
-                      { value: 'vertical', label: '세로 스크롤', desc: '4~8컷' },
+                      { value: 4, label: '4컷', desc: '훅·문제·해결·CTA' },
+                      { value: 6, label: '6컷', desc: '+포인트·사용법' },
+                      { value: 8, label: '8컷', desc: '자세히' },
                     ].map(f => (
-                      <button key={f.value} onClick={() => setAdFormat(f.value)}
-                        className={`flex-1 py-2 px-3 rounded-xl border-2 text-xs font-bold transition-colors ${adFormat === f.value
+                      <button key={f.value} onClick={() => setAdCutCount(f.value)}
+                        className={`flex-1 py-2.5 px-3 rounded-xl border-2 text-sm font-bold transition-colors ${adCutCount === f.value
                           ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300'
                           : 'border-border dark:border-zinc-700 text-gray-500 dark:text-gray-400 hover:border-purple-300'}`}>
                         {f.label} <span className="text-[10px] font-normal text-gray-400 block">{f.desc}</span>

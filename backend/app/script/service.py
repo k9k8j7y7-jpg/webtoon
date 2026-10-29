@@ -75,6 +75,9 @@ async def generate_script(
     is_ad: bool = False,
     product_name: str | None = None,
     purpose: str = "story",
+    target_cuts: int | None = None,
+    tone: str | None = None,
+    product_info: str | None = None,
 ) -> dict:
     """기획안으로부터 대본을 생성한다.
 
@@ -82,6 +85,9 @@ async def generate_script(
     is_ad가 True면 광고 웹툰 지침을 적용한다.
     product_name이 있으면 제품 소품 등장 지시를 추가한다.
     purpose가 onecut_ad면 1컷 대본 전용 addon 적용.
+    target_cuts: 인스타툰 컷 수 강제(4/6/8).
+    tone: 대본 톤 재생성(더 짧게/임팩트/감성/유머/신뢰).
+    product_info: 제품 특징·활용법 텍스트.
     """
     from app.script.prompt_fragments import (
         build_series_context_block,
@@ -89,6 +95,7 @@ async def generate_script(
         STANDALONE_SCRIPT_INSTRUCTION_ADDON,
         AD_SCRIPT_INSTRUCTION_ADDON,
         ONECUT_AD_SCRIPT_INSTRUCTION_ADDON,
+        get_ad_script_addon,
     )
 
     # 연작 컨텍스트 블록
@@ -163,6 +170,22 @@ async def generate_script(
 등장인물은 모델 1명(필요 시 조연 1명까지). 새 인물을 여럿 만들지 마라.
 """
 
+    # 제품 정보 주입 (idea_brief product_info + product_info_web)
+    if product_info:
+        prompt += f"\n\n제품 상세 정보:\n{product_info}\n위 정보를 대본에 자연스럽게 반영하라."
+
+    # 톤 재생성 지시
+    if tone:
+        _TONE_LABELS = {
+            "shorter": "더 짧고 간결하게",
+            "impact": "강렬하고 임팩트 있게",
+            "emotional": "감성적이고 따뜻하게",
+            "humor": "재미있고 유머러스하게",
+            "trust": "신뢰감 있고 전문적으로",
+        }
+        tone_label = _TONE_LABELS.get(tone, tone)
+        prompt += f"\n\n톤 지시: 전체 대본의 톤을 '{tone_label}' 느낌으로 만들어라."
+
     if purpose == "onecut_ad":
         from app.script.prompt_fragments import ONECUT_AD_SYSTEM_INSTRUCTION
         system = ONECUT_AD_SYSTEM_INSTRUCTION
@@ -171,28 +194,48 @@ async def generate_script(
         if series_context:
             system += SERIES_SCRIPT_INSTRUCTION_ADDON
         elif is_ad:
-            system += AD_SCRIPT_INSTRUCTION_ADDON
+            # 인스타툰: target_cuts로 컷 수별 구조 강제
+            system += get_ad_script_addon(target_cuts)
         else:
             system += STANDALONE_SCRIPT_INSTRUCTION_ADDON
 
-    raw = await generate_text(
-        prompt=prompt,
-        system_instruction=system,
-        temperature=0.85,
-        max_output_tokens=16384,
-    )
+    async def _generate_and_parse():
+        raw = await generate_text(
+            prompt=prompt,
+            system_instruction=system,
+            temperature=0.85,
+            max_output_tokens=16384,
+        )
+        text = raw.strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+        if text.endswith("```"):
+            text = text[:-3]
+        text = text.strip()
+        if text.startswith("json"):
+            text = text[4:].strip()
+        return json.loads(text)
 
-    # JSON 파싱 (마크다운 코드블록 제거)
-    text = raw.strip()
-    if text.startswith("```"):
-        text = text.split("\n", 1)[1] if "\n" in text else text[3:]
-    if text.endswith("```"):
-        text = text[:-3]
-    text = text.strip()
-    if text.startswith("json"):
-        text = text[4:].strip()
+    result = await _generate_and_parse()
 
-    return json.loads(text)
+    # 인스타툰 컷 수 검증: target_cuts != 실제 컷 수 → 1회 재생성
+    if target_cuts and target_cuts in (4, 6, 8) and purpose != "onecut_ad":
+        actual = sum(len(s.get("cuts", [])) for s in result.get("scenes", []))
+        if actual != target_cuts:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Script cut count mismatch: target=%d actual=%d → retry once", target_cuts, actual
+            )
+            result = await _generate_and_parse()
+            actual = sum(len(s.get("cuts", [])) for s in result.get("scenes", []))
+            if actual != target_cuts:
+                from fastapi import HTTPException
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"대본 컷 수가 맞지 않아요 ({actual}컷/{target_cuts}컷) — 다시 만들어 주세요",
+                )
+
+    return result
 
 
 def extract_character_names(script: dict) -> set[str]:

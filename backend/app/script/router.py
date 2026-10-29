@@ -9,10 +9,24 @@ from app.auth.deps import get_current_user
 from app.users.models import User
 from app.projects.models import Project, Episode, Series
 from app.script.service import generate_script, extract_character_names, extract_location_names
-from app.workflow.gate import approve_gate, get_gate_number, is_ad_episode
+from app.workflow.gate import approve_gate, get_gate_number, is_ad_episode, get_purpose
 from app.workflow.service import compute_invalidation_scope, invalidate_from_gate
 
 router = APIRouter(tags=["gate2-script"])
+
+
+def _merge_dialogue_only(old_script: dict, new_script: dict) -> dict:
+    """광고 대본 대사만 편집: dialogue만 new에서 가져오고 나머지(action·shot·characters)는 old 유지."""
+    import copy
+    merged = copy.deepcopy(old_script)
+    new_scenes = new_script.get("scenes", [])
+    for si, scene in enumerate(merged.get("scenes", [])):
+        new_scene = new_scenes[si] if si < len(new_scenes) else {}
+        for ci, cut in enumerate(scene.get("cuts", [])):
+            new_cuts = new_scene.get("cuts", [])
+            if ci < len(new_cuts):
+                cut["dialogue"] = new_cuts[ci].get("dialogue", cut.get("dialogue", []))
+    return merged
 
 
 class ApproveRequest(BaseModel):
@@ -33,10 +47,15 @@ async def get_script(
     return script
 
 
+class ScriptCreateBody(BaseModel):
+    tone: str | None = None  # shorter | impact | emotional | humor | trust
+
+
 @router.post("/projects/{project_id}/episodes/{episode_id}/script")
 async def create_script(
     project_id: int,
     episode_id: int,
+    body: ScriptCreateBody | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -95,14 +114,28 @@ async def create_script(
     _purpose = get_purpose(episode.gate_status)
 
     # 광고 3종: idea_brief(카피·장면·브리프)를 planning에 합쳐 전달
+    _gs = episode.gate_status or {}
     if _purpose in ("onecut_ad", "instatoon_ad", "brand_series"):
-        gs = episode.gate_status or {}
-        planning["idea_brief"] = gs.get("idea_brief", {})
+        planning["idea_brief"] = _gs.get("idea_brief", {})
+
+    # 인스타툰 target_cuts (4/6/8)
+    _target_cuts = _gs.get("target_cuts") if _purpose == "instatoon_ad" else None
+
+    # 제품 정보 (idea_brief에서 추출)
+    _ib = _gs.get("idea_brief", {})
+    _product_info = _ib.get("product_info", "")
+    _product_info_web = _ib.get("product_info_web", "")
+    _full_product_info = "\n".join(filter(None, [_product_info, _product_info_web])) or None
+
+    _tone = body.tone if body else None
 
     result = await generate_script(
         planning, series_context=series_context,
         is_ad=ad_flag, product_name=_product_name,
         purpose=_purpose,
+        target_cuts=_target_cuts,
+        product_info=_full_product_info,
+        tone=_tone,
     )
 
     # 대본 저장
@@ -129,6 +162,12 @@ async def update_script(
 
     old_script = (episode.script or {}).get("script", {})
     new_script = body.get("script", old_script)
+
+    # 광고 purpose: dialogue만 갱신 (action·shot·characters는 보존)
+    _purpose = get_purpose(episode.gate_status)
+    if _purpose in ("instatoon_ad", "brand_series") and body.get("dialogue_only"):
+        # 컷 단위 dialogue만 교체, 나머지는 원본 유지
+        new_script = _merge_dialogue_only(old_script, new_script)
 
     # diff 판정 (Backend-State-Model 3.2)
     old_chars = extract_character_names(old_script)

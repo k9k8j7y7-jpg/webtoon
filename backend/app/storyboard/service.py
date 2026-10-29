@@ -219,6 +219,13 @@ def create_cuts_from_script(
     global_cut_number = 0
     ep_chars = episode_character_names(episode_id, db)
 
+    # 장소 ref_key → 한글 이름 매핑 (대본 locations 배열에서 추출)
+    _loc_names = {}
+    for loc in script_data.get("locations", []):
+        rk = loc.get("ref_key", "")
+        if rk:
+            _loc_names[rk] = loc.get("name", rk)
+
     for scene in script_data.get("scenes", []):
         scene_id = scene.get("scene_id", "s00")
 
@@ -230,13 +237,18 @@ def create_cuts_from_script(
             # 제품 등장 여부 자동 판단
             has_product = _detect_product_in_cut(cut_data, product_names or [])
 
+            # 장소 한글 이름
+            _loc_id = cut_data.get("location_id")
+            _loc_name = _loc_names.get(_loc_id, _loc_id) if _loc_id else None
+
             # Cut Spec JSON 조립
             spec = {
                 "cut_id": cut_id,
                 "scene_id": scene_id,
                 "cut_number": global_cut_number,
                 "characters": cut_data.get("characters", []),
-                "location_id": cut_data.get("location_id"),
+                "location_id": _loc_id,
+                "location_name": _loc_name,
                 "shot": cut_data.get("shot", "full"),
                 "action": cut_data.get("action", ""),
                 "dialogue": _apply_narration_box_default(cut_data.get("dialogue", [])),

@@ -285,6 +285,7 @@ async def generate_cut_image(
     user_id: int,
     db: Session,
     source: str | None = None,
+    user_note: str | None = None,
 ) -> dict:
     """단일 컷의 이미지를 생성한다. 레퍼런스 주입 포함."""
     # 에피소드 용도 확인 (onecut_ad는 GPT 고정 + 카피 렌더)
@@ -293,15 +294,16 @@ async def generate_cut_image(
 
     # 실사 캐릭터 포함 에피소드 → GPT 어댑터
     # 제품 컷(has_product)도 GPT 기본 — Gemini는 라벨 뭉개짐 (scratch photoreal 10-28)
-    # onecut_ad는 카피 렌더 품질을 위해 GPT 고정
+    # 광고 3종(onecut_ad·instatoon_ad·brand_series)은 모든 컷 GPT 기본 (story는 Gemini 유지)
+    _is_ad_purpose = _ep_purpose in ("onecut_ad", "instatoon_ad", "brand_series")
     use_gpt = _episode_has_photo_real_char(episode_id, db)
     cut_has_product_flag = (cut.spec or {}).get("has_product", False)
     if cut_has_product_flag and not use_gpt:
         use_gpt = True
         logger.info("Cut %s: product cut → GPT adapter", cut.cut_id)
-    if _ep_purpose == "onecut_ad" and not use_gpt:
+    if _is_ad_purpose and not use_gpt:
         use_gpt = True
-        logger.info("Cut %s: onecut_ad → GPT adapter (copy render)", cut.cut_id)
+        logger.info("Cut %s: %s → GPT adapter (ad purpose)", cut.cut_id, _ep_purpose)
     adapter = get_openai_image_adapter() if use_gpt else get_image_adapter()
     spec = cut.spec
 
@@ -478,6 +480,7 @@ async def generate_cut_image(
         has_photo_real_char=use_gpt,
         extra_prompt=drama_extra,
         copy_clause=copy_clause,
+        user_note=user_note,
     )
 
     # 6. 이미지 생성 (레퍼런스 주입 + 앵커링!)
@@ -579,6 +582,9 @@ async def generate_cut_image(
     if _copy_check_result is not None:
         gen_info["copy_check"] = _copy_check_result
         gen_info["copy_retried"] = _copy_retried
+    # 사용자 재생성 요청 문구 기록
+    if user_note:
+        gen_info["user_note"] = user_note
     updated_spec["generation"] = gen_info
     updated_spec["status"] = "approved"
 

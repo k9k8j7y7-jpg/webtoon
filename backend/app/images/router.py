@@ -21,6 +21,7 @@ class RegenerateRequest(BaseModel):
     mode: str = "reseed"  # reseed | emotion | pose | outfit
     seed: int | None = None
     params: dict | None = None
+    user_note: str | None = None  # "수건 빼줘" 등 재생성 요청 문구 (최대 200자)
 
 
 @router.post("/projects/{project_id}/episodes/{episode_id}/generate", status_code=202)
@@ -120,6 +121,11 @@ async def regenerate_cut(
                 spec["drama_level"] = dl
                 cut.spec = spec
 
+    # user_note 검증 (200자 제한)
+    regen_user_note = None
+    if body and body.user_note:
+        regen_user_note = body.user_note.strip()[:200] or None
+
     # 재생성에 필요한 정보를 미리 추출
     regen_seed = body.seed if body and body.seed else None
     regen_episode_id = cut.episode_id
@@ -146,6 +152,7 @@ async def regenerate_cut(
                 project_id=regen_project_id,
                 user_id=regen_user_id,
                 db=bg_db,
+                user_note=regen_user_note,
             )
             bg_db.commit()
             return result

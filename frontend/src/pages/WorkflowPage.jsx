@@ -106,11 +106,12 @@ export default function WorkflowPage() {
   };
 
   const purpose = gateStatus?.purpose || 'story';
+  const _adSkipGate4 = ['onecut_ad', 'instatoon_ad', 'brand_series'].includes(purpose);
   const gateComponents = {
     1: Gate1Planning,
     2: purpose === 'onecut_ad' ? Gate1Planning : Gate2Script,
     3: Gate3Assets,
-    4: purpose === 'onecut_ad' ? Gate5Review : Gate4Storyboard,  // onecut_ad: gate4 스킵 → Gate5 직행
+    4: _adSkipGate4 ? Gate5Review : Gate4Storyboard,  // 광고 3종: gate4 스킵 → Gate5 직행 (콘티 자동)
     5: Gate5Review,
   };
   const GateComponent = gateComponents[displayGate];

@@ -102,6 +102,18 @@ async def update_idea_brief_selection(
             "position": cd.get("position", "auto") if cd.get("position") in ("auto", "top", "bottom") else "auto",
             "emphasis": cd.get("emphasis") or None,
         }
+    # 제품 정보 (브리프 폼에서 입력)
+    if "product_name" in body:
+        ib["product_name"] = body["product_name"]
+    if "product_info" in body:
+        ib["product_info"] = body["product_info"]
+    if "product_info_web" in body:
+        ib["product_info_web"] = body["product_info_web"]
+    # 인스타툰 컷 수 (4/6/8)
+    if "target_cuts" in body:
+        tc = body["target_cuts"]
+        if tc in (4, 6, 8):
+            gs["target_cuts"] = tc
     gs["idea_brief"] = ib
 
     # 광고 purpose: 모델 1명 planning 자동 설정 (이야기형 planning 대체)
@@ -548,6 +560,66 @@ async def rewrite_copy_endpoint(
         key_message=body.key_message,
     )
     return result
+
+
+# ── 제품 정보 웹 보완 ──
+
+class EnrichProductRequest(BaseModel):
+    name: str = ""
+    info: str = ""
+
+
+@router.post("/projects/{project_id}/episodes/{episode_id}/ad-brief/enrich-product")
+async def enrich_product(
+    project_id: int,
+    episode_id: int,
+    body: EnrichProductRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """제품 정보 웹 보완 (Gemini 검색 그라운딩, 0패킷). 결과만 반환, 저장은 프론트 [반영] 시."""
+    _get_episode_for_user(db, project_id, episode_id, current_user.id)
+
+    import logging
+    logger = logging.getLogger(__name__)
+
+    try:
+        from google.genai import types
+        from app.adapters.gemini import get_client, AI_TOKENS_SHORT, parse_ai_json
+
+        client = get_client()
+        query = f"{body.name} 제품 특징 성분 활용법"
+        prompt = (
+            f"제품명: {body.name}\n"
+            f"사용자 입력: {body.info}\n\n"
+            f"위 제품에 대해 검색해서 아래 항목을 각 2~3줄로 요약해줘. JSON으로 반환:\n"
+            '{"features": "핵심 특징 2~3줄", "ingredients": "주요 성분 2~3줄", '
+            '"usage": "활용법·사용 팁 2~3줄", "sources": ["출처 URL 2~3개"]}\n'
+            "검색 결과가 없으면 사용자 입력 정보만으로 요약해줘. ONLY JSON."
+        )
+
+        resp = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[prompt],
+            config=types.GenerateContentConfig(
+                temperature=0.3,
+                max_output_tokens=AI_TOKENS_SHORT,
+                tools=[types.Tool(google_search=types.GoogleSearch())],
+            ),
+        )
+        result = parse_ai_json(resp.text)
+        logger.info("enrich-product: name=%s → keys=%s", body.name, list(result.keys()))
+        return result
+
+    except Exception as e:
+        logger.warning("enrich-product failed: %s", e)
+        return {
+            "features": "",
+            "ingredients": "",
+            "usage": "",
+            "sources": [],
+            "error": "지금은 보완하지 못했어요 — 입력한 내용으로 진행해요",
+        }
 
 
 # ── 참고 광고 ──

@@ -70,6 +70,7 @@ def build_cut_prompt(
     has_photo_real_char: bool = False,
     extra_prompt: str = "",
     copy_clause: str = "",
+    user_note: str | None = None,
 ) -> str:
     """컷 명세로부터 이미지 생성 프롬프트를 조립한다.
 
@@ -280,5 +281,9 @@ def build_cut_prompt(
             "DO NOT render any text, letters, words, or speech bubbles in the image. "
             "No Korean text, no English text, no signs, no captions. Pure illustration only"
         )
+
+    # ── 8. 사용자 재생성 요청 문구 ──
+    if user_note:
+        parts.append(f"Additional instruction from the user: {user_note}")
 
     return ". ".join(parts)

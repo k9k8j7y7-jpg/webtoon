@@ -168,10 +168,11 @@ async def create_storyboard(
             product_names.append(p.name_ko)
 
     # 목표 컷 수가 있고, 현재와 다르면 AI 재분할
-    # onecut_ad는 readjust 건너뜀 (1컷 고정)
+    # onecut_ad·instatoon_ad는 readjust 건너뜀 (대본 컷 수 그대로 사용, 자르기 금지)
     from app.workflow.gate import get_purpose
     _purpose = get_purpose(episode.gate_status)
-    if target and _purpose != "onecut_ad":
+    _no_readjust = _purpose in ("onecut_ad", "instatoon_ad")
+    if target and not _no_readjust:
         readjusted = await readjust_storyboard(script_data, target, page_format=page_format)
         adjusted_script = {"scenes": readjusted.get("scenes", [])}
         cuts = create_cuts_from_script(episode_id, adjusted_script, db, product_names=product_names)

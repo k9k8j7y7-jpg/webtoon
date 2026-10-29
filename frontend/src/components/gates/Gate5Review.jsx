@@ -348,12 +348,13 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
     }
   };
 
-  const handleRegenerate = async (cutId, dramaLevel) => {
+  const handleRegenerate = async (cutId, dramaLevel, userNote) => {
     setError('');
     setPartialResult(null);
     try {
       const body = { mode: 'reseed' };
       if (dramaLevel) body.params = { drama_level: dramaLevel };
+      if (userNote) body.user_note = userNote;
       const { data } = await api.post(`/cuts/${cutId}/regenerate`, body);
       setJob({ job_id: data.job_id, status: 'processing', progress: { done: 0, total: 1 } });
       await pollJob(data.job_id, setJob);
@@ -723,11 +724,21 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
 
       {hasImages && <PublishBar projectId={projectId} episodeId={episodeId} />}
 
+      {/* 장소 줄 (광고 공통) */}
+      {['onecut_ad', 'instatoon_ad', 'brand_series'].includes(gateStatus?.purpose) && cuts.length > 0 && (() => {
+        const locNames = [...new Set(cuts.map(c => c.spec?.location_name || c.spec?.location_id).filter(Boolean))];
+        return locNames.length > 0 ? (
+          <div className="glass-card px-4 py-2.5 flex items-center gap-2 text-sm">
+            <span className="text-zinc-400 dark:text-zinc-500">장소:</span>
+            <span className="font-bold text-zinc-700 dark:text-zinc-200">{locNames.join(', ')}</span>
+          </div>
+        ) : null;
+      })()}
+
       <div className="glass-card p-4 sm:p-6">
-        {/* 모바일: 제목 / 생성 버튼 / 내보내기 4개를 세로로 쌓음 (가로 배치 시 제목이 폭 0으로 눌려 글자 단위로 꺾이던 문제) */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
           <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2">
-            <Image size={20} className="text-indigo-500 shrink-0" /> 웹툰 만들기
+            <Image size={20} className="text-indigo-500 shrink-0" /> {['onecut_ad', 'instatoon_ad', 'brand_series'].includes(gateStatus?.purpose) ? '완성' : '웹툰 만들기'}
           </h2>
           <div className="flex flex-col gap-2 sm:flex-row">
             {pendingCuts.length > 0 && (
@@ -755,6 +766,11 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                 {gateStatus?.purpose === 'onecut_ad' && (
                   <span className="text-[10px] font-bold text-indigo-500 dark:text-indigo-400">
                     모델·제품·카피를 한 장에 그려요 — 60초쯤
+                  </span>
+                )}
+                {['instatoon_ad', 'brand_series'].includes(gateStatus?.purpose) && (
+                  <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">
+                    광고는 더 정교하게 그려서 컷당 1분쯤 걸려요
                   </span>
                 )}
               </div>
@@ -1845,6 +1861,7 @@ function RegenDropdown({ cutId, cutSpec, disabled, onRegenerate, epDramaLevel, h
   const [open, setOpen] = useState(false);
   const btnRef = useRef(null);
   const [pos, setPos] = useState(null);
+  const [userNote, setUserNote] = useState('');
   const cutDrama = cutSpec?.drama_level;
   const isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches;
 
@@ -1875,7 +1892,13 @@ function RegenDropdown({ cutId, cutSpec, disabled, onRegenerate, epDramaLevel, h
       // 모바일: 바텀시트
       <div data-drama-menu className="fixed inset-0 z-[60] flex items-end justify-center bg-black/50" onPointerDown={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
         <div className="w-full max-w-md bg-white dark:bg-night-card rounded-t-2xl shadow-2xl p-4 pb-6 space-y-1" onPointerDown={(e) => e.stopPropagation()}>
-          <p className="text-xs font-bold text-gray-400 mb-2 px-1">연출 강도 재생성 (1패킷)</p>
+          <div className="px-1 mb-3">
+            <p className="text-[11px] font-bold text-gray-400 mb-1">이렇게 고쳐서 다시 (선택)</p>
+            <input type="text" value={userNote} onChange={e => setUserNote(e.target.value.slice(0, 200))}
+              placeholder="예: 머리에 쓴 수건 빼줘"
+              className="w-full px-3 py-2 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-ink-black dark:text-white placeholder-gray-400 focus:outline-none focus:border-amber-400" />
+          </div>
+          <p className="text-xs font-bold text-gray-400 mb-2 px-1">연출 강도 (1패킷)</p>
           {hasProduct && (
             <div className="flex items-center gap-2 px-4 py-2 mb-1 bg-amber-50 dark:bg-amber-900/10 rounded-xl">
               <span className="text-xs font-bold text-amber-700 dark:text-amber-400">📦 제품 참조 포함</span>
@@ -1887,7 +1910,7 @@ function RegenDropdown({ cutId, cutSpec, disabled, onRegenerate, epDramaLevel, h
             return (
               <button
                 key={level}
-                onClick={() => { setOpen(false); onRegenerate(cutId, level); }}
+                onClick={() => { setOpen(false); onRegenerate(cutId, level, userNote || undefined); }}
                 className={`flex items-center justify-between w-full px-4 py-3 rounded-xl text-sm font-bold transition-colors ${
                   current === level ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5'
                 }`}
@@ -1928,7 +1951,7 @@ function RegenDropdown({ cutId, cutSpec, disabled, onRegenerate, epDramaLevel, h
           return (
             <button
               key={level}
-              onClick={() => { setOpen(false); onRegenerate(cutId, level); }}
+              onClick={() => { setOpen(false); onRegenerate(cutId, level, userNote || undefined); }}
               className="flex items-center justify-between w-full px-3 py-2 text-xs font-bold text-left hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
             >
               <span className="text-gray-700 dark:text-gray-200">{DRAMA_LABELS[level]}</span>
@@ -1953,7 +1976,7 @@ function RegenDropdown({ cutId, cutSpec, disabled, onRegenerate, epDramaLevel, h
     <div className="relative">
       <div className="flex">
         <button
-          onClick={(e) => { e.stopPropagation(); onRegenerate(cutId); }}
+          onClick={(e) => { e.stopPropagation(); onRegenerate(cutId, undefined, userNote || undefined); }}
           disabled={disabled}
           title="재생성 (1패킷)"
           className="flex items-center gap-0.5 h-8 px-2 py-1 bg-comic-blue/10 text-comic-blue rounded-l-full font-bold shadow-sm hover:bg-comic-blue/20 text-[10px] disabled:opacity-50 transition-colors"

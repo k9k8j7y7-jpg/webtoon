@@ -128,6 +128,32 @@ AD_SCRIPT_INSTRUCTION_ADDON = """
   {"type": "narration", "speaker": null, "text": "서브카피", "bubble_style": "box"}
 """
 
+# 인스타툰 광고 컷 수별 구조 — target_cuts로 분기
+_AD_CUT_STRUCTURES = {
+    4: "[훅(상황 제시), 문제(갈등·고민), 해결(제품 등장·사용), CTA(결과·마무리)]",
+    6: "[훅(상황 제시), 문제(갈등·고민), 해결(제품 등장), 포인트(효과·장점), 사용법(활용 장면), CTA(결과·마무리)]",
+    8: "[훅(상황 제시), 문제(갈등·고민), 해결(제품 등장), 포인트1(핵심 장점), 포인트2(추가 장점), 사용법1(활용 장면), 사용법2(다른 활용), CTA(결과·마무리)]",
+}
+
+
+def get_ad_script_addon(target_cuts: int | None = None) -> str:
+    """인스타툰/연재툰 광고 대본 addon. target_cuts가 있으면 컷 수 구조 강제."""
+    if target_cuts and target_cuts in _AD_CUT_STRUCTURES:
+        structure = _AD_CUT_STRUCTURES[target_cuts]
+        return f"""
+추가 원칙 (광고 웹툰 — 완결 필수 + 제품 자연 노출):
+- 이 에피소드는 광고 웹툰이다. 하나의 완결된 이야기를 만들어야 한다.
+- **반드시 정확히 {target_cuts}컷**을 만들어라. {target_cuts - 1}컷이나 {target_cuts + 1}컷은 안 된다.
+- 컷 구조: {structure}. 각 컷의 역할을 이 순서대로 따라라.
+- 제품/브랜드를 스토리에 자연스럽게 녹여라. 노골적 광고 문구("지금 구매하세요!", "최고의 제품!")는 절대 금지.
+- 캐릭터가 제품을 실제로 사용하거나 경험하는 장면을 통해 제품의 가치를 보여줘라.
+- 등장인물: 모델 1명(character_id는 기획안 등장인물의 ref_key 또는 "model") + 필요 시 조연 1명까지. 3명 이상 금지.
+- 첫 컷 또는 마지막 컷에 헤드카피·서브카피를 dialogue에 넣어라:
+  {{"type": "narration", "speaker": null, "text": "헤드카피", "bubble_style": "headcopy"}}
+  {{"type": "narration", "speaker": null, "text": "서브카피", "bubble_style": "box"}}
+"""
+    return AD_SCRIPT_INSTRUCTION_ADDON
+
 
 ONECUT_AD_SCRIPT_INSTRUCTION_ADDON = """
 추가 원칙 (한 컷 광고 — 1컷만):

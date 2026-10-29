@@ -65,10 +65,12 @@ async def approve_assets(
         new_status["auto_advance"] = True
     episode.gate_status = new_status
     db.commit()
+    db.refresh(episode)
 
-    # ⑲ 한 컷 광고: 콘티 1컷 자동 생성 + gate 4 자동 승인 → gate 5 직행
+    # 광고 3종: 콘티 자동 생성 + gate 4 자동 승인 → gate 5 직행
+    # (이미지 생성 자동 시작은 onecut_ad만 — instatoon/brand_series는 수동)
     purpose = new_status.get("purpose", "story")
-    if purpose == "onecut_ad":
+    if purpose in ("onecut_ad", "instatoon_ad", "brand_series"):
         from app.storyboard.service import create_cuts_from_script
         script_data = (episode.script or {}).get("script", {})
         if script_data.get("scenes"):
@@ -98,7 +100,7 @@ async def approve_assets(
             new_status = approve_gate(episode.gate_status, 4)
             episode.gate_status = new_status
             db.commit()
-            logger.info("onecut_ad auto storyboard: ep=%d, cuts=%d → gate 5", episode_id, len(cuts))
+            logger.info("%s auto storyboard: ep=%d, cuts=%d → gate 5", purpose, episode_id, len(cuts))
 
     db.refresh(episode)
 

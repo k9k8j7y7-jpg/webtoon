@@ -798,13 +798,56 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
     const subcopy = cut?.dialogue?.find(d => d.bubble_style === 'box' && d.type === 'narration');
     const speeches = cut?.dialogue?.filter(d => d.type === 'speech') || [];
 
+    // 광고 보기 모드: 브리프 요약 카드
+    if (readOnly && gateStatus?.idea_brief) {
+      const ib = gateStatus.idea_brief;
+      const br = ib.ad_brief_result || {};
+      const copySel = ib.copy_selected ?? 0;
+      const copies = ib.copy_candidates || [];
+      const chosen = copies[copySel] || copies[0] || {};
+      const sceneSel = ib.scene_selected ?? 0;
+      const scenes = ib.scene_ideas || [];
+      const chosenScene = scenes[sceneSel] || scenes[0] || {};
+      const planChars = gateStatus?.planning_draft?.characters || [];
+      return (
+        <div className="space-y-4">
+          <div className="glass-card p-5 space-y-3">
+            <h3 className="text-base font-bold font-serif text-ink-black dark:text-white">광고 브리프 요약</h3>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+              {ib.ad_purpose && <><span className="text-zinc-400">목적</span><span className="font-bold text-zinc-700 dark:text-zinc-200">{ib.ad_purpose === 'product_ad' ? '상품 광고' : ib.ad_purpose}</span></>}
+              {br.key_message && <><span className="text-zinc-400">전달 내용</span><span className="font-bold text-zinc-700 dark:text-zinc-200">{br.key_message}</span></>}
+              {ib.mood && <><span className="text-zinc-400">분위기</span><span className="font-bold text-zinc-700 dark:text-zinc-200">{ib.mood === 'ai_pick' ? 'AI 추천' : ib.mood}</span></>}
+              {ib.product?.name && <><span className="text-zinc-400">제품</span><span className="font-bold text-zinc-700 dark:text-zinc-200">{ib.product.name}</span></>}
+            </div>
+            {chosen.head && (
+              <div className="bg-zinc-900 text-white rounded-lg px-4 py-2.5 text-center mt-2">
+                <p className="text-[10px] font-bold text-zinc-500 mb-0.5">선택 카피</p>
+                <p className="text-base font-black">{chosen.head}</p>
+                {chosen.sub && <p className="text-xs text-zinc-300 mt-0.5">{chosen.sub}</p>}
+              </div>
+            )}
+            {chosenScene.scene && (
+              <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                <span className="font-bold">장면:</span> {chosenScene.scene}
+              </div>
+            )}
+            {planChars[0]?.name && (
+              <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                <span className="font-bold">모델:</span> {planChars[0].name} ({planChars[0].age} {planChars[0].gender})
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="space-y-4">
         <AdBriefForm
           projectId={projectId}
           episodeId={episodeId}
           gateStatus={gateStatus}
-          onBriefDone={async ({ selectedCopy, selectedScene, briefResult }) => {
+          onBriefDone={async ({ selectedCopy, selectedScene, briefResult, productName: pName, productInfo: pInfo, productInfoWeb: pInfoWeb }) => {
             setAdScriptGenerating(true);
             try {
               const currentGate = gateStatus?.current_gate || 1;
@@ -812,6 +855,9 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
               // 1) 선택 + 모델 설정 + 카피 디자인 저장
               const ib = { ...(gateStatus?.idea_brief || {}), copy_selected: selectedCopy, scene_selected: selectedScene };
               if (purpose === 'onecut_ad') ib.copy_design = copyDesign;
+              if (pName) ib.product_name = pName;
+              if (pInfo) ib.product_info = pInfo;
+              if (pInfoWeb) ib.product_info_web = pInfoWeb;
               await api.put(`/projects/${projectId}/episodes/${episodeId}/idea-brief/selection`, ib);
 
               // 2) gate 1 승인 — 광고 3종은 이야기형 POST /planning 금지 (idea-brief/selection이 모델·기획안 설정)
@@ -970,15 +1016,15 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                     }).catch(() => {});
                   };
                   return (
-                    <div className="bg-zinc-50 dark:bg-zinc-800/50 rounded-lg px-3 py-2.5 space-y-2">
-                      <p className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500">카피 디자인</p>
+                    <div className="bg-zinc-50 dark:bg-zinc-800/50 rounded-lg px-3 py-3 space-y-2.5">
+                      <p className="text-xs font-bold text-zinc-500 dark:text-zinc-400">카피 디자인</p>
                       {/* 글씨체 */}
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[10px] text-zinc-400 dark:text-zinc-500 shrink-0">글씨체</span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs text-zinc-400 dark:text-zinc-500 shrink-0">글씨체</span>
                         {FONTS.map(f => (
                           <button key={f.key}
                             onClick={() => saveCopyDesign({ ...copyDesign, font: f.key })}
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors ${
+                            className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
                               copyDesign.font === f.key
                                 ? 'bg-amber-500 text-white'
                                 : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-300 dark:hover:bg-zinc-600'
@@ -987,12 +1033,12 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                         ))}
                       </div>
                       {/* 위치 */}
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[10px] text-zinc-400 dark:text-zinc-500 shrink-0">위치</span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs text-zinc-400 dark:text-zinc-500 shrink-0">위치</span>
                         {POSITIONS.map(p => (
                           <button key={p.key}
                             onClick={() => saveCopyDesign({ ...copyDesign, position: p.key })}
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors ${
+                            className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
                               copyDesign.position === p.key
                                 ? 'bg-purple-500 text-white'
                                 : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-300 dark:hover:bg-zinc-600'
@@ -1002,19 +1048,19 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                       </div>
                       {/* 강조 단어 */}
                       {headWords.length > 0 && (
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-[10px] text-zinc-400 dark:text-zinc-500 shrink-0">강조</span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs text-zinc-400 dark:text-zinc-500 shrink-0">강조</span>
                           {headWords.map(w => (
                             <button key={w}
                               onClick={() => saveCopyDesign({ ...copyDesign, emphasis: copyDesign.emphasis === w ? null : w })}
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors ${
+                              className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
                                 copyDesign.emphasis === w
                                   ? 'bg-rose-500 text-white'
                                   : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-300 dark:hover:bg-zinc-600'
                               }`}
                             >{w}</button>
                           ))}
-                          <span className="text-[9px] text-zinc-400 dark:text-zinc-500">비워두면 AI가 골라요</span>
+                          <span className="text-[10px] text-zinc-400 dark:text-zinc-500">비워두면 AI가 골라요</span>
                         </div>
                       )}
                     </div>

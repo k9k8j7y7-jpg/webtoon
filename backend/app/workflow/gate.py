@@ -72,6 +72,44 @@ GATE_KEYS = [
     "5_review",
 ]
 
+# 용도별 단계 이름 (프론트 StepHeader·에피소드 목록 부제 공용)
+# story: 5단계 — 기획·대본·자산 준비·콘티·장소·웹툰 만들기
+# onecut_ad: 3단계 — 브리프·준비·완성
+# instatoon_ad/brand_series: 4단계 — 브리프·대본·준비·완성
+AD_STEP_NAMES = {
+    "onecut_ad": {
+        "total": 3,
+        "steps": {1: "브리프", 2: "브리프", 3: "준비", 4: "완성", 5: "완성"},
+        "step_number": {1: 1, 2: 1, 3: 2, 4: 3, 5: 3},
+    },
+    "instatoon_ad": {
+        "total": 4,
+        "steps": {1: "브리프", 2: "대본", 3: "준비", 4: "완성", 5: "완성"},
+        "step_number": {1: 1, 2: 2, 3: 3, 4: 4, 5: 4},
+    },
+    "brand_series": {
+        "total": 4,
+        "steps": {1: "브리프", 2: "대본", 3: "준비", 4: "완성", 5: "완성"},
+        "step_number": {1: 1, 2: 2, 3: 3, 4: 4, 5: 4},
+    },
+}
+
+
+def get_step_info(gate_status: dict) -> dict:
+    """프론트용 단계 정보 반환. {total, number, name}."""
+    purpose = get_purpose(gate_status)
+    gate = get_gate_number(gate_status)
+    if purpose in AD_STEP_NAMES:
+        info = AD_STEP_NAMES[purpose]
+        return {
+            "total": info["total"],
+            "number": info["step_number"].get(gate, gate),
+            "name": info["steps"].get(gate, ""),
+        }
+    # story: 5단계
+    _STORY_NAMES = {1: "기획", 2: "대본", 3: "자산 준비", 4: "콘티·장소", 5: "웹툰 만들기"}
+    return {"total": 5, "number": gate, "name": _STORY_NAMES.get(gate, "")}
+
 
 def approve_gate(gate_status: dict, gate_number: int) -> dict:
     """게이트 N을 승인하고 N+1을 draft로 전환한다.

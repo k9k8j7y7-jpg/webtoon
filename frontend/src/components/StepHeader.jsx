@@ -22,8 +22,17 @@ const STEPS_ONECUT = [
   { n: 3, key: '5_review',    name: '완성',     desc: '한 컷을 생성하고 공유해요', gates: [4, 5] },
 ];
 
+const STEPS_INSTA_BRAND = [
+  { n: 1, key: '1_planning',  name: '브리프', desc: '광고 목적과 카피를 정해요', gates: [1] },
+  { n: 2, key: '2_script',    name: '대본',   desc: '컷별 대사와 장면을 만들어요', gates: [2] },
+  { n: 3, key: '3_assets',    name: '준비',   desc: '모델·제품·스타일을 준비해요', gates: [3] },
+  { n: 4, key: '5_review',    name: '완성',   desc: '컷을 생성하고 공유해요', gates: [4, 5] },
+];
+
 function getSteps(purpose) {
-  return purpose === 'onecut_ad' ? STEPS_ONECUT : STEPS_DEFAULT;
+  if (purpose === 'onecut_ad') return STEPS_ONECUT;
+  if (purpose === 'instatoon_ad' || purpose === 'brand_series') return STEPS_INSTA_BRAND;
+  return STEPS_DEFAULT;
 }
 
 // 게이트 번호 → 표시 스텝 번호 변환

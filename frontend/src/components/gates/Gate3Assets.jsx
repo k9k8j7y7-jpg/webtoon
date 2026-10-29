@@ -284,8 +284,8 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
     { key: 'other', label: '기타' },
   ];
   const SIZE_CHIPS = [
-    { key: 'palm', label: '손바닥' }, { key: 'one_hand', label: '한 손' },
-    { key: 'two_hands', label: '두 손' }, { key: 'tabletop', label: '탁상' }, { key: 'large', label: '대형' },
+    { key: 'palm', label: '손바닥 크기' }, { key: 'one_hand', label: '한 손에 쥐는' },
+    { key: 'two_hands', label: '두 손으로 드는' }, { key: 'tabletop', label: '탁자 위에 놓는' }, { key: 'large', label: '사람만 한' },
   ];
 
   const imageUrl = (path) => {
@@ -1263,8 +1263,8 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
         )}
       </div>
 
-      {/* 페이지 형식 */}
-      <div className="glass-card p-6">
+      {/* 페이지 형식 — onecut_ad에서는 숨김 */}
+      {purpose !== 'onecut_ad' && <div className="glass-card p-6">
         <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2 mb-4">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="text-indigo-500"><rect x="2" y="2" width="16" height="16" rx="2" stroke="currentColor" strokeWidth="1.5"/><line x1="10" y1="2" x2="10" y2="18" stroke="currentColor" strokeWidth="1.2"/><line x1="2" y1="10" x2="18" y2="10" stroke="currentColor" strokeWidth="1.2"/></svg>
           형식
@@ -1338,10 +1338,10 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
             {currentFmt.label} 잠금됨
           </p>
         )}
-      </div>
+      </div>}
 
-      {/* 컷 비율 */}
-      <div className="glass-card p-6">
+      {/* 컷 비율 — onecut_ad에서는 숨김 */}
+      {purpose !== 'onecut_ad' && <div className="glass-card p-6">
         <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2 mb-4">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="text-blue-500"><rect x="2" y="2" width="16" height="16" rx="2" stroke="currentColor" strokeWidth="1.5"/><rect x="6" y="4" width="8" height="12" rx="1" stroke="currentColor" strokeWidth="1.2" strokeDasharray="2 1"/></svg>
           컷 비율
@@ -1392,7 +1392,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
             {aspectRatio} 비율 잠금됨
           </p>
         )}
-      </div>
+      </div>}
 
       {/* 연출 강도 */}
       <DramaLevelSelector projectId={projectId} episodeId={episodeId} gateStatus={gateStatus} onRefresh={onRefresh} />
@@ -1417,13 +1417,6 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
             <Users size={20} className="text-purple-500" /> 캐릭터 시트
           </h2>
           <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2">
-            <button
-              onClick={openPicker}
-              disabled={!!job}
-              className="flex items-center justify-center gap-1 px-3 py-2 text-xs font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 hover:bg-purple-100 dark:hover:bg-purple-900/40 rounded-full transition-colors disabled:opacity-50"
-            >
-              <Link size={12} /> 캐릭터 불러오기
-            </button>
             <button
               onClick={generateCharacters}
               disabled={!!job || !hasStyle}
@@ -1459,6 +1452,13 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
                 </div>
               )}
             </div>
+            <button
+              onClick={openPicker}
+              disabled={!!job}
+              className="flex items-center justify-center gap-1 px-3 py-2 text-xs font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 hover:bg-purple-100 dark:hover:bg-purple-900/40 rounded-full transition-colors disabled:opacity-50"
+            >
+              <Link size={12} /> 캐릭터 불러오기
+            </button>
           </div>
         </div>
         {hasCharacters && photoRealCount > 0 && (
@@ -1851,7 +1851,8 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
       </div>
 
       {/* 장소 — 간소화: 새 에피소드는 안내만, 기존 에피소드는 읽기 전용 요약 */}
-      <div className="glass-card p-6">
+      {/* 광고 purpose: 장소는 콘티 자동 시 AI가 설정 → 숨김 */}
+      {!isAdPurpose && <div className="glass-card p-6">
         <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2 mb-3">
           <MapPin size={20} className="text-emerald-500" /> 장소
         </h2>
@@ -1879,7 +1880,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
             </p>
           </div>
         )}
-      </div>
+      </div>}
 
       {/* 제품 자산 — story: 기존 위치 (장소 뒤) */}
       {!isAdPurpose && renderProductSection()}
