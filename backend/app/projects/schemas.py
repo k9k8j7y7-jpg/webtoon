@@ -24,6 +24,7 @@ class ProjectResponse(BaseModel):
     genre: str | None
     language: str
     visibility: str
+    series_defaults: dict | None = None
     created_at: datetime
     updated_at: datetime
 

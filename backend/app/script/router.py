@@ -118,8 +118,13 @@ async def create_script(
     if _purpose in ("onecut_ad", "instatoon_ad", "brand_series"):
         planning["idea_brief"] = _gs.get("idea_brief", {})
 
-    # 인스타툰 target_cuts (4/6/8)
-    _target_cuts = _gs.get("target_cuts") if _purpose == "instatoon_ad" else None
+    # 인스타툰 target_cuts (4/6/8), brand_series target_cuts (6/8/10)
+    if _purpose == "instatoon_ad":
+        _target_cuts = _gs.get("target_cuts")
+    elif _purpose == "brand_series":
+        _target_cuts = _gs.get("target_cuts") or 6  # 기본 6컷
+    else:
+        _target_cuts = None
 
     # 제품 정보 (idea_brief에서 추출)
     _ib = _gs.get("idea_brief", {})

@@ -109,10 +109,15 @@ async def update_idea_brief_selection(
         ib["product_info"] = body["product_info"]
     if "product_info_web" in body:
         ib["product_info_web"] = body["product_info_web"]
-    # 인스타툰 컷 수 (4/6/8)
+    # brand_series 이번 화 소재
+    if "episode_topic" in body:
+        ib["episode_topic"] = body["episode_topic"]
+    # 인스타툰 컷 수 (4/6/8), brand_series 컷 수 (6/8/10)
     if "target_cuts" in body:
         tc = body["target_cuts"]
-        if tc in (4, 6, 8):
+        purpose_for_tc = gs.get("purpose", "story")
+        valid_tc = (6, 8, 10) if purpose_for_tc == "brand_series" else (4, 6, 8)
+        if tc in valid_tc:
             gs["target_cuts"] = tc
     gs["idea_brief"] = ib
 
@@ -143,10 +148,15 @@ async def update_idea_brief_selection(
             "age": model_age,
             "description": model_desc,
         }
-        # planning에 모델 1명만 (이야기형 캐릭터 덮어씀)
+        # planning에 모델 설정 — brand_series만 최대 2명, 나머지 1명
         script_data = dict(episode.script) if episode.script else {}
         planning = dict(script_data.get("planning") or {})
-        planning["characters"] = [model_char]
+        if purpose == "brand_series":
+            # 기존 2번째 모델 보존 (있으면), 1번째만 갱신
+            existing_chars = planning.get("characters", [])
+            planning["characters"] = [model_char] + existing_chars[1:2]
+        else:
+            planning["characters"] = [model_char]
         # 이야기형 기획 필드 최소화
         copy_sel = ib.get("copy_selected", 0)
         copies = ib.get("copy_candidates", [])
@@ -159,8 +169,24 @@ async def update_idea_brief_selection(
         gs["planning_draft"] = {"characters": [model_char]}
 
     episode.gate_status = gs
+
+    # brand_series 1화: 프로젝트에 기본값이 없으면 자동 저장
+    if purpose == "brand_series":
+        project = db.query(Project).filter(Project.id == project_id).first()
+        if project and not project.series_defaults:
+            from app.projects.router import _BRIEF_EXCLUDE_KEYS
+            from datetime import datetime, timezone
+            brief_for_defaults = {k: v for k, v in ib.items() if k not in _BRIEF_EXCLUDE_KEYS}
+            project.series_defaults = {
+                "brief": brief_for_defaults,
+                "saved_at": datetime.now(timezone.utc).isoformat(),
+                "source_episode_id": episode.id,
+            }
+            import logging
+            logging.getLogger(__name__).info("auto series_defaults: project=%d ep=%d", project_id, episode.id)
+
     db.commit()
-    return {"status": "saved"}
+    return {"status": "saved", "auto_series_defaults": purpose == "brand_series" and bool(db.query(Project).filter(Project.id == project_id).first().series_defaults)}
 
 
 @router.post("/projects/{project_id}/episodes/{episode_id}/idea-brief")

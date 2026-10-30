@@ -136,8 +136,10 @@ _AD_CUT_STRUCTURES = {
 }
 
 
-def get_ad_script_addon(target_cuts: int | None = None) -> str:
+def get_ad_script_addon(target_cuts: int | None = None, series: bool = False) -> str:
     """인스타툰/연재툰 광고 대본 addon. target_cuts가 있으면 컷 수 구조 강제."""
+    if series:
+        return _get_brand_series_addon(target_cuts)
     if target_cuts and target_cuts in _AD_CUT_STRUCTURES:
         structure = _AD_CUT_STRUCTURES[target_cuts]
         return f"""
@@ -153,6 +155,37 @@ def get_ad_script_addon(target_cuts: int | None = None) -> str:
   {{"type": "narration", "speaker": null, "text": "서브카피", "bubble_style": "box"}}
 """
     return AD_SCRIPT_INSTRUCTION_ADDON
+
+
+# ── brand_series 전용 ──
+
+_BRAND_SERIES_CUT_STRUCTURES = {
+    6: "[훅(일상 시작), 일상 장면(공감), 제품 자연 등장(전환), 포인트(핵심 장점), 사용 결과(변화), 여운(마무리·CTA 선택)]",
+    8: "[훅(일상 시작), 일상 장면(공감·디테일), 문제 인식(고민), 제품 자연 등장, 포인트1(핵심 장점), 포인트2(추가 장점), 사용 결과(변화), 여운(마무리·CTA 선택)]",
+    10: "[훅(일상 시작), 일상 장면1(공감), 일상 장면2(디테일), 문제 인식(고민), 제품 자연 등장, 포인트1(핵심 장점), 포인트2(추가 장점), 사용법(활용), 사용 결과(변화), 여운(마무리·CTA 선택)]",
+}
+
+
+def _get_brand_series_addon(target_cuts: int | None = None) -> str:
+    """brand_series 전용 대본 addon — 연재 구조 + 이번 화 소재."""
+    tc = target_cuts or 6
+    if tc not in _BRAND_SERIES_CUT_STRUCTURES:
+        tc = 6
+    structure = _BRAND_SERIES_CUT_STRUCTURES[tc]
+    return f"""
+추가 원칙 (브랜드 연재툰 — 완결 필수 + 제품 자연 노출):
+- 이 에피소드는 브랜드 연재 웹툰의 한 화다. 이번 화 안에서 완결되는 이야기를 만들어야 한다.
+- **반드시 정확히 {tc}컷**을 만들어라. {tc - 1}컷이나 {tc + 1}컷은 안 된다.
+- 컷 구조: {structure}. 각 컷의 역할을 이 순서대로 따라라.
+- 연재 톤: 일상 공감형. 캐릭터의 평범한 하루에 제품이 자연스럽게 녹아드는 구성.
+- 제품/브랜드를 스토리에 자연스럽게 녹여라. 노골적 광고 문구("지금 구매하세요!", "최고의 제품!")는 절대 금지.
+- 캐릭터가 제품을 실제로 사용하거나 경험하는 장면을 통해 제품의 가치를 보여줘라.
+- 등장인물: 모델 최대 2명(character_id는 기획안 등장인물의 ref_key). 3명 이상 금지.
+- 마지막 컷에 CTA를 넣을지는 선택. "다음 화에 계속"은 금지 — 이번 화 안에서 마무리.
+- 첫 컷 또는 마지막 컷에 헤드카피·서브카피를 dialogue에 넣어라:
+  {{"type": "narration", "speaker": null, "text": "헤드카피", "bubble_style": "headcopy"}}
+  {{"type": "narration", "speaker": null, "text": "서브카피", "bubble_style": "box"}}
+"""
 
 
 ONECUT_AD_SCRIPT_INSTRUCTION_ADDON = """

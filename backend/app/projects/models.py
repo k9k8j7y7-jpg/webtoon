@@ -39,6 +39,7 @@ class Project(Base):
     visibility = Column(Enum("private", "public", name="visibility_enum"), default="private")
     created_at = Column(DateTime, nullable=False, server_default=func.now())
     updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
+    series_defaults = Column(JSON, nullable=True)  # step35: brand_series 시리즈 기본값
     deleted_at = Column(DateTime, nullable=True)
 
     episodes = relationship("Episode", back_populates="project", lazy="dynamic")

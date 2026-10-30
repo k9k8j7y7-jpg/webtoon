@@ -75,7 +75,7 @@ async def create_storyboard(
     _purpose = get_purpose(episode.gate_status)
     if target:
         rec = recommend_cut_count(script_data)
-        ad_min = 1 if _purpose == "onecut_ad" else (4 if _purpose in ("instatoon_ad", "brand_series") else rec["absolute_min"])
+        ad_min = 1 if _purpose == "onecut_ad" else (6 if _purpose == "brand_series" else (4 if _purpose == "instatoon_ad" else rec["absolute_min"]))
         if target < ad_min:
             raise HTTPException(
                 status_code=400,

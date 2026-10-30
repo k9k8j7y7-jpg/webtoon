@@ -186,6 +186,15 @@ async def generate_script(
         tone_label = _TONE_LABELS.get(tone, tone)
         prompt += f"\n\n톤 지시: 전체 대본의 톤을 '{tone_label}' 느낌으로 만들어라."
 
+    # brand_series: 이번 화 소재 주입
+    if purpose == "brand_series":
+        ib = planning.get("idea_brief") or {}
+        episode_topic = ib.get("episode_topic", "")
+        if episode_topic:
+            prompt += f"\n\n이번 화 소재: {episode_topic}\n위 소재를 이야기의 중심 상황으로 녹여라."
+        else:
+            prompt += "\n\n이번 화 소재가 지정되지 않았다. 제품 특징 중 하나를 골라 한 화의 소재로 삼아라."
+
     if purpose == "onecut_ad":
         from app.script.prompt_fragments import ONECUT_AD_SYSTEM_INSTRUCTION
         system = ONECUT_AD_SYSTEM_INSTRUCTION
@@ -194,8 +203,8 @@ async def generate_script(
         if series_context:
             system += SERIES_SCRIPT_INSTRUCTION_ADDON
         elif is_ad:
-            # 인스타툰: target_cuts로 컷 수별 구조 강제
-            system += get_ad_script_addon(target_cuts)
+            # brand_series: series=True → 연재 구조 addon
+            system += get_ad_script_addon(target_cuts, series=(purpose == "brand_series"))
         else:
             system += STANDALONE_SCRIPT_INSTRUCTION_ADDON
 
@@ -218,8 +227,8 @@ async def generate_script(
 
     result = await _generate_and_parse()
 
-    # 인스타툰 컷 수 검증: target_cuts != 실제 컷 수 → 1회 재생성
-    if target_cuts and target_cuts in (4, 6, 8) and purpose != "onecut_ad":
+    # 인스타툰/brand_series 컷 수 검증: target_cuts != 실제 컷 수 → 1회 재생성
+    if target_cuts and target_cuts in (4, 6, 8, 10) and purpose != "onecut_ad":
         actual = sum(len(s.get("cuts", [])) for s in result.get("scenes", []))
         if actual != target_cuts:
             import logging
