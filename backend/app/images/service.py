@@ -342,7 +342,7 @@ async def generate_cut_image(
                     ref_tracking.append({"type": "product", "product_id": prod.id, "label": prod.name})
                     product_ref_attached = True
                     logger.info("Cut %s product_ref: attached (photo) product=%d", cut.cut_id, prod.id)
-            product_desc = build_product_clause(prod)
+            product_desc = build_product_clause(prod, anatomy_hint=(_ep_purpose in ("instatoon_ad", "brand_series")))
 
     # 2. 장소 레퍼런스 로드 (샷 타입에 따라 이미지 첨부 여부 분기)
     location_id = spec.get("location_id")
@@ -451,34 +451,50 @@ async def generate_cut_image(
         )
 
     # 5.5. 카피 렌더 (헤드카피·서브카피를 그림에 직접)
-    # onecut_ad: 모든 컷 (1컷뿐)
-    # instatoon_ad: 첫 컷(훅)과 마지막 컷(CTA)만
+    # onecut_ad: 모든 컷 (1컷뿐) — head+sub
+    # instatoon_ad·brand_series: 첫 컷=hook_copy만, 마지막 컷=head+sub
     copy_clause = ""
     _copy_head = ""
     _copy_sub = ""
     _should_copy_render = False
+    _is_hook_cut = False  # 훅 컷(1컷)은 hook_copy만 렌더
     if _ep_purpose == "onecut_ad":
         _should_copy_render = True
-    elif _ep_purpose == "instatoon_ad":
-        # 첫 컷 또는 마지막 컷인지 확인
+    elif _ep_purpose in ("instatoon_ad", "brand_series"):
         _cut_num = spec.get("cut_number", 0)
         _total_cuts_q = db.query(Cut).filter(Cut.episode_id == episode_id).count()
-        if _cut_num == 1 or _cut_num == _total_cuts_q:
+        if _cut_num == 1:
             _should_copy_render = True
-            logger.info("Cut %s instatoon_ad: copy render (cut %d/%d)", cut.cut_id, _cut_num, _total_cuts_q)
+            _is_hook_cut = True
+            logger.info("Cut %s %s: hook copy render (cut 1/%d)", cut.cut_id, _ep_purpose, _total_cuts_q)
+        elif _cut_num == _total_cuts_q:
+            _should_copy_render = True
+            logger.info("Cut %s %s: copy render (last cut %d/%d)", cut.cut_id, _ep_purpose, _cut_num, _total_cuts_q)
 
     if _should_copy_render:
         ib = get_idea_brief(_ep_for_purpose.gate_status) or {}
         copy_sel = ib.get("copy_selected", 0)
         copies = ib.get("copy_candidates", [])
         chosen = copies[copy_sel] if isinstance(copy_sel, int) and copy_sel < len(copies) else (copies[0] if copies else {})
-        _copy_head = chosen.get("head", "")
-        _copy_sub = chosen.get("sub", "")
+
+        if _is_hook_cut:
+            # 훅 컷: dialogue에서 headcopy 텍스트를 hook_copy로 사용 (대본이 생성한 문제 제기형)
+            hook_text = ""
+            for d in spec.get("dialogue", []):
+                if d.get("bubble_style") == "headcopy":
+                    hook_text = d.get("text", "")
+                    break
+            _copy_head = hook_text or chosen.get("head", "")
+            _copy_sub = ""  # 훅 컷은 서브카피 없음
+        else:
+            _copy_head = chosen.get("head", "")
+            _copy_sub = chosen.get("sub", "")
+
         copy_design = ib.get("copy_design")
         if _copy_head or _copy_sub:
             from app.prompts.copy_render import build_copy_clause
             copy_clause = build_copy_clause(_copy_head, _copy_sub, copy_design)
-            logger.info("Cut %s copy_clause: head='%s' sub='%s' design=%s", cut.cut_id, _copy_head, _copy_sub, copy_design)
+            logger.info("Cut %s copy_clause: head='%s' sub='%s' hook=%s design=%s", cut.cut_id, _copy_head, _copy_sub, _is_hook_cut, copy_design)
 
     prompt = build_cut_prompt(
         cut_spec=spec,
@@ -513,7 +529,8 @@ async def generate_cut_image(
         _copy_check_result = check_copy_text(result.image_bytes, _copy_head, _copy_sub)
         logger.info("Cut %s copy_check: %s", cut.cut_id, _copy_check_result)
 
-        if not (_copy_check_result.get("head_ok", True) and _copy_check_result.get("sub_ok", True)):
+        _sub_ok = _copy_check_result.get("sub_ok", True) if _copy_sub else True  # 훅 컷: sub 없으면 skip
+        if not (_copy_check_result.get("head_ok", True) and _sub_ok):
             # 불일치 → 자동 재시도 1회 (같은 프롬프트, 새 시드)
             logger.warning("Cut %s copy_check MISMATCH → retry once", cut.cut_id)
             _copy_retried = True
@@ -529,6 +546,34 @@ async def generate_cut_image(
                 logger.info("Cut %s copy_check retry: %s", cut.cut_id, _copy_check_result)
             except Exception as e:
                 logger.warning("Cut %s copy retry failed (using first result): %s", cut.cut_id, e)
+
+    # 6.4. 손·팔 개수 비전 검사 + 자동 재시도 1회 (instatoon_ad·brand_series의 has_product 컷)
+    _anatomy_check_result = None
+    _anatomy_retried = False
+    if cut_has_product and _ep_purpose in ("instatoon_ad", "brand_series"):
+        from app.prompts.copy_render import check_anatomy
+        _anatomy_check_result = check_anatomy(result.image_bytes)
+        logger.info("Cut %s anatomy_check: %s", cut.cut_id, _anatomy_check_result)
+
+        if not _anatomy_check_result.get("ok", True):
+            logger.warning("Cut %s anatomy FAIL (hands=%s arms=%s) → retry once",
+                           cut.cut_id, _anatomy_check_result.get("hands"), _anatomy_check_result.get("arms"))
+            _anatomy_retried = True
+            try:
+                result = await adapter.generate_image(
+                    prompt=prompt,
+                    reference_images=ref_images if ref_images else None,
+                    reference_labels=ref_labels if ref_labels else None,
+                    seed=None,
+                    aspect_ratio=ep_aspect_ratio,
+                )
+                _anatomy_check_result = check_anatomy(result.image_bytes)
+                logger.info("Cut %s anatomy_check retry: %s", cut.cut_id, _anatomy_check_result)
+                # 재시도 후 카피 검사도 다시 (카피 렌더 컷이면)
+                if copy_clause and (_copy_head or _copy_sub):
+                    _copy_check_result = check_copy_text(result.image_bytes, _copy_head, _copy_sub)
+            except Exception as e:
+                logger.warning("Cut %s anatomy retry failed (using previous result): %s", cut.cut_id, e)
 
     # 6.5. 첫 이미지 생성 시 비율 잠금
     if not is_aspect_ratio_locked(episode.gate_status):
@@ -595,6 +640,10 @@ async def generate_cut_image(
     if _copy_check_result is not None:
         gen_info["copy_check"] = _copy_check_result
         gen_info["copy_retried"] = _copy_retried
+    # 손·팔 검사 결과 기록
+    if _anatomy_check_result is not None:
+        gen_info["anatomy_check"] = _anatomy_check_result
+        gen_info["anatomy_retried"] = _anatomy_retried
     # 사용자 재생성 요청 문구 기록
     if user_note:
         gen_info["user_note"] = user_note

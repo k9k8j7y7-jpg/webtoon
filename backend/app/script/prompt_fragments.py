@@ -123,9 +123,13 @@ AD_SCRIPT_INSTRUCTION_ADDON = """
 - 제품/브랜드를 스토리에 자연스럽게 녹여라. 노골적 광고 문구("지금 구매하세요!", "최고의 제품!")는 절대 금지.
 - 캐릭터가 제품을 실제로 사용하거나 경험하는 장면을 통해 제품의 가치를 보여줘라.
 - 등장인물: 모델 1명(character_id는 기획안 등장인물의 ref_key 또는 "model") + 필요 시 조연 1명까지. 3명 이상 금지.
-- 첫 컷 또는 마지막 컷에 헤드카피·서브카피를 dialogue에 넣어라:
+- 첫 컷(1컷)에는 **훅 카피**(문제 제기형, 15자 이내)를 dialogue에 넣어라:
+  {"type": "narration", "speaker": null, "text": "훅 카피 문구", "bubble_style": "headcopy"}
+  훅 카피는 독자가 "나도 그래!" 하고 공감할 문제 제기 한 줄. 헤드카피(CTA형)와 다른 문장이어야 한다.
+- 마지막 컷에는 헤드카피·서브카피를 dialogue에 넣어라:
   {"type": "narration", "speaker": null, "text": "헤드카피", "bubble_style": "headcopy"}
   {"type": "narration", "speaker": null, "text": "서브카피", "bubble_style": "box"}
+- 한 컷에 손 동작은 하나만(제품 들기 vs 머리 만지기 중 택1). 제품 든 컷은 나머지 손은 자연스럽게 내려놓거나 몸 옆에.
 """
 
 # 인스타툰 광고 컷 수별 구조 — target_cuts로 분기
@@ -150,9 +154,13 @@ def get_ad_script_addon(target_cuts: int | None = None, series: bool = False) ->
 - 제품/브랜드를 스토리에 자연스럽게 녹여라. 노골적 광고 문구("지금 구매하세요!", "최고의 제품!")는 절대 금지.
 - 캐릭터가 제품을 실제로 사용하거나 경험하는 장면을 통해 제품의 가치를 보여줘라.
 - 등장인물: 모델 1명(character_id는 기획안 등장인물의 ref_key 또는 "model") + 필요 시 조연 1명까지. 3명 이상 금지.
-- 첫 컷 또는 마지막 컷에 헤드카피·서브카피를 dialogue에 넣어라:
+- 첫 컷(1컷)에는 **훅 카피**(문제 제기형, 15자 이내)를 dialogue에 넣어라:
+  {{"type": "narration", "speaker": null, "text": "훅 카피 문구", "bubble_style": "headcopy"}}
+  훅 카피는 독자가 "나도 그래!" 하고 공감할 문제 제기 한 줄. 헤드카피(CTA형)와 다른 문장이어야 한다.
+- 마지막 컷에는 헤드카피·서브카피를 dialogue에 넣어라:
   {{"type": "narration", "speaker": null, "text": "헤드카피", "bubble_style": "headcopy"}}
   {{"type": "narration", "speaker": null, "text": "서브카피", "bubble_style": "box"}}
+- 한 컷에 손 동작은 하나만(제품 들기 vs 머리 만지기 중 택1). 제품 든 컷은 나머지 손은 자연스럽게 내려놓거나 몸 옆에.
 """
     return AD_SCRIPT_INSTRUCTION_ADDON
 
@@ -182,9 +190,13 @@ def _get_brand_series_addon(target_cuts: int | None = None) -> str:
 - 캐릭터가 제품을 실제로 사용하거나 경험하는 장면을 통해 제품의 가치를 보여줘라.
 - 등장인물: 모델 최대 2명(character_id는 기획안 등장인물의 ref_key). 3명 이상 금지.
 - 마지막 컷에 CTA를 넣을지는 선택. "다음 화에 계속"은 금지 — 이번 화 안에서 마무리.
-- 첫 컷 또는 마지막 컷에 헤드카피·서브카피를 dialogue에 넣어라:
+- 첫 컷(1컷)에는 **훅 카피**(문제 제기형, 15자 이내)를 dialogue에 넣어라:
+  {{"type": "narration", "speaker": null, "text": "훅 카피 문구", "bubble_style": "headcopy"}}
+  훅 카피는 독자가 "나도 그래!" 하고 공감할 문제 제기 한 줄. 헤드카피(CTA형)와 다른 문장이어야 한다.
+- 마지막 컷에는 헤드카피·서브카피를 dialogue에 넣어라:
   {{"type": "narration", "speaker": null, "text": "헤드카피", "bubble_style": "headcopy"}}
   {{"type": "narration", "speaker": null, "text": "서브카피", "bubble_style": "box"}}
+- 한 컷에 손 동작은 하나만(제품 들기 vs 머리 만지기 중 택1). 제품 든 컷은 나머지 손은 자연스럽게 내려놓거나 몸 옆에.
 """
 
 

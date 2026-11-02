@@ -175,9 +175,9 @@ async def create_storyboard(
     if target and not _no_readjust:
         readjusted = await readjust_storyboard(script_data, target, page_format=page_format)
         adjusted_script = {"scenes": readjusted.get("scenes", [])}
-        cuts = create_cuts_from_script(episode_id, adjusted_script, db, product_names=product_names)
+        cuts = create_cuts_from_script(episode_id, adjusted_script, db, product_names=product_names, purpose=_purpose)
     else:
-        cuts = create_cuts_from_script(episode_id, script_data, db, product_names=product_names)
+        cuts = create_cuts_from_script(episode_id, script_data, db, product_names=product_names, purpose=_purpose)
 
     # 재생성 후 게이트4 상태가 invalidated이면 draft로 변경
     # create_cuts_from_script가 db.commit()을 호출하므로 episode를 refresh해야 함

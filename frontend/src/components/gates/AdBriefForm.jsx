@@ -39,7 +39,7 @@ const MSG_PLACEHOLDERS = [
   '반려동물 전용 영양제, 건강하게',
 ];
 
-export default function AdBriefForm({ projectId, episodeId, gateStatus, onBriefDone }) {
+export default function AdBriefForm({ projectId, episodeId, gateStatus, onBriefDone, scriptGenerating = false }) {
   const [adPurpose, setAdPurpose] = useState('product_ad');
   const [keyMessage, setKeyMessage] = useState('');
   const [mood, setMood] = useState('ai_pick');
@@ -424,9 +424,14 @@ export default function AdBriefForm({ projectId, episodeId, gateStatus, onBriefD
 
           {/* 진행 버튼 */}
           <button onClick={handleProceed}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 transition-colors"
+            disabled={scriptGenerating}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            <Check size={14} /> {(gateStatus?.current_gate || 1) >= 2 ? '이 카피로 대본 다시 만들기' : '이대로 진행'}
+            {scriptGenerating ? (
+              <><RefreshCw size={14} className="animate-spin" /> 대본 만드는 중 — 30초쯤</>
+            ) : (
+              <><Check size={14} /> {(gateStatus?.current_gate || 1) >= 2 ? '이 카피로 대본 다시 만들기' : '이대로 진행'}</>
+            )}
           </button>
         </div>
       )}

@@ -10,10 +10,11 @@ _SIZE_PHRASES = {
 }
 
 
-def build_product_clause(product) -> str:
+def build_product_clause(product, anatomy_hint: bool = False) -> str:
     """Product ORM 객체 → 컷 프롬프트에 주입할 제품 설명 문자열.
 
     라벨 글자 재현 지시 + 크기 상대 표현 포함.
+    anatomy_hint=True이면 손·팔 해부학 지시 추가 (instatoon_ad·brand_series용).
     """
     parts = []
     name = product.name or "product"
@@ -50,7 +51,13 @@ def build_product_clause(product) -> str:
         "Show it naturally held, placed on a surface, or used by a character. "
         "Do not redesign the packaging. "
         "No text anywhere in the image except the product's own label; "
-        "no slogans, signs, or posters with words."
+        "no slogans, signs, or posters with words"
     )
+
+    if anatomy_hint:
+        parts.append(
+            "ANATOMY: exactly two hands visible, one holding the product, the other relaxed at the side or naturally resting — "
+            "anatomically correct human hands with five fingers each. Never draw three or more hands"
+        )
 
     return " ".join(parts)

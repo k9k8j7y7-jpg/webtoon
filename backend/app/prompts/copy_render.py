@@ -1,7 +1,7 @@
-"""카피 렌더 프롬프트 — build_copy_clause 단일 진입점.
+"""카피 렌더 프롬프트 + 비전 검사 — build_copy_clause · check_copy_text · check_anatomy 단일 진입점.
 
-한 컷 광고(onecut_ad) 전용: 헤드카피·서브카피를 이미지 안에
-직접 디자인으로 렌더하도록 프롬프트를 조립한다.
+광고 에피소드: 헤드카피·서브카피를 이미지 안에 직접 디자인으로 렌더하도록
+프롬프트를 조립한다. has_product 컷은 손·팔 개수 비전 검사도 수행한다.
 """
 
 # 글씨체별 스타일 지시
@@ -110,3 +110,42 @@ def check_copy_text(
         import logging
         logging.getLogger(__name__).warning("copy text check failed (pass-through): %s", e)
         return {"head_ok": True, "sub_ok": True, "found_text": f"check_error: {e}"}
+
+
+def check_anatomy(image_bytes: bytes) -> dict:
+    """생성된 이미지의 손·팔 개수를 비전으로 검사한다.
+
+    Returns: {hands: int, arms: int, ok: bool}
+    hands>2 또는 arms>2 → ok=False.
+    검사 실패(타임아웃 등)면 ok=True 반환 (통과 처리).
+    """
+    try:
+        from google.genai import types
+        from app.adapters.gemini import get_client, AI_TOKENS_SHORT, parse_ai_json
+
+        client = get_client()
+        prompt = (
+            "Count the number of human hands and human arms visible in this illustration. "
+            "Include partial hands/arms that are cut off by the frame. "
+            'Return JSON only: {"hands": <int>, "arms": <int>}. '
+            "ONLY JSON, no other text."
+        )
+        resp = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[
+                types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"),
+                prompt,
+            ],
+            config=types.GenerateContentConfig(
+                temperature=0.1,
+                max_output_tokens=AI_TOKENS_SHORT,
+            ),
+        )
+        result = parse_ai_json(resp.text)
+        hands = int(result.get("hands", 2))
+        arms = int(result.get("arms", 2))
+        return {"hands": hands, "arms": arms, "ok": hands <= 2 and arms <= 2}
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("anatomy check failed (pass-through): %s", e)
+        return {"hands": 0, "arms": 0, "ok": True, "error": str(e)}

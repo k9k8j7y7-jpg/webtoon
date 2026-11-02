@@ -24,6 +24,24 @@ class RegenerateRequest(BaseModel):
     user_note: str | None = None  # "수건 빼줘" 등 재생성 요청 문구 (최대 200자)
 
 
+@router.get("/projects/{project_id}/episodes/{episode_id}/pending-cuts")
+def get_pending_cuts_count(
+    project_id: int,
+    episode_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """남은(미생성) 컷 수와 필요 패킷 수를 반환한다."""
+    episode = _get_episode_for_user(db, project_id, episode_id, current_user.id)
+    pending = (
+        db.query(Cut)
+        .filter(Cut.episode_id == episode_id, Cut.status.in_(["pending", "invalidated", "regenerating"]))
+        .count()
+    )
+    total = db.query(Cut).filter(Cut.episode_id == episode_id).count()
+    return {"pending": pending, "total": total, "packets_needed": pending}
+
+
 @router.post("/projects/{project_id}/episodes/{episode_id}/generate", status_code=202)
 async def generate_images(
     project_id: int,

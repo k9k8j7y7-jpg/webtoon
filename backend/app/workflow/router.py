@@ -94,7 +94,7 @@ async def approve_assets(
                         description=loc_data.get("description", ""),
                         status="approved",
                     ))
-            cuts = create_cuts_from_script(episode_id, script_data, db, product_names=product_names)
+            cuts = create_cuts_from_script(episode_id, script_data, db, product_names=product_names, purpose=purpose)
             db.flush()
             # gate 4 자동 승인
             new_status = approve_gate(episode.gate_status, 4)

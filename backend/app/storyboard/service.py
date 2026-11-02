@@ -210,14 +210,38 @@ def auto_add_mentioned_characters(
     return added
 
 
+def _apply_copy_cut_positions(dialogue: list[dict], is_copy_cut: bool) -> list[dict]:
+    """카피 렌더 컷(첫/마지막)의 말풍선·내레이션 초기 위치를 하단(y≥0.70)으로 내린다.
+
+    카피가 상단에 렌더되므로 말풍선은 하단에 배치해야 겹치지 않는다.
+    """
+    if not is_copy_cut:
+        return dialogue
+    for item in dialogue:
+        if item.get("bubble_style") == "headcopy":
+            continue  # headcopy 레이어는 이미지에 직접 렌더 → 위치 무관
+        layout = item.get("bubble_layout")
+        if layout and isinstance(layout, dict):
+            if layout.get("y", 0) < 0.70:
+                layout["y"] = 0.70 + (layout.get("y", 0) * 0.2)  # 상대 오프셋 유지
+        elif not layout:
+            item["bubble_layout"] = {"x": 0.04, "y": 0.72, "width": 0.44, "tail_direction": "none"}
+    return dialogue
+
+
 def create_cuts_from_script(
     episode_id: int, script_data: dict, db: Session,
     product_names: list[str] | None = None,
+    purpose: str = "story",
 ) -> list[dict]:
     """대본에서 컷 명세를 추출해 DB에 저장한다."""
     cuts_result = []
     global_cut_number = 0
     ep_chars = episode_character_names(episode_id, db)
+
+    # 총 컷 수 미리 계산 (카피 렌더 컷 판정용)
+    _total_cuts = sum(len(s.get("cuts", [])) for s in script_data.get("scenes", []))
+    _is_copy_render_purpose = purpose in ("instatoon_ad", "brand_series")
 
     # 장소 ref_key → 한글 이름 매핑 (대본 locations 배열에서 추출)
     _loc_names = {}
@@ -251,7 +275,10 @@ def create_cuts_from_script(
                 "location_name": _loc_name,
                 "shot": cut_data.get("shot", "full"),
                 "action": cut_data.get("action", ""),
-                "dialogue": _apply_narration_box_default(cut_data.get("dialogue", [])),
+                "dialogue": _apply_copy_cut_positions(
+                    _apply_narration_box_default(cut_data.get("dialogue", [])),
+                    is_copy_cut=(_is_copy_render_purpose and (global_cut_number == 1 or global_cut_number == _total_cuts)),
+                ),
                 "emphasis": cut_data.get("emphasis", "normal"),
                 "transition": cut_data.get("transition"),
                 "has_product": has_product,

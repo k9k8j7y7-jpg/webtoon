@@ -748,7 +748,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                   disabled={!!job}
                   className="neon-btn flex items-center justify-center gap-1 w-full sm:w-auto !rounded-full !px-4 !py-2 text-xs whitespace-nowrap disabled:opacity-50"
                 >
-                  <Image size={12} /> {pendingCuts.length}컷 생성 ({pendingCuts.length}패킷)
+                  <Image size={12} /> 남은 컷 전부 생성 ({pendingCuts.length}패킷)
                 </button>
                 <span className="text-[10px] text-gray-400 dark:text-gray-500">
                   연출: {DRAMA_LABELS[gateStatus?.drama_level || (gateStatus?.is_ad ? 'light' : 'normal')]}
@@ -1099,11 +1099,18 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                   resolveUrl={imageUrl}
                 />
               ) : (
-                <div className="bg-gray-50 dark:bg-zinc-800 flex items-center justify-center" style={{ aspectRatio: cssAspect(gateStatus?.aspect_ratio) }}>
+                <div className="bg-gray-50 dark:bg-zinc-800 flex flex-col items-center justify-center gap-2" style={{ aspectRatio: cssAspect(gateStatus?.aspect_ratio) }}>
                   <div className="text-center text-gray-300 dark:text-zinc-600">
                     <Image size={32} className="mx-auto mb-1" />
                     <span className="text-xs font-bold">#{cut.cut_number}</span>
                   </div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleRegenerate(cut.cut_id); }}
+                    disabled={!!job}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold bg-indigo-500 text-white hover:bg-indigo-600 transition-colors disabled:opacity-50 shadow-sm"
+                  >
+                    <Image size={11} /> 이 컷 생성 · 1패킷
+                  </button>
                 </div>
               )}
 
@@ -1887,6 +1894,8 @@ function RegenDropdown({ cutId, cutSpec, disabled, onRegenerate, epDramaLevel, h
     setOpen(!open);
   };
 
+  const [selectedDrama, setSelectedDrama] = useState(cutDrama || epDramaLevel);
+
   const menu = open ? createPortal(
     isMobile ? (
       // 모바일: 바텀시트
@@ -1898,31 +1907,28 @@ function RegenDropdown({ cutId, cutSpec, disabled, onRegenerate, epDramaLevel, h
               placeholder="예: 머리에 쓴 수건 빼줘"
               className="w-full px-3 py-2 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-ink-black dark:text-white placeholder-gray-400 focus:outline-none focus:border-amber-400" />
           </div>
-          <p className="text-xs font-bold text-gray-400 mb-2 px-1">연출 강도 (1패킷)</p>
           {hasProduct && (
             <div className="flex items-center gap-2 px-4 py-2 mb-1 bg-amber-50 dark:bg-amber-900/10 rounded-xl">
               <span className="text-xs font-bold text-amber-700 dark:text-amber-400">📦 제품 참조 포함</span>
               <span className="text-[10px] text-amber-600/70 dark:text-amber-400/60 ml-auto">GPT 권장</span>
             </div>
           )}
-          {['light', 'normal', 'strong'].map((level) => {
-            const current = cutDrama || epDramaLevel;
-            return (
-              <button
-                key={level}
-                onClick={() => { setOpen(false); onRegenerate(cutId, level, userNote || undefined); }}
-                className={`flex items-center justify-between w-full px-4 py-3 rounded-xl text-sm font-bold transition-colors ${
-                  current === level ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5'
-                }`}
-              >
-                <div>
-                  <span>{DRAMA_LABELS[level]}</span>
-                  <span className="ml-2 text-xs font-normal text-gray-400">{DRAMA_DESC[level]}</span>
-                </div>
-                {current === level && <Check size={14} className="text-amber-500 shrink-0" />}
-              </button>
-            );
-          })}
+          <p className="text-xs font-bold text-gray-400 mb-2 px-1">연출 강도</p>
+          {['light', 'normal', 'strong'].map((level) => (
+            <button
+              key={level}
+              onClick={() => setSelectedDrama(level)}
+              className={`flex items-center justify-between w-full px-4 py-3 rounded-xl text-sm font-bold transition-colors ${
+                selectedDrama === level ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5'
+              }`}
+            >
+              <div>
+                <span>{DRAMA_LABELS[level]}</span>
+                <span className="ml-2 text-xs font-normal text-gray-400">{DRAMA_DESC[level]}</span>
+              </div>
+              {selectedDrama === level && <Check size={14} className="text-amber-500 shrink-0" />}
+            </button>
+          ))}
           {purpose === 'onecut_ad' && projectId && episodeId && (
             <button
               onClick={() => { setOpen(false); window.location.hash = ''; window.location.href = `/WEBTOON/projects/${projectId}/episodes/${episodeId}/workflow?gate=1`; }}
@@ -1931,34 +1937,44 @@ function RegenDropdown({ cutId, cutSpec, disabled, onRegenerate, epDramaLevel, h
               카피 디자인 바꾸기 → 대본 카드로
             </button>
           )}
-          <button onClick={() => setOpen(false)} className="w-full mt-2 h-11 rounded-xl text-sm font-bold bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300">닫기</button>
+          <button
+            onClick={() => { setOpen(false); onRegenerate(cutId, selectedDrama, userNote || undefined); }}
+            className="w-full mt-2 h-12 rounded-xl text-sm font-bold bg-comic-blue text-white hover:bg-comic-blue/90 transition-colors shadow-sm"
+          >
+            이 내용으로 다시 그리기 · 1패킷
+          </button>
+          <button onClick={() => setOpen(false)} className="w-full mt-1 h-11 rounded-xl text-sm font-bold bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300">닫기</button>
         </div>
       </div>
     ) : (
       // PC: fixed 팝오버
-      <div data-drama-menu className="fixed z-[60] w-40 bg-white dark:bg-night-card border border-border dark:border-night-border rounded-xl shadow-xl overflow-hidden"
+      <div data-drama-menu className="fixed z-[60] w-56 bg-white dark:bg-night-card border border-border dark:border-night-border rounded-xl shadow-xl overflow-hidden"
         style={{ left: pos?.left ?? 0, top: pos?.top ?? 0 }}
         onPointerDown={(e) => e.stopPropagation()}
       >
-        <p className="px-3 pt-2 pb-1 text-[10px] font-bold text-gray-400">연출 강도 재생성</p>
+        <div className="px-3 pt-2 pb-1">
+          <input type="text" value={userNote} onChange={e => setUserNote(e.target.value.slice(0, 200))}
+            placeholder="예: 수건 빼줘"
+            className="w-full px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-ink-black dark:text-white placeholder-gray-400 focus:outline-none focus:border-amber-400" />
+        </div>
         {hasProduct && (
           <div className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/10">
             📦 제품 참조 포함 <span className="text-amber-500/70 ml-auto">GPT 권장</span>
           </div>
         )}
-        {['light', 'normal', 'strong'].map((level) => {
-          const current = cutDrama || epDramaLevel;
-          return (
-            <button
-              key={level}
-              onClick={() => { setOpen(false); onRegenerate(cutId, level, userNote || undefined); }}
-              className="flex items-center justify-between w-full px-3 py-2 text-xs font-bold text-left hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
-            >
-              <span className="text-gray-700 dark:text-gray-200">{DRAMA_LABELS[level]}</span>
-              {current === level && <Check size={12} className="text-amber-500" />}
-            </button>
-          );
-        })}
+        <p className="px-3 pt-1 pb-0.5 text-[10px] font-bold text-gray-400">연출 강도</p>
+        {['light', 'normal', 'strong'].map((level) => (
+          <button
+            key={level}
+            onClick={() => setSelectedDrama(level)}
+            className={`flex items-center justify-between w-full px-3 py-1.5 text-xs font-bold text-left transition-colors ${
+              selectedDrama === level ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5'
+            }`}
+          >
+            <span>{DRAMA_LABELS[level]}</span>
+            {selectedDrama === level && <Check size={12} className="text-amber-500" />}
+          </button>
+        ))}
         {purpose === 'onecut_ad' && projectId && episodeId && (
           <button
             onClick={() => { setOpen(false); window.location.href = `/WEBTOON/projects/${projectId}/episodes/${episodeId}/workflow?gate=1`; }}
@@ -1967,6 +1983,14 @@ function RegenDropdown({ cutId, cutSpec, disabled, onRegenerate, epDramaLevel, h
             카피 디자인 바꾸기 →
           </button>
         )}
+        <div className="p-2 border-t border-border dark:border-night-border">
+          <button
+            onClick={() => { setOpen(false); onRegenerate(cutId, selectedDrama, userNote || undefined); }}
+            className="w-full h-8 rounded-lg text-xs font-bold bg-comic-blue text-white hover:bg-comic-blue/90 transition-colors"
+          >
+            이 내용으로 다시 그리기 · 1패킷
+          </button>
+        </div>
       </div>
     ),
     document.body

@@ -847,6 +847,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
           projectId={projectId}
           episodeId={episodeId}
           gateStatus={gateStatus}
+          scriptGenerating={adScriptGenerating}
           onBriefDone={async ({ selectedCopy, selectedScene, briefResult, productName: pName, productInfo: pInfo, productInfoWeb: pInfoWeb }) => {
             setAdScriptGenerating(true);
             try {
@@ -882,10 +883,17 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                   await api.post(`/projects/${projectId}/episodes/${episodeId}/script`, {});
                 } catch (e) {
                   console.warn('Auto script generation failed:', e.response?.data?.detail || e.message);
+                  alert('대본 생성에 실패했어요. 다시 시도해 주세요.');
                 }
               }
 
               onRefresh?.();
+              // 완료 후 스크롤 (대본 단계로)
+              if (purpose !== 'onecut_ad') {
+                setTimeout(() => {
+                  document.getElementById('gate-2-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 400);
+              }
             } catch (err) {
               console.error('onBriefDone error:', err.response?.data || err.message);
             } finally {

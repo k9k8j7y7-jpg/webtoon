@@ -143,9 +143,13 @@ export default function Gate2Script({ projectId, episodeId, onRefresh, readOnly 
     <div className="space-y-3">
       {script.scenes.map((scene, sceneIdx) => (
         <div key={scene.scene_id} className="glass-card p-5">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-bold font-serif text-ink-black dark:text-white">씬 {scene.scene_no}: {scene.summary}</h3>
-            <span className="text-xs font-bold bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-300 px-2 py-1 rounded">{scene.location}</span>
+          <div className="mb-3">
+            <h3 className="font-bold font-serif text-ink-black dark:text-white line-clamp-2">씬 {scene.scene_no}: {scene.summary}</h3>
+            {scene.location && (
+              <span className="inline-flex items-center gap-1 mt-1 text-xs font-bold bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-300 px-2 py-1 rounded">
+                📍 {(() => { const loc = script.locations?.find(l => l.ref_key === scene.location); const name = loc?.name || scene.location; return name.replace(/\s*\([\w_\s]+\)\s*$/, '').replace(/_/g, ' '); })()}
+              </span>
+            )}
           </div>
           <div className="space-y-2">
             {scene.cuts?.map((cut, cutIdx) => (

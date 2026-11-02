@@ -159,6 +159,17 @@ WEBTOON/
 - **정밀 합성 E(실사 사진 오버레이 마스킹)는 백로그** — 프롬프트 접근 한계 확인, 합성이 유일한 확실한 해법
 - 빠른 한 컷 제품 있을 때도 GPT 동일 적용. RegenDropdown "GPT 권장" 표시(수동 변경은 향후 C 모델 선택 구조에서)
 
+**광고 트랙 3차 규칙 (2026-11-02):**
+- **훅 카피 분기(instatoon_ad·brand_series만):** 1컷 = hook_copy(문제형 훅, 15자 이내, sub 없음), 마지막 컷 = head+sub. 대본 addon이 AI에 훅/CTA 구분 지시. 렌더: `_is_hook_cut` 플래그로 1컷은 dialogue headcopy 텍스트를 hook_copy로 사용, sub 생략. copy check에서 sub 빈 문자열이면 `_sub_ok=True` 강제(빈 sub 오판 방지). onecut_ad는 기존대로 head+sub 통째 렌더
+- **렌더 컷 말풍선 초기 위치:** 카피 렌더 컷(첫/마지막)의 dialogue 초기 y≥0.70(하단). `_apply_copy_cut_positions()` — `create_cuts_from_script(purpose=)` 파라미터로 전달. 카피 position 기본 top
+- **has_product 컷 손·팔 비전 검사(instatoon_ad·brand_series만):** `check_anatomy()` — Gemini flash 비전, hands/arms 개수 세기. hands>2 또는 arms>2 → `anatomy FAIL` → 자동 재시도 1회(같은 프롬프트·새 시드, 추가 패킷 차감 없음). 검사 실패(타임아웃)는 통과. `generation.anatomy_check`·`anatomy_retried` spec 기록. 프롬프트: `build_product_clause(anatomy_hint=True)` — "exactly two hands, one holding the product" 고정 문구. 대본 addon에도 "한 컷에 손 동작은 하나" 지시
+- **purpose별 모델 수 제한:** `_PURPOSE_MODEL_LIMIT = {brand_series:2, instatoon_ad:1, onecut_ad:1}`. `_check_model_limit()` — link·stub 엔드포인트에서 상한 초과 시 409. series `_auto_link_characters(max_chars=)` 파라미터
+- **재생성 시트:** 강도 3개 = 선택만(실행 안 됨), [이 내용으로 다시 그리기 · 1패킷] 주 버튼 하단, [닫기] 취소. PC 팝오버에도 메모 입력+주 버튼 구조 동일
+- **완성 단계 컷별 생성:** 빈 컷 카드에 [이 컷 생성 · 1패킷] 버튼, 상단 [남은 컷 전부 생성 · N패킷] 동적 문구. `GET .../pending-cuts` API (pending·total·packets_needed)
+- **[이대로 진행] 진행 표시:** `adScriptGenerating` → AdBriefForm `scriptGenerating` prop, 버튼 "대본 만드는 중 — 30초쯤" 스피너+비활성, 완료 후 gate-2 스크롤, 실패 시 alert
+- **시트 버튼 통일:** Gate3 캐릭터 3버튼 `h-12 w-full` (48px) flex-col
+- **JobProgress:** idle 시 비표시, 완료 후 3초 페이드아웃
+
 **교훈:** Gemini 2.5-flash의 image-to-image 스타일 변환은 불신뢰 (플랜 A: 프롬프트 강화 실패, 플랜 B: 참조 이미지 변환 실패 → 사진풍 유지). 플랜 C(비전 텍스트 추출→텍스트→이미지)로 해결 — 참조 이미지를 전달하지 않아 사진풍 오염 원천 차단. Pro 모델의 image-to-image는 1-5 모델 실험에서 재도전 가능.
 
 **이미지 모델 전환 (2026-09-11):** `gemini-2.5-flash-image` → `gemini-3.1-flash-image` 완료. 2.5는 2026-10-02 종료 예정이었음. `IMAGE_MODEL` 환경변수로 관리 — 롤백은 `.env` 한 줄 변경 + touch main.py. 신모델 특성: 9:16 비율을 실제 준수(2.5는 정사각 출력이었음 — 새 컷부터 세로 비율), JPEG 출력(PNG 대비 30~60% 작음), generate_content API 호환 확인됨, 참조 5장 통과. 이미지당 원가 $0.039→$0.067.

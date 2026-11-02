@@ -1416,11 +1416,11 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
           <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2 mb-3">
             <Users size={20} className="text-purple-500" /> 캐릭터 시트
           </h2>
-          <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2">
+          <div className="flex flex-col gap-2">
             <button
               onClick={generateCharacters}
               disabled={!!job || !hasStyle}
-              className="flex items-center justify-center gap-1.5 h-9 px-4 bg-purple-600 text-white rounded-full text-xs font-bold hover:bg-purple-700 hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50"
+              className="flex items-center justify-center gap-1.5 w-full h-12 px-4 bg-purple-600 text-white rounded-full text-xs font-bold hover:bg-purple-700 hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50"
             >
               {hasCharacters ? <><RefreshCw size={12} /> 재생성 (1인 2패킷)</> : '등장 캐릭터 자동 생성 (1인 2패킷)'}
             </button>
@@ -1428,7 +1428,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
               <button
                 onClick={() => setShowRealPicker((v) => !v)}
                 disabled={!!job || scriptChars.length === 0}
-                className="flex items-center gap-1.5 h-9 px-4 text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-full transition-colors disabled:opacity-50"
+                className="flex items-center justify-center gap-1.5 w-full h-12 px-4 text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-full transition-colors disabled:opacity-50"
               >
                 <Camera size={12} /> 실사 캐릭터 추가 (사진·패킷 0)
               </button>
@@ -1455,7 +1455,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
             <button
               onClick={openPicker}
               disabled={!!job}
-              className="flex items-center justify-center gap-1.5 h-9 px-4 text-xs font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 hover:bg-purple-100 dark:hover:bg-purple-900/40 rounded-full transition-colors disabled:opacity-50"
+              className="flex items-center justify-center gap-1.5 w-full h-12 px-4 text-xs font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 hover:bg-purple-100 dark:hover:bg-purple-900/40 rounded-full transition-colors disabled:opacity-50"
             >
               <Link size={12} /> 캐릭터 불러오기
             </button>
