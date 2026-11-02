@@ -234,13 +234,27 @@ export default function ProjectPage() {
 
       <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
         <h1 className="text-2xl font-bold font-serif text-ink-black dark:text-white">{project.title}</h1>
-        <button
-          onClick={() => setShowPurposeModal(true)}
-          disabled={creating}
-          className="neon-btn flex items-center gap-1.5 !px-4 !py-2 !rounded-full text-sm disabled:opacity-50"
-        >
-          <Plus size={16} /> 새 에피소드
-        </button>
+        {episodes.length > 0 && episodes[0]?.gate_status?.purpose === 'brand_series' ? (
+          <button
+            onClick={() => {
+              setAdTitlePurpose('brand_series');
+              setAdTitle(`${episodes.length + 1}화`);
+              setShowAdTitleModal(true);
+            }}
+            disabled={creating}
+            className="neon-btn flex items-center gap-1.5 !px-4 !py-2 !rounded-full text-sm disabled:opacity-50"
+          >
+            <Plus size={16} /> 새 화
+          </button>
+        ) : (
+          <button
+            onClick={() => setShowPurposeModal(true)}
+            disabled={creating}
+            className="neon-btn flex items-center gap-1.5 !px-4 !py-2 !rounded-full text-sm disabled:opacity-50"
+          >
+            <Plus size={16} /> 새 에피소드
+          </button>
+        )}
       </div>
 
       {!hasContent ? (
@@ -353,7 +367,11 @@ export default function ProjectPage() {
                   {ep.gate_status?.is_ad && (
                     <span className="shrink-0 px-2 py-0.5 text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 rounded-full">광고</span>
                   )}
-                  <h3 className="font-bold font-serif text-ink-black dark:text-white group-hover:text-comic-orange transition-colors">{ep.title || `에피소드 ${ep.episode_no}`}</h3>
+                  <h3 className="font-bold font-serif text-ink-black dark:text-white group-hover:text-comic-orange transition-colors">
+                    {ep.gate_status?.purpose === 'brand_series'
+                      ? `${ep.episode_no}화`
+                      : (ep.title || `에피소드 ${ep.episode_no}`)}
+                  </h3>
                 </div>
                 {isEpisodeCompleted(ep.gate_status) ? (
                   <p className="text-sm font-bold text-green-500 mt-0.5 flex items-center gap-1">
@@ -390,7 +408,7 @@ export default function ProjectPage() {
               {[
                 { purpose: 'onecut_ad', icon: '📸', title: '한 컷 광고', desc: '제품·가게 홍보 한 장', color: 'border-amber-400 dark:border-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20' },
                 { purpose: 'instatoon_ad', icon: '📱', title: '인스타툰 광고', desc: '4~8컷 캐러셀 + 릴스', color: 'border-purple-400 dark:border-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20' },
-                { purpose: 'brand_series', icon: '📚', title: '브랜드 연재툰', desc: '매주 이어지는 이야기', color: 'border-blue-400 dark:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20' },
+                { purpose: 'brand_series', icon: '📚', title: '브랜드 연재툰', desc: '같은 제품으로 매주 한 편 — 1화 만들면 2화부턴 제품 정보는 그대로, 이번 화 소재만', color: 'border-blue-400 dark:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20' },
               ].map(c => (
                 <button
                   key={c.purpose}

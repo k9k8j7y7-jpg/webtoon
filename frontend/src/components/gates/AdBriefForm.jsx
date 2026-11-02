@@ -65,6 +65,12 @@ export default function AdBriefForm({ projectId, episodeId, gateStatus, onBriefD
   const [enrichApplied, setEnrichApplied] = useState(false); // 반영 후 접힘
   const [enrichExpanded, setEnrichExpanded] = useState(false); // 접힌 후 다시 펼침
 
+  // brand_series: 이번 화 소재
+  const purpose = gateStatus?.purpose || 'story';
+  const [episodeTopic, setEpisodeTopic] = useState('');
+  const isPrefilled = gateStatus?.idea_brief?.prefilled_from === 'project';
+  const [savedDefaults, setSavedDefaults] = useState(false);
+
   // placeholder 로테이션
   const [phIdx, setPhIdx] = useState(0);
   useEffect(() => {
@@ -88,6 +94,7 @@ export default function AdBriefForm({ projectId, episodeId, gateStatus, onBriefD
       }
       if (ib.product_name) setProductName(ib.product_name);
       if (ib.product_info) setProductInfo(ib.product_info);
+      if (ib.episode_topic) setEpisodeTopic(ib.episode_topic);
       if (ib.copy_candidates?.length) {
         setBriefResult({
           key_message: ib.ad_brief_result?.key_message || '',
@@ -179,7 +186,16 @@ export default function AdBriefForm({ projectId, episodeId, gateStatus, onBriefD
       productName: productName.trim(),
       productInfo: productInfo.trim(),
       productInfoWeb: enrichResult && !enrichResult.error ? [enrichResult.features, enrichResult.ingredients, enrichResult.usage].filter(Boolean).join('\n') : '',
+      episodeTopic: episodeTopic.trim(),
     });
+  };
+
+  const handleSaveDefaults = async () => {
+    try {
+      await api.post(`/projects/${projectId}/series-defaults`, { episode_id: episodeId });
+      setSavedDefaults(true);
+      setTimeout(() => setSavedDefaults(false), 3000);
+    } catch { /* ignore */ }
   };
 
   return (
@@ -189,6 +205,23 @@ export default function AdBriefForm({ projectId, episodeId, gateStatus, onBriefD
         <h3 className="text-base font-bold font-serif text-ink-black dark:text-white flex items-center gap-2">
           <Sparkles size={18} className="text-amber-500" /> 광고 브리프
         </h3>
+
+        {/* brand_series 프리필 안내 */}
+        {purpose === 'brand_series' && isPrefilled && (
+          <div className="px-3 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-xl text-xs font-bold text-blue-600 dark:text-blue-400">
+            시리즈 기본값에서 불러왔어요 · 이번 화 소재를 적어주세요
+          </div>
+        )}
+
+        {/* brand_series 이번 화 소재 */}
+        {purpose === 'brand_series' && (
+          <div>
+            <label className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5 block">이번 화 소재</label>
+            <input type="text" value={episodeTopic} onChange={e => setEpisodeTopic(e.target.value)}
+              placeholder="예: 겨울 건조 편 · 비워두면 AI가 골라요"
+              className="w-full px-3 py-2.5 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-ink-black dark:text-white placeholder-gray-400 focus:outline-none focus:border-amber-400" />
+          </div>
+        )}
 
         {/* 목적 칩 */}
         <div>
@@ -433,6 +466,15 @@ export default function AdBriefForm({ projectId, episodeId, gateStatus, onBriefD
               <><Check size={14} /> {(gateStatus?.current_gate || 1) >= 2 ? '이 카피로 대본 다시 만들기' : '이대로 진행'}</>
             )}
           </button>
+
+          {/* brand_series: 시리즈 기본값으로 저장 */}
+          {purpose === 'brand_series' && (
+            <button onClick={handleSaveDefaults}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-700 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+            >
+              {savedDefaults ? '✓ 저장했어요 · 다음 화부터 자동으로 채워져요' : '시리즈 기본값으로 저장'}
+            </button>
+          )}
         </div>
       )}
     </div>

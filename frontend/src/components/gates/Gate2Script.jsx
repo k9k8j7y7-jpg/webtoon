@@ -209,6 +209,32 @@ export default function Gate2Script({ projectId, episodeId, onRefresh, readOnly 
             대본
           </h2>
         )}
+        {/* brand_series 컷 수 칩 6·8·10 */}
+        {purpose === 'brand_series' && (
+          <div className="mb-4 flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-bold text-gray-500 dark:text-gray-400">컷 수</span>
+            {[6, 8, 10].map(n => {
+              const current = gateStatus?.target_cuts || 6;
+              return (
+                <button key={n}
+                  onClick={async () => {
+                    try {
+                      await api.put(`/projects/${projectId}/episodes/${episodeId}/idea-brief/selection`, { target_cuts: n });
+                      onRefresh?.();
+                    } catch {}
+                  }}
+                  disabled={generating}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
+                    current === n
+                      ? 'bg-comic-blue text-white'
+                      : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+                  } disabled:opacity-50`}
+                >{n}컷</button>
+              );
+            })}
+          </div>
+        )}
+
         {isAdScript && script?.scenes && (
           <div className="mb-4">
             <div className="flex items-center justify-between flex-wrap gap-2">
