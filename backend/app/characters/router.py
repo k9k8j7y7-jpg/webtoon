@@ -24,6 +24,34 @@ from app.story.service import _is_animal_character
 
 router = APIRouter(tags=["gate3-characters"])
 
+# --- 광고 에피소드 모델 수 제한 ---
+_PURPOSE_MODEL_LIMIT = {"brand_series": 2, "instatoon_ad": 1, "onecut_ad": 1}
+
+
+def _check_model_limit(db: Session, episode: "Episode") -> None:
+    """광고 에피소드의 모델(캐릭터) 수 상한을 넘으면 409."""
+    gs = episode.gate_status if isinstance(episode.gate_status, dict) else (json.loads(episode.gate_status) if episode.gate_status else {})
+    purpose = gs.get("purpose")
+    limit = _PURPOSE_MODEL_LIMIT.get(purpose)
+    if limit is None:
+        return
+    current = (
+        db.query(sa_func.count(EpisodeCharacter.character_id))
+        .filter(EpisodeCharacter.episode_id == episode.id)
+        .scalar()
+    )
+    if current >= limit:
+        raise HTTPException(
+            status_code=409,
+            detail=f"이 에피소드에는 모델(캐릭터)을 최대 {limit}명까지 연결할 수 있습니다 (현재 {current}명)",
+        )
+
+
+def _get_model_limit(db: Session, episode: "Episode") -> int | None:
+    """광고 에피소드의 모델 상한 반환, 비광고면 None."""
+    gs = episode.gate_status if isinstance(episode.gate_status, dict) else (json.loads(episode.gate_status) if episode.gate_status else {})
+    return _PURPOSE_MODEL_LIMIT.get(gs.get("purpose"))
+
 
 @router.post("/projects/{project_id}/episodes/{episode_id}/characters", status_code=202)
 async def create_characters(
@@ -241,6 +269,9 @@ async def create_character_stub(
         .first()
     )
     if not character:
+        # 광고 에피소드 모델 수 제한
+        _check_model_limit(db, episode)
+
         # 이전 unlink로 EC 없이 남은 고아 레코드 재활용
         character = (
             db.query(Character)
@@ -684,6 +715,9 @@ async def link_character(
     )
     if existing:
         return {"linked": True, "character_id": body.character_id, "already_linked": True}
+
+    # 광고 에피소드 모델 수 제한
+    _check_model_limit(db, episode)
 
     # ref_key 결정: override_ref_key 또는 자동 매핑
     effective_ref_key = body.override_ref_key

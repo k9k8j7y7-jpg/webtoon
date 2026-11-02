@@ -951,6 +951,7 @@ def _auto_link_characters(
     source_episode_id: int,
     target_episode_id: int,
     project_id: int,
+    max_chars: int | None = None,
 ) -> dict:
     """직전 에피소드 캐릭터를 현재 에피소드에 자동 연결.
 
@@ -1000,6 +1001,21 @@ def _auto_link_characters(
         if conflict:
             skipped.append({"ref_key": char.ref_key, "name": char.name, "reason": "ref_key 충돌"})
             continue
+
+        # 모델 수 상한 검사
+        if max_chars is not None:
+            from sqlalchemy import func as _func
+            current_count = len([x for x in linked if x["status"] == "newly_linked"]) + len(
+                [x for x in linked if x.get("status") == "already_linked"]
+            )
+            existing_count = (
+                db.query(_func.count(EpisodeCharacter.character_id))
+                .filter(EpisodeCharacter.episode_id == target_episode_id)
+                .scalar()
+            )
+            if existing_count + current_count >= max_chars:
+                skipped.append({"ref_key": char.ref_key, "name": char.name, "reason": f"모델 최대 {max_chars}명"})
+                continue
 
         # 연결 생성
         ec = EpisodeCharacter(episode_id=target_episode_id, character_id=char.id)
