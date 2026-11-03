@@ -292,10 +292,13 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
 
   const { loading: initialLoading, error: loadError, retry: retryLoad } = useGateLoad(loadAllData);
 
-  // 게이트4 승인 후 자동 이미지 생성
+  // 게이트4 승인 후 자동 이미지 생성 (story 트랙만 — 광고는 gate3→4→5 자동 전환이라 사용자 의도 없이 시작됨)
   const autoTriggered = useRef(false);
+  const purpose = gateStatus?.purpose;
   useEffect(() => {
     if (cuts.length > 0 && !autoTriggered.current && !job) {
+      // 광고 3종은 자동 생성 안 함 — 사용자가 직접 [생성] 버튼 누르도록
+      if (['onecut_ad', 'instatoon_ad', 'brand_series'].includes(purpose)) return;
       const hasAnyImage = cuts.some(c => c.image_url);
       if (!hasAnyImage) {
         autoTriggered.current = true;
@@ -1902,9 +1905,9 @@ function RegenDropdown({ cutId, cutSpec, disabled, onRegenerate, epDramaLevel, h
       <div data-drama-menu className="fixed inset-0 z-[60] flex items-end justify-center bg-black/50" onPointerDown={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
         <div className="w-full max-w-md bg-white dark:bg-night-card rounded-t-2xl shadow-2xl p-4 pb-6 space-y-1" onPointerDown={(e) => e.stopPropagation()}>
           <div className="px-1 mb-3">
-            <p className="text-[11px] font-bold text-gray-400 mb-1">이렇게 고쳐서 다시 (선택)</p>
+            <p className="text-[11px] font-bold text-gray-400 mb-1">메모 (선택)</p>
             <input type="text" value={userNote} onChange={e => setUserNote(e.target.value.slice(0, 200))}
-              placeholder="예: 머리에 쓴 수건 빼줘"
+              placeholder="예: 정면을 보게, 티셔츠는 흰색으로"
               className="w-full px-3 py-2 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-ink-black dark:text-white placeholder-gray-400 focus:outline-none focus:border-amber-400" />
           </div>
           {hasProduct && (
@@ -1929,12 +1932,12 @@ function RegenDropdown({ cutId, cutSpec, disabled, onRegenerate, epDramaLevel, h
               {selectedDrama === level && <Check size={14} className="text-amber-500 shrink-0" />}
             </button>
           ))}
-          {purpose === 'onecut_ad' && projectId && episodeId && (
+          {['onecut_ad', 'instatoon_ad', 'brand_series'].includes(purpose) && projectId && episodeId && (
             <button
-              onClick={() => { setOpen(false); window.location.hash = ''; window.location.href = `/WEBTOON/projects/${projectId}/episodes/${episodeId}/workflow?gate=1`; }}
+              onClick={() => { setOpen(false); window.location.hash = ''; window.location.href = `/WEBTOON/projects/${projectId}/episodes/${episodeId}/workflow?gate=${purpose === 'onecut_ad' ? 1 : 2}`; }}
               className="flex items-center gap-1 w-full px-4 py-2.5 mt-1 rounded-xl text-xs font-bold text-indigo-500 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
             >
-              카피 디자인 바꾸기 → 대본 카드로
+              카피 디자인 바꾸기 →
             </button>
           )}
           <button
@@ -1954,7 +1957,7 @@ function RegenDropdown({ cutId, cutSpec, disabled, onRegenerate, epDramaLevel, h
       >
         <div className="px-3 pt-2 pb-1">
           <input type="text" value={userNote} onChange={e => setUserNote(e.target.value.slice(0, 200))}
-            placeholder="예: 수건 빼줘"
+            placeholder="예: 정면을 보게"
             className="w-full px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-ink-black dark:text-white placeholder-gray-400 focus:outline-none focus:border-amber-400" />
         </div>
         {hasProduct && (
@@ -1975,9 +1978,9 @@ function RegenDropdown({ cutId, cutSpec, disabled, onRegenerate, epDramaLevel, h
             {selectedDrama === level && <Check size={12} className="text-amber-500" />}
           </button>
         ))}
-        {purpose === 'onecut_ad' && projectId && episodeId && (
+        {['onecut_ad', 'instatoon_ad', 'brand_series'].includes(purpose) && projectId && episodeId && (
           <button
-            onClick={() => { setOpen(false); window.location.href = `/WEBTOON/projects/${projectId}/episodes/${episodeId}/workflow?gate=1`; }}
+            onClick={() => { setOpen(false); window.location.href = `/WEBTOON/projects/${projectId}/episodes/${episodeId}/workflow?gate=${purpose === 'onecut_ad' ? 1 : 2}`; }}
             className="w-full px-3 py-2 text-[10px] font-bold text-left text-indigo-500 dark:text-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition-colors border-t border-border dark:border-night-border"
           >
             카피 디자인 바꾸기 →
@@ -1998,24 +2001,15 @@ function RegenDropdown({ cutId, cutSpec, disabled, onRegenerate, epDramaLevel, h
 
   return (
     <div className="relative">
-      <div className="flex">
-        <button
-          onClick={(e) => { e.stopPropagation(); onRegenerate(cutId, undefined, userNote || undefined); }}
-          disabled={disabled}
-          title="재생성 (1패킷)"
-          className="flex items-center gap-0.5 h-8 px-2 py-1 bg-comic-blue/10 text-comic-blue rounded-l-full font-bold shadow-sm hover:bg-comic-blue/20 text-[10px] disabled:opacity-50 transition-colors"
-        >
-          <RefreshCw size={11} /> <span className="hidden min-[400px]:inline">재생성</span>
-        </button>
-        <button
-          ref={btnRef}
-          onClick={handleOpen}
-          disabled={disabled}
-          className="flex items-center h-8 px-1.5 bg-comic-blue/10 text-comic-blue rounded-r-full font-bold shadow-sm hover:bg-comic-blue/20 text-[10px] disabled:opacity-50 transition-colors border-l border-comic-blue/20"
-        >
-          <ChevronDown size={11} />
-        </button>
-      </div>
+      <button
+        ref={btnRef}
+        onClick={handleOpen}
+        disabled={disabled}
+        title="다시 그리기 (1패킷)"
+        className="flex items-center gap-0.5 h-8 px-2.5 py-1 bg-comic-blue/10 text-comic-blue rounded-full font-bold shadow-sm hover:bg-comic-blue/20 text-[10px] disabled:opacity-50 transition-colors"
+      >
+        <RefreshCw size={11} /> <span className="hidden min-[400px]:inline">다시 그리기</span>
+      </button>
       {menu}
     </div>
   );

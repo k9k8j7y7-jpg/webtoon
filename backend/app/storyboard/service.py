@@ -243,12 +243,14 @@ def create_cuts_from_script(
     _total_cuts = sum(len(s.get("cuts", [])) for s in script_data.get("scenes", []))
     _is_copy_render_purpose = purpose in ("instatoon_ad", "brand_series")
 
-    # 장소 ref_key → 한글 이름 매핑 (대본 locations 배열에서 추출)
+    # 장소 ref_key → 한글 이름·설명 매핑 (대본 locations 배열에서 추출)
     _loc_names = {}
+    _loc_descs = {}
     for loc in script_data.get("locations", []):
         rk = loc.get("ref_key", "")
         if rk:
             _loc_names[rk] = loc.get("name", rk)
+            _loc_descs[rk] = loc.get("description", "")
 
     for scene in script_data.get("scenes", []):
         scene_id = scene.get("scene_id", "s00")
@@ -265,6 +267,9 @@ def create_cuts_from_script(
             _loc_id = cut_data.get("location_id")
             _loc_name = _loc_names.get(_loc_id, _loc_id) if _loc_id else None
 
+            # 장소 설명 (대본 locations 배열에서 추출)
+            _loc_hint = _loc_descs.get(_loc_id, "") if _loc_id else ""
+
             # Cut Spec JSON 조립
             spec = {
                 "cut_id": cut_id,
@@ -273,6 +278,7 @@ def create_cuts_from_script(
                 "characters": cut_data.get("characters", []),
                 "location_id": _loc_id,
                 "location_name": _loc_name,
+                "location_hint": _loc_hint or None,
                 "shot": cut_data.get("shot", "full"),
                 "action": cut_data.get("action", ""),
                 "dialogue": _apply_copy_cut_positions(

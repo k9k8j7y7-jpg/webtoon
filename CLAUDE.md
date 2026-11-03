@@ -164,11 +164,18 @@ WEBTOON/
 - **렌더 컷 말풍선 초기 위치:** 카피 렌더 컷(첫/마지막)의 dialogue 초기 y≥0.70(하단). `_apply_copy_cut_positions()` — `create_cuts_from_script(purpose=)` 파라미터로 전달. 카피 position 기본 top
 - **has_product 컷 손·팔 비전 검사(instatoon_ad·brand_series만):** `check_anatomy()` — Gemini flash 비전, hands/arms 개수 세기. hands>2 또는 arms>2 → `anatomy FAIL` → 자동 재시도 1회(같은 프롬프트·새 시드, 추가 패킷 차감 없음). 검사 실패(타임아웃)는 통과. `generation.anatomy_check`·`anatomy_retried` spec 기록. 프롬프트: `build_product_clause(anatomy_hint=True)` — "exactly two hands, one holding the product" 고정 문구. 대본 addon에도 "한 컷에 손 동작은 하나" 지시
 - **purpose별 모델 수 제한:** `_PURPOSE_MODEL_LIMIT = {brand_series:2, instatoon_ad:1, onecut_ad:1}`. `_check_model_limit()` — link·stub 엔드포인트에서 상한 초과 시 409. series `_auto_link_characters(max_chars=)` 파라미터
-- **재생성 시트:** 강도 3개 = 선택만(실행 안 됨), [이 내용으로 다시 그리기 · 1패킷] 주 버튼 하단, [닫기] 취소. PC 팝오버에도 메모 입력+주 버튼 구조 동일
 - **완성 단계 컷별 생성:** 빈 컷 카드에 [이 컷 생성 · 1패킷] 버튼, 상단 [남은 컷 전부 생성 · N패킷] 동적 문구. `GET .../pending-cuts` API (pending·total·packets_needed)
 - **[이대로 진행] 진행 표시:** `adScriptGenerating` → AdBriefForm `scriptGenerating` prop, 버튼 "대본 만드는 중 — 30초쯤" 스피너+비활성, 완료 후 gate-2 스크롤, 실패 시 alert
 - **시트 버튼 통일:** Gate3 캐릭터 3버튼 `h-12 w-full` (48px) flex-col
 - **JobProgress:** idle 시 비표시, 완료 후 3초 페이드아웃
+
+**광고 트랙 4차 규칙 (2026-11-03):**
+- **광고 3종 완성 화면 자동 생성 없음:** Gate5 useEffect `handleGenerateAll` 자동 호출을 `onecut_ad`·`instatoon_ad`·`brand_series`에서 제거. 광고는 gate3→4→5 자동 전환이라 사용자 의도 없이 과금됨. **story 트랙만 자동 생성 유지**(gate4 수동 승인 후 gate5 자동 시작)
+- **[다시 그리기] 단일 진입:** [재생성]+▾ 분리 버튼 제거 → 단일 **[다시 그리기]** 버튼, 항상 시트(바텀시트/PC 팝오버) 열림. 시트 = 메모(선택, placeholder "예: 정면을 보게, 티셔츠는 흰색으로") + 연출 강도 + 제품 참조 + [이 내용으로 다시 그리기 · 1패킷] 인라인 확인 + [닫기]. ↻ 되돌리기는 그대로
+- **카피 디자인 3트랙 공통:** onecut_ad(Gate1) + instatoon_ad·brand_series(Gate2) 모두 카피 디자인 줄(글씨체 손글씨/굵은 고딕/깔끔한 고딕, 위치 자동/상단/하단, 강조 단어). `copy_design` 저장은 동일(`idea_brief.copy_design`). RegenDropdown "카피 디자인 바꾸기 →" 3종 공통(onecut→gate1, instatoon·brand→gate2)
+- **컷 수 칩 문구:** 인스타툰 4컷 "짧고 강하게" / 6컷 "장점·쓰는 법까지" / 8컷 "차근차근 자세히". 연재툰 6컷 "한 편 기본" / 8컷 "여유 있게" / 10컷 "길게"
+- **장소 칩 외 N곳:** 광고 트랙 대본 카드 장소 칩 "📍 X 외 N곳"(고유 location_id 2종 이상일 때). 대본 카드 1컷에 로즈색 "훅" 라벨, 마지막 컷에 인디고색 "카피" 라벨
+- **location_hint:** `create_cuts_from_script`에서 `locations[].description`을 cut spec `location_hint` 필드로 저장(프롬프트 변경 없음, DB 마이그레이션 없음)
 
 **교훈:** Gemini 2.5-flash의 image-to-image 스타일 변환은 불신뢰 (플랜 A: 프롬프트 강화 실패, 플랜 B: 참조 이미지 변환 실패 → 사진풍 유지). 플랜 C(비전 텍스트 추출→텍스트→이미지)로 해결 — 참조 이미지를 전달하지 않아 사진풍 오염 원천 차단. Pro 모델의 image-to-image는 1-5 모델 실험에서 재도전 가능.
 

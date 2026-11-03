@@ -27,6 +27,9 @@ export default function Gate2Script({ projectId, episodeId, onRefresh, readOnly 
   const purpose = gateStatus?.purpose || 'story';
   const isAdScript = ['instatoon_ad', 'brand_series'].includes(purpose);
 
+  // 카피 디자인 (instatoon_ad·brand_series — 1컷 훅+마지막 컷 카피에 적용)
+  const [copyDesign, setCopyDesign] = useState(() => gateStatus?.idea_brief?.copy_design || { font: 'handwritten', position: 'auto', emphasis: null });
+
   const loadScript = async () => {
     const { data } = await api.get(`/projects/${projectId}/episodes/${episodeId}/script`);
     if (data) setScript(data);
@@ -139,6 +142,27 @@ export default function Gate2Script({ projectId, episodeId, onRefresh, readOnly 
 
   // ── 렌더링 ──────────────────────────────────────────
 
+  // 광고 트랙: 총 컷 수 계산 (훅/카피 라벨 판정용)
+  const _totalCuts = script?.scenes?.reduce((n, s) => n + (s.cuts?.length || 0), 0) || 0;
+  const _isCopyPurpose = ['instatoon_ad', 'brand_series'].includes(purpose);
+
+  // 광고 트랙: 장소 칩 — 고유 장소 수 계산
+  const _uniqueLocNames = (() => {
+    if (!_isCopyPurpose || !script?.scenes) return [];
+    const names = [];
+    const seen = new Set();
+    for (const s of script.scenes) {
+      for (const c of (s.cuts || [])) {
+        const locId = c.location_id || s.location;
+        if (!locId || seen.has(locId)) continue;
+        seen.add(locId);
+        const loc = script.locations?.find(l => l.ref_key === locId);
+        names.push(loc?.name || locId.replace(/_/g, ' '));
+      }
+    }
+    return names;
+  })();
+
   const renderScenes = (editEnabled = false) => (
     <div className="space-y-3">
       {script.scenes.map((scene, sceneIdx) => (
@@ -147,17 +171,33 @@ export default function Gate2Script({ projectId, episodeId, onRefresh, readOnly 
             <h3 className="font-bold font-serif text-ink-black dark:text-white line-clamp-2">씬 {scene.scene_no}: {scene.summary}</h3>
             {scene.location && (
               <span className="inline-flex items-center gap-1 mt-1 text-xs font-bold bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-300 px-2 py-1 rounded">
-                📍 {(() => { const loc = script.locations?.find(l => l.ref_key === scene.location); const name = loc?.name || scene.location; return name.replace(/\s*\([\w_\s]+\)\s*$/, '').replace(/_/g, ' '); })()}
+                📍 {(() => {
+                  // 광고 트랙: "X 외 N곳" 표시
+                  if (_isCopyPurpose && _uniqueLocNames.length > 0) {
+                    const first = _uniqueLocNames[0].replace(/\s*\([\w_\s]+\)\s*$/, '');
+                    return _uniqueLocNames.length > 1 ? `${first} 외 ${_uniqueLocNames.length - 1}곳` : first;
+                  }
+                  const loc = script.locations?.find(l => l.ref_key === scene.location);
+                  const name = loc?.name || scene.location;
+                  return name.replace(/\s*\([\w_\s]+\)\s*$/, '').replace(/_/g, ' ');
+                })()}
               </span>
             )}
           </div>
           <div className="space-y-2">
-            {scene.cuts?.map((cut, cutIdx) => (
+            {scene.cuts?.map((cut, cutIdx) => {
+              // 광고 트랙 훅/카피 라벨 판정
+              const _globalCutNum = script.scenes.slice(0, sceneIdx).reduce((n, s) => n + (s.cuts?.length || 0), 0) + cutIdx + 1;
+              const _isHookCut = _isCopyPurpose && _globalCutNum === 1;
+              const _isCopyCut = _isCopyPurpose && _globalCutNum === _totalCuts && _totalCuts > 1;
+              return (
               <div key={cut.cut_number} className="border-l-2 border-comic-blue/30 pl-3 py-2">
                 <div className="flex items-center gap-2 text-xs font-bold text-gray-500 dark:text-gray-400">
                   <span className="bg-comic-blue/10 text-comic-blue px-1.5 py-0.5 rounded font-bold">
                     컷 {cut.cut_number}
                   </span>
+                  {_isHookCut && <span className="bg-rose-500 text-white px-1.5 py-0.5 rounded text-[10px]">훅</span>}
+                  {_isCopyCut && <span className="bg-indigo-500 text-white px-1.5 py-0.5 rounded text-[10px]">카피</span>}
                   <span>{SHOT_LABELS[cut.shot] || cut.shot}</span>
                   <span>·</span>
                   <span>{cut.characters?.map(c => typeof c === 'string' ? c : c.character_id).join(', ')}</span>
@@ -180,10 +220,84 @@ export default function Gate2Script({ projectId, episodeId, onRefresh, readOnly 
                   </p>
                 ))}
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       ))}
+
+      {/* 카피 디자인 (instatoon_ad·brand_series) */}
+      {isAdScript && script && !readOnly && (() => {
+        const FONTS = [
+          { key: 'handwritten', label: '손글씨' },
+          { key: 'bold_gothic', label: '굵은 고딕' },
+          { key: 'clean_gothic', label: '깔끔한 고딕' },
+        ];
+        const POSITIONS = [
+          { key: 'auto', label: '자동' },
+          { key: 'top', label: '상단' },
+          { key: 'bottom', label: '하단' },
+        ];
+        // 마지막 컷의 헤드카피 텍스트에서 강조 단어 추출
+        const lastScene = script.scenes?.[script.scenes.length - 1];
+        const lastCut = lastScene?.cuts?.[lastScene.cuts.length - 1];
+        const headDialogue = lastCut?.dialogue?.find(d => d.bubble_style === 'headcopy') || lastCut?.dialogue?.find(d => d.type === 'speech');
+        const headWords = headDialogue?.text ? headDialogue.text.split(/\s+/).filter(Boolean) : [];
+        const saveCopyDesign = (next) => {
+          setCopyDesign(next);
+          api.put(`/projects/${projectId}/episodes/${episodeId}/idea-brief/selection`, {
+            ...(gateStatus?.idea_brief || {}),
+            copy_design: next,
+          }).catch(() => {});
+        };
+        return (
+          <div className="bg-zinc-50 dark:bg-zinc-800/50 rounded-lg px-3 py-3 space-y-2.5">
+            <p className="text-xs font-bold text-zinc-500 dark:text-zinc-400">카피 디자인</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-zinc-400 dark:text-zinc-500 shrink-0">글씨체</span>
+              {FONTS.map(f => (
+                <button key={f.key}
+                  onClick={() => saveCopyDesign({ ...copyDesign, font: f.key })}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
+                    copyDesign.font === f.key
+                      ? 'bg-amber-500 text-white'
+                      : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-300 dark:hover:bg-zinc-600'
+                  }`}
+                >{f.label}</button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-zinc-400 dark:text-zinc-500 shrink-0">위치</span>
+              {POSITIONS.map(p => (
+                <button key={p.key}
+                  onClick={() => saveCopyDesign({ ...copyDesign, position: p.key })}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
+                    copyDesign.position === p.key
+                      ? 'bg-purple-500 text-white'
+                      : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-300 dark:hover:bg-zinc-600'
+                  }`}
+                >{p.label}</button>
+              ))}
+            </div>
+            {headWords.length > 0 && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-zinc-400 dark:text-zinc-500 shrink-0">강조</span>
+                {headWords.map(w => (
+                  <button key={w}
+                    onClick={() => saveCopyDesign({ ...copyDesign, emphasis: copyDesign.emphasis === w ? null : w })}
+                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
+                      copyDesign.emphasis === w
+                        ? 'bg-rose-500 text-white'
+                        : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-300 dark:hover:bg-zinc-600'
+                    }`}
+                  >{w}</button>
+                ))}
+                <span className="text-[10px] text-zinc-400 dark:text-zinc-500">비워두면 AI가 골라요</span>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {!readOnly && (!isInvalidated || regenerated) && (
         <button
@@ -213,23 +327,27 @@ export default function Gate2Script({ projectId, episodeId, onRefresh, readOnly 
         {purpose === 'brand_series' && (
           <div className="mb-4 flex items-center gap-2 flex-wrap">
             <span className="text-xs font-bold text-gray-500 dark:text-gray-400">컷 수</span>
-            {[6, 8, 10].map(n => {
+            {[
+              { value: 6, label: '6컷', desc: '한 편 기본' },
+              { value: 8, label: '8컷', desc: '여유 있게' },
+              { value: 10, label: '10컷', desc: '길게' },
+            ].map(f => {
               const current = gateStatus?.target_cuts || 6;
               return (
-                <button key={n}
+                <button key={f.value}
                   onClick={async () => {
                     try {
-                      await api.put(`/projects/${projectId}/episodes/${episodeId}/idea-brief/selection`, { target_cuts: n });
+                      await api.put(`/projects/${projectId}/episodes/${episodeId}/idea-brief/selection`, { target_cuts: f.value });
                       onRefresh?.();
                     } catch {}
                   }}
                   disabled={generating}
                   className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
-                    current === n
+                    current === f.value
                       ? 'bg-comic-blue text-white'
                       : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
                   } disabled:opacity-50`}
-                >{n}컷</button>
+                >{f.label} <span className="text-[10px] font-normal opacity-70">{f.desc}</span></button>
               );
             })}
           </div>

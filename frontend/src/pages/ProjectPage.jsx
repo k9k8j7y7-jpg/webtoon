@@ -465,9 +465,9 @@ export default function ProjectPage() {
                   <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1.5">몇 컷으로 만들까요?</label>
                   <div className="flex gap-2">
                     {[
-                      { value: 4, label: '4컷', desc: '훅·문제·해결·CTA' },
-                      { value: 6, label: '6컷', desc: '+포인트·사용법' },
-                      { value: 8, label: '8컷', desc: '자세히' },
+                      { value: 4, label: '4컷', desc: '짧고 강하게' },
+                      { value: 6, label: '6컷', desc: '장점·쓰는 법까지' },
+                      { value: 8, label: '8컷', desc: '차근차근 자세히' },
                     ].map(f => (
                       <button key={f.value} onClick={() => setAdCutCount(f.value)}
                         className={`flex-1 py-2.5 px-3 rounded-xl border-2 text-sm font-bold transition-colors ${adCutCount === f.value
