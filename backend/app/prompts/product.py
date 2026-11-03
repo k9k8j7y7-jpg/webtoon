@@ -61,3 +61,19 @@ def build_product_clause(product, anatomy_hint: bool = False) -> str:
         )
 
     return " ".join(parts)
+
+
+def build_product_exclusion_clause(product) -> str:
+    """제품이 등장하지 않는 컷용 — 가짜 포장/라벨 금지 문장.
+
+    광고(instatoon_ad·brand_series)에서 제품이 등록돼 있지만 이 컷에
+    제품이 직접 등장하지 않을 때 사용. 제품을 억지로 넣지는 않되,
+    다른 브랜드 포장이 그려지는 걸 막는다.
+    """
+    name = product.name or "product"
+    return (
+        f"If any bottle, jar, tube, or package appears in the scene, "
+        f"it must be exactly '{name}' matching the provided product reference; "
+        f"never invent other product packaging or labels. "
+        f"Do not add any text, slogans, or brand names to the image"
+    )

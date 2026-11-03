@@ -751,31 +751,11 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                   disabled={!!job}
                   className="neon-btn flex items-center justify-center gap-1 w-full sm:w-auto !rounded-full !px-4 !py-2 text-xs whitespace-nowrap disabled:opacity-50"
                 >
-                  <Image size={12} /> 남은 컷 전부 생성 ({pendingCuts.length}패킷)
+                  <Image size={12} /> {pendingCuts.length === cuts.length ? `${cuts.length}컷 전부 생성 (${pendingCuts.length}패킷)` : `남은 ${pendingCuts.length}컷 생성 (${pendingCuts.length}패킷)`}
                 </button>
                 <span className="text-[10px] text-gray-400 dark:text-gray-500">
-                  연출: {DRAMA_LABELS[gateStatus?.drama_level || (gateStatus?.is_ad ? 'light' : 'normal')]}
+                  컷당 1분쯤 걸려요{cuts.some(c => c.has_product) ? ' · 제품 컷은 조금 더' : ''} · 연출: {DRAMA_LABELS[gateStatus?.drama_level || (gateStatus?.is_ad ? 'light' : 'normal')]}
                 </span>
-                {gateStatus?.has_photo_real_char && (
-                  <span className="text-[10px] font-bold text-blue-500 dark:text-blue-400">
-                    실사 캐릭터 포함 — 컷당 약 30~40초
-                  </span>
-                )}
-                {!gateStatus?.has_photo_real_char && cuts.some(c => c.has_product) && (
-                  <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">
-                    제품 컷은 더 정교하게 그려서 40초쯤 걸려요
-                  </span>
-                )}
-                {gateStatus?.purpose === 'onecut_ad' && (
-                  <span className="text-[10px] font-bold text-indigo-500 dark:text-indigo-400">
-                    모델·제품·카피를 한 장에 그려요 — 60초쯤
-                  </span>
-                )}
-                {['instatoon_ad', 'brand_series'].includes(gateStatus?.purpose) && (
-                  <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">
-                    광고는 더 정교하게 그려서 컷당 1분쯤 걸려요
-                  </span>
-                )}
               </div>
             )}
             {/* 페이지 미리보기 토글 (vertical이 아닐 때만) */}
@@ -1102,11 +1082,25 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                   resolveUrl={imageUrl}
                 />
               ) : (
-                <div className="bg-gray-50 dark:bg-zinc-800 flex flex-col items-center justify-center gap-2" style={{ aspectRatio: cssAspect(gateStatus?.aspect_ratio) }}>
+                <div className="bg-gray-50 dark:bg-zinc-800 flex flex-col items-center justify-center gap-2 px-3" style={{ aspectRatio: cssAspect(gateStatus?.aspect_ratio) }}>
                   <div className="text-center text-gray-300 dark:text-zinc-600">
-                    <Image size={32} className="mx-auto mb-1" />
+                    <Image size={24} className="mx-auto mb-1" />
                     <span className="text-xs font-bold">#{cut.cut_number}</span>
                   </div>
+                  {/* 콘티 요약: action + 첫 대사 */}
+                  {(cut.action || (cut.dialogue && cut.dialogue.length > 0)) && (() => {
+                    const _isCopyPurpose = ['instatoon_ad', 'brand_series'].includes(gateStatus?.purpose);
+                    const _isFirstCut = cut.cut_number === 1 && _isCopyPurpose;
+                    const _isLastCut = cut.cut_number === cuts.length && _isCopyPurpose && cuts.length > 1;
+                    const prefix = _isFirstCut ? '훅 · ' : _isLastCut ? '카피 · ' : '';
+                    const firstDlg = cut.dialogue?.find(d => d.text);
+                    return (
+                      <div className="text-center max-w-full">
+                        {cut.action && <p className="text-[10px] text-gray-400 dark:text-zinc-500 line-clamp-2">{prefix}{cut.action}</p>}
+                        {firstDlg && <p className="text-[10px] text-gray-400/70 dark:text-zinc-600 line-clamp-1 italic mt-0.5">"{firstDlg.text}"</p>}
+                      </div>
+                    );
+                  })()}
                   <button
                     onClick={(e) => { e.stopPropagation(); handleRegenerate(cut.cut_id); }}
                     disabled={!!job}

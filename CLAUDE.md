@@ -177,6 +177,13 @@ WEBTOON/
 - **장소 칩 외 N곳:** 광고 트랙 대본 카드 장소 칩 "📍 X 외 N곳"(고유 location_id 2종 이상일 때). 대본 카드 1컷에 로즈색 "훅" 라벨, 마지막 컷에 인디고색 "카피" 라벨
 - **location_hint:** `create_cuts_from_script`에서 `locations[].description`을 cut spec `location_hint` 필드로 저장(프롬프트 변경 없음, DB 마이그레이션 없음)
 
+**광고 트랙 5차 규칙 (2026-11-03):**
+- **전 컷 제품 참조 (instatoon_ad·brand_series):** 에피소드에 제품 등록 시 has_product 컷뿐 아니라 **모든 컷에 제품 참조 이미지 전달**. has_product 컷은 기존 full clause(등장·라벨·크기), 비has_product 컷은 `build_product_exclusion_clause` — "가짜 포장/라벨 금지" 문장만(제품 억지 등장 안 시킴). `_ad_needs_product_ref` 플래그로 `_reserved=2` 슬롯. onecut_ad는 1컷=has_product이므로 기존 경로 불변
+- **완성 빈 카드 콘티 요약:** 이미지 없는 컷 카드에 action 2줄(`line-clamp-2`) + 첫 대사 1줄 이탤릭. 광고 트랙 1컷은 "훅 · " 머리말, 마지막 컷은 "카피 · " 머리말
+- **완성 상단 생성 버튼 동적 문구:** 전부 pending이면 "N컷 전부 생성 (N패킷)", 일부 있으면 "남은 N컷 생성 (N패킷)"
+- **안내 한 줄:** 기존 여러 줄 분기 → "컷당 1분쯤 걸려요 · 제품 컷은 조금 더 · 연출: {level}" 한 줄
+- **준비 승인 버튼 문구:** 인스타·연재 "승인하고 STEP 4 완성으로 →", 한 컷 "승인하고 STEP 3 완성으로 →", story "승인하고 STEP 4 콘티·장소로 →"
+
 **브랜드 연재툰 2단계 완료 (2026-11-03):** 지시서 `docs/지시서-연재툰.md`
 - brand_series = 인스타툰 파이프라인 + 프로젝트 `series_defaults`(브리프 기본값, 제품은 새 화 생성 시 행+파일 복사), 이번 화 소재 `episode_topic`, 연재 구조 addon `series=True` 6/8/10, 모델 최대 2. 연속성은 강제 아님(캐릭터·장소 화마다 자유). 한 컷·인스타툰 경로 불변
 - **DB:** `projects.series_defaults` JSON NULL (step35)

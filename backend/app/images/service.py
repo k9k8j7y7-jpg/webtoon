@@ -309,21 +309,26 @@ async def generate_cut_image(
 
     # 1. 캐릭터 레퍼런스 로드
     char_ids = [c.get("character_id") for c in spec.get("characters", []) if c.get("character_id")]
-    # 제품 + 장소로 예약할 슬롯 수: has_product면 2(제품+장소), 아니면 1(장소만)
+    # 제품 + 장소로 예약할 슬롯 수
+    # 광고(instatoon_ad·brand_series)는 제품 등록 시 모든 컷에 제품 참조 → 항상 2슬롯 예약
     cut_has_product = spec.get("has_product", False)
-    _reserved = 2 if cut_has_product else 1
+    _ad_needs_product_ref = _is_ad_purpose and _ep_purpose != "onecut_ad"  # instatoon·brand만
+    _reserved = 2 if (cut_has_product or _ad_needs_product_ref) else 1
     ref_images, ref_labels, char_descs = _get_character_references(
         episode_id, char_ids, db, cut_spec=spec, reserved_slots=_reserved
     )
     # 참조 추적 (generation_logs.refs 기록용)
     ref_tracking = [{"type": lbl.split(" - ")[0] if " - " in lbl else "char", "label": lbl} for lbl in ref_labels]
 
-    # 1.5. 제품 레퍼런스 — has_product 컷은 2순위 (캐릭터 시트 바로 다음)
+    # 1.5. 제품 레퍼런스
+    # has_product 컷: 제품 clause(들고 있음·라벨) + 참조 이미지 (기존)
+    # 광고 비has_product 컷: 타 포장 금지 clause + 참조 이미지 (가짜 병 방지)
     product_desc = ""
     product_ref_attached = False
-    if cut_has_product:
+    _should_attach_product = cut_has_product or _ad_needs_product_ref
+    if _should_attach_product:
         from app.products.models import Product
-        from app.prompts.product import build_product_clause
+        from app.prompts.product import build_product_clause, build_product_exclusion_clause
         products = db.query(Product).filter(
             Product.episode_id == episode_id, Product.photo_url.isnot(None)
         ).all()
@@ -342,7 +347,12 @@ async def generate_cut_image(
                     ref_tracking.append({"type": "product", "product_id": prod.id, "label": prod.name})
                     product_ref_attached = True
                     logger.info("Cut %s product_ref: attached (photo) product=%d", cut.cut_id, prod.id)
-            product_desc = build_product_clause(prod, anatomy_hint=(_ep_purpose in ("instatoon_ad", "brand_series")))
+            # has_product 컷: 풀 clause (등장·라벨·크기), 비has_product 컷: 타 포장 금지만
+            if cut_has_product:
+                product_desc = build_product_clause(prod, anatomy_hint=(_ep_purpose in ("instatoon_ad", "brand_series")))
+            else:
+                product_desc = build_product_exclusion_clause(prod)
+                logger.info("Cut %s: non-product cut with exclusion clause (ad purpose)", cut.cut_id)
 
     # 2. 장소 레퍼런스 로드 (샷 타입에 따라 이미지 첨부 여부 분기)
     location_id = spec.get("location_id")

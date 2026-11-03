@@ -2072,7 +2072,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
           disabled={approving}
           className="flex items-center gap-1.5 px-5 py-2.5 bg-green-600 dark:bg-green-600 text-white rounded-full text-sm font-bold hover:bg-green-700 hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50"
         >
-          <Check size={14} /> {approving ? '승인 중...' : purpose === 'onecut_ad' ? '승인하고 완성 단계로 →' : '승인하고 STEP 4 콘티·장소로 →'}
+          <Check size={14} /> {approving ? '승인 중...' : purpose === 'onecut_ad' ? '승인하고 STEP 3 완성으로 →' : ['instatoon_ad', 'brand_series'].includes(purpose) ? '승인하고 STEP 4 완성으로 →' : '승인하고 STEP 4 콘티·장소로 →'}
         </button>
       )}
 
