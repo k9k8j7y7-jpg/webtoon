@@ -177,6 +177,12 @@ WEBTOON/
 - **장소 칩 외 N곳:** 광고 트랙 대본 카드 장소 칩 "📍 X 외 N곳"(고유 location_id 2종 이상일 때). 대본 카드 1컷에 로즈색 "훅" 라벨, 마지막 컷에 인디고색 "카피" 라벨
 - **location_hint:** `create_cuts_from_script`에서 `locations[].description`을 cut spec `location_hint` 필드로 저장(프롬프트 변경 없음, DB 마이그레이션 없음)
 
+**브랜드 연재툰 2단계 완료 (2026-11-03):** 지시서 `docs/지시서-연재툰.md`
+- brand_series = 인스타툰 파이프라인 + 프로젝트 `series_defaults`(브리프 기본값, 제품은 새 화 생성 시 행+파일 복사), 이번 화 소재 `episode_topic`, 연재 구조 addon `series=True` 6/8/10, 모델 최대 2. 연속성은 강제 아님(캐릭터·장소 화마다 자유). 한 컷·인스타툰 경로 불변
+- **DB:** `projects.series_defaults` JSON NULL (step35)
+- **백엔드:** `POST /series-defaults` 저장, 새 화 생성 시 idea_brief 프리필 + products 행·파일 복사, `get_ad_script_addon(series=True)` 연재 구조 6/8/10, `_PURPOSE_MODEL_LIMIT brand_series:2`
+- **프론트:** ProjectPage [새 화] 버튼·카드 "{n}화 · {단계}", AdBriefForm "이번 화 소재" 칸·프리필 안내·[시리즈 기본값으로 저장], Gate3 [저장된 캐릭터에서 고르기]·[새로 만들기]·[+ 모델 추가], Gate2 컷 수 칩 6/8/10 "한 편 기본/여유 있게/길게"
+
 **교훈:** Gemini 2.5-flash의 image-to-image 스타일 변환은 불신뢰 (플랜 A: 프롬프트 강화 실패, 플랜 B: 참조 이미지 변환 실패 → 사진풍 유지). 플랜 C(비전 텍스트 추출→텍스트→이미지)로 해결 — 참조 이미지를 전달하지 않아 사진풍 오염 원천 차단. Pro 모델의 image-to-image는 1-5 모델 실험에서 재도전 가능.
 
 **이미지 모델 전환 (2026-09-11):** `gemini-2.5-flash-image` → `gemini-3.1-flash-image` 완료. 2.5는 2026-10-02 종료 예정이었음. `IMAGE_MODEL` 환경변수로 관리 — 롤백은 `.env` 한 줄 변경 + touch main.py. 신모델 특성: 9:16 비율을 실제 준수(2.5는 정사각 출력이었음 — 새 컷부터 세로 비율), JPEG 출력(PNG 대비 30~60% 작음), generate_content API 호환 확인됨, 참조 5장 통과. 이미지당 원가 $0.039→$0.067.
