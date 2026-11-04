@@ -56,6 +56,7 @@ export default function AdBriefForm({ projectId, episodeId, gateStatus, onBriefD
   const [selectedCopy, setSelectedCopy] = useState(0);
   const [selectedScene, setSelectedScene] = useState(0);
   const [rewriting, setRewriting] = useState(false);
+  const [vpChecked, setVpChecked] = useState([]);  // visual_points 체크 상태 (인덱스 배열)
 
   // 제품 정보
   const [productName, setProductName] = useState('');
@@ -105,6 +106,7 @@ export default function AdBriefForm({ projectId, episodeId, gateStatus, onBriefD
         });
         setSelectedCopy(ib.copy_selected ?? 0);
         setSelectedScene(ib.scene_selected ?? 0);
+        if (ib.visual_points_selected) setVpChecked(ib.visual_points_selected);
       }
     }
   }, [episodeId]);
@@ -125,6 +127,11 @@ export default function AdBriefForm({ projectId, episodeId, gateStatus, onBriefD
       setBriefResult(data);
       setSelectedCopy(0);
       setSelectedScene(0);
+      // visual_points 기본 체크: 8컷 3개, 6컷 2개, 4컷 1개
+      const _vps = data.visual_points || [];
+      const _tc = gateStatus?.target_cuts || 8;
+      const _defaultCount = _tc >= 8 ? 3 : _tc >= 6 ? 2 : 1;
+      setVpChecked(_vps.slice(0, _defaultCount).map((_, i) => i));
     } catch (err) {
       setError(err.response?.data?.detail || '기획안 생성에 실패했어요');
     } finally {
@@ -187,6 +194,7 @@ export default function AdBriefForm({ projectId, episodeId, gateStatus, onBriefD
       productInfo: productInfo.trim(),
       productInfoWeb: enrichResult && !enrichResult.error ? [enrichResult.features, enrichResult.ingredients, enrichResult.usage].filter(Boolean).join('\n') : '',
       episodeTopic: episodeTopic.trim(),
+      visualPointsSelected: vpChecked,
     });
   };
 
@@ -446,6 +454,37 @@ export default function AdBriefForm({ projectId, episodeId, gateStatus, onBriefD
               ))}
             </div>
           </div>
+
+          {/* 보여줄 특징 — visual_points 칩 (instatoon_ad·brand_series만) */}
+          {purpose !== 'onecut_ad' && briefResult.visual_points?.length > 0 && (
+            <div>
+              <label className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-2 block">
+                보여줄 특징 — 체크한 특징은 캐릭터가 그림으로 설명해요 · 컷당 1패킷 동일
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {briefResult.visual_points.map((vp, i) => {
+                  const checked = vpChecked.includes(i);
+                  const DEVICE_KR = { zoom_inset: '확대 단면', icon_badges: '아이콘 배지', before_after: '전·후', steps: '단계', size_compare: '크기 비교', process: '작용 과정' };
+                  return (
+                    <button key={i}
+                      onClick={() => setVpChecked(prev => prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i])}
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border-2 transition-all ${
+                        checked
+                          ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300'
+                          : 'border-border dark:border-zinc-700 text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-zinc-600'
+                      }`}
+                    >
+                      <span className={`w-4 h-4 rounded border-2 flex items-center justify-center text-[10px] ${
+                        checked ? 'border-purple-500 bg-purple-500 text-white' : 'border-gray-300 dark:border-zinc-600'
+                      }`}>{checked ? '✓' : ''}</span>
+                      <span>{vp.feature}</span>
+                      <span className="text-[10px] text-purple-400 dark:text-purple-500">{DEVICE_KR[vp.device] || vp.device}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* 추천 스타일 */}
           {briefResult.recommended_style && (

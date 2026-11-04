@@ -247,6 +247,8 @@ async def analyze_product(
                 "- name_ko: product name in Korean (translate if label is in another language, "
                 "or Korean brand alias if commonly known — e.g. '밀본 엘루쥬다' for 'MILBON Elujuda')\n"
                 "- colors: comma-separated list of dominant colors IN KOREAN (예: 흰색, 주황색, 베이지)\n"
+                "- palette: 2-3 dominant product colors in English color names (e.g. [\"forest green\", \"gold\", \"cream\"]). "
+                "Pick from the packaging, cap, and label — for use as design accent colors.\n"
                 "- label_text: ALL text visible on the product label, transcribed exactly as printed "
                 "(line breaks as \\n)\n"
                 "- shape: one of: bottle, can, box, tube, flat, pouch, other\n"
@@ -347,6 +349,7 @@ async def analyze_product(
         "size_hint": analysis.get("size_hint", "one_hand"),
         "description": analysis.get("description", ""),
         "size_ratio": size_ratio,
+        "palette": analysis.get("palette", []),
     }
     logger.info("Product %d analyzed: shape=%s size=%s ratio=%s name_ko=%s",
                 product_id, result["shape"], result["size_hint"], size_ratio, result["name_ko"])

@@ -140,10 +140,49 @@ _AD_CUT_STRUCTURES = {
 }
 
 
-def get_ad_script_addon(target_cuts: int | None = None, series: bool = False) -> str:
+def _build_explain_addon(visual_points: list[dict]) -> str:
+    """선택된 visual_points → 대본 AI에 설명 컷 배치 지시."""
+    if not visual_points:
+        return ""
+    _DEVICE_KR = {
+        "zoom_inset": "확대 단면",
+        "icon_badges": "아이콘 배지 3개",
+        "before_after": "전·후 반반",
+        "steps": "단계 미니 패널 3개",
+        "size_compare": "크기 비교",
+        "process": "작용 과정 3패널",
+    }
+    lines = ["\n\n[설명 컷 배치 — 아래 특징을 캐릭터가 그림으로 설명하는 컷으로 만들어라]"]
+    for i, vp in enumerate(visual_points, 1):
+        device = vp.get("device", "zoom_inset")
+        labels = vp.get("labels", [])
+        feature = vp.get("feature", "")
+        mechanism = vp.get("mechanism", "")
+        elements = vp.get("elements", [])
+        device_kr = _DEVICE_KR.get(device, device)
+        labels_str = ", ".join(f'"{l}"' for l in labels) if labels else ""
+        line = f"  {i}. 특징: {feature} → device: \"{device}\" ({device_kr}), 라벨: [{labels_str}]"
+        if mechanism:
+            line += f", 작용: {mechanism}"
+        if elements:
+            line += f", 그릴 요소: {', '.join(elements[:5])}"
+        lines.append(line)
+    lines.append(
+        "위 설명 컷은 포인트·사용법 자리에 넣어라. "
+        "설명 컷의 JSON에 kind: \"explain\", device: \"영문키(zoom_inset/icon_badges/before_after/steps/size_compare/process 중 택1)\", "
+        "labels: [\"라벨\"], mechanism: \"작용 원리 영문 한 줄\", elements: [\"그릴 요소\"] 필드를 추가해라. "
+        "일반 장면 컷은 kind 필드 없거나 \"scene\". "
+        "설명 컷에서도 캐릭터가 등장해야 한다(가이드 역할: 들고·가리키고). "
+        "훅(1컷)과 카피(마지막 컷)는 반드시 scene이다."
+    )
+    return "\n".join(lines)
+
+
+def get_ad_script_addon(target_cuts: int | None = None, series: bool = False, visual_points: list[dict] | None = None) -> str:
     """인스타툰/연재툰 광고 대본 addon. target_cuts가 있으면 컷 수 구조 강제."""
     if series:
-        return _get_brand_series_addon(target_cuts)
+        return _get_brand_series_addon(target_cuts, visual_points=visual_points)
+    explain_addon = _build_explain_addon(visual_points or [])
     if target_cuts and target_cuts in _AD_CUT_STRUCTURES:
         structure = _AD_CUT_STRUCTURES[target_cuts]
         return f"""
@@ -161,8 +200,8 @@ def get_ad_script_addon(target_cuts: int | None = None, series: bool = False) ->
   {{"type": "narration", "speaker": null, "text": "헤드카피", "bubble_style": "headcopy"}}
   {{"type": "narration", "speaker": null, "text": "서브카피", "bubble_style": "box"}}
 - 한 컷에 손 동작은 하나만(제품 들기 vs 머리 만지기 중 택1). 제품 든 컷은 나머지 손은 자연스럽게 내려놓거나 몸 옆에.
-"""
-    return AD_SCRIPT_INSTRUCTION_ADDON
+""" + explain_addon
+    return AD_SCRIPT_INSTRUCTION_ADDON + explain_addon
 
 
 # ── brand_series 전용 ──
@@ -174,7 +213,7 @@ _BRAND_SERIES_CUT_STRUCTURES = {
 }
 
 
-def _get_brand_series_addon(target_cuts: int | None = None) -> str:
+def _get_brand_series_addon(target_cuts: int | None = None, visual_points: list[dict] | None = None) -> str:
     """brand_series 전용 대본 addon — 연재 구조 + 이번 화 소재."""
     tc = target_cuts or 6
     if tc not in _BRAND_SERIES_CUT_STRUCTURES:
@@ -197,7 +236,7 @@ def _get_brand_series_addon(target_cuts: int | None = None) -> str:
   {{"type": "narration", "speaker": null, "text": "헤드카피", "bubble_style": "headcopy"}}
   {{"type": "narration", "speaker": null, "text": "서브카피", "bubble_style": "box"}}
 - 한 컷에 손 동작은 하나만(제품 들기 vs 머리 만지기 중 택1). 제품 든 컷은 나머지 손은 자연스럽게 내려놓거나 몸 옆에.
-"""
+""" + _build_explain_addon(visual_points or [])
 
 
 ONECUT_AD_SCRIPT_INSTRUCTION_ADDON = """

@@ -100,6 +100,19 @@ ep30 × 6장, gpt-image-2.5-sunburst. 비용 동급($0.073 vs $0.067). 장점: �
 - 빈 카드 콘티 요약: action 2줄 + 첫 대사. 훅/카피 머리말
 - 생성 버튼 동적 문구. 안내 한 줄. 준비 승인 버튼 문구 분기
 
+### 광고 트랙 6차 — 설명 컷 (2026-11-04)
+지시서 `docs/지시서-설명컷.md`
+- **컷 종류** `cut.kind`: `scene`(기본) / `explain`(설명 컷). **시각 장치** `cut.device` 6종: zoom_inset(확대 단면), icon_badges(아이콘 배지 3), before_after(전·후 반반), steps(단계 패널 3), size_compare(크기 비교), process(작용 과정 3패널)
+- **ad_brief**: `visual_points [{feature, device, labels[], mechanism, elements[], compare?}]` 최대 5개. AI가 제품 특징에서 자동 추출. `idea_brief.ad_brief_result.visual_points`에 저장, `visual_points_selected`(인덱스 배열)로 사용자 선택
+- **대본**: 선택된 visual_points를 `get_ad_script_addon(visual_points=)` → 포인트·사용법 자리에 `kind:"explain", device, labels, mechanism, elements` 컷으로 배치
+- **콘티**: explain 컷은 `shot=bust` 고정, `has_product=True` 강제
+- **프롬프트**: `prompts/explain.py` `build_explain_clause(device, labels, compare, elements, palette, mechanism)` — scratch 템플릿 이식. 공통 "clean composition, one focal element, leave negative space for labels". elements→"VISUAL DETAILS" 목록, palette→"use these product colors for infographic accents"
+- **검사**: `check_copy_text`에 labels 전달(head=라벨 합침) → 불일치 재시도 1회(0패킷). `check_anatomy` 그대로 적용. gen_info에 `label_check`·`label_retried` 기록
+- **PUT /cuts/{id}/device**: explain 컷 장치·라벨·mechanism·elements 변경
+- **products analyze**: `palette`(영문 색명 2~3개) 추가. `idea_brief.product_palette`에 저장 → explain clause 강조색
+- **프론트**: AdBriefForm "보여줄 특징" 칩(체크 토글, 기본 8컷→3·6컷→2·4컷→1). Gate2 "설명 · {장치}" 보라 배지+라벨 칩+편집. Gate5 빈 카드 "설명 · 장치" 머리말+(59)요약 밝게. RegenDropdown 장치 6종 칩+라벨 입력
+- **onecut_ad 해당 없음** — diff 0줄
+
 ### 브랜드 연재툰 2단계 (2026-11-03)
 지시서 `docs/지시서-연재툰.md`
 - brand_series = 인스타툰 파이프라인 + `series_defaults`(프리필, 제품 복사) + `episode_topic` + 연재 addon 6/8/10

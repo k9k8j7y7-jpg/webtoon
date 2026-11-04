@@ -204,7 +204,16 @@ async def generate_script(
             system += SERIES_SCRIPT_INSTRUCTION_ADDON
         elif is_ad:
             # brand_series: series=True → 연재 구조 addon
-            system += get_ad_script_addon(target_cuts, series=(purpose == "brand_series"))
+            # 선택된 visual_points → 설명 컷 배치 지시
+            _ib_for_vp = planning.get("idea_brief") or {}
+            _vps = _ib_for_vp.get("visual_points_selected")
+            _all_vps = (_ib_for_vp.get("ad_brief_result") or {}).get("visual_points", [])
+            _selected_vps = []
+            if _vps and _all_vps:
+                for idx in _vps:
+                    if isinstance(idx, int) and 0 <= idx < len(_all_vps):
+                        _selected_vps.append(_all_vps[idx])
+            system += get_ad_script_addon(target_cuts, series=(purpose == "brand_series"), visual_points=_selected_vps)
         else:
             system += STANDALONE_SCRIPT_INSTRUCTION_ADDON
 

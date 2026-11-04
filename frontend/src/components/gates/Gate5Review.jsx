@@ -1092,12 +1092,15 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                     const _isCopyPurpose = ['instatoon_ad', 'brand_series'].includes(gateStatus?.purpose);
                     const _isFirstCut = cut.cut_number === 1 && _isCopyPurpose;
                     const _isLastCut = cut.cut_number === cuts.length && _isCopyPurpose && cuts.length > 1;
-                    const prefix = _isFirstCut ? '훅 · ' : _isLastCut ? '카피 · ' : '';
+                    const _DEVICE_KR = { zoom_inset: '확대 단면', icon_badges: '아이콘 배지', before_after: '전·후', steps: '단계', size_compare: '크기 비교', process: '작용 과정' };
+                    const _isExplain = cut.kind === 'explain';
+                    const prefix = _isExplain ? `설명 · ${_DEVICE_KR[cut.device] || cut.device} · `
+                      : _isFirstCut ? '훅 · ' : _isLastCut ? '카피 · ' : '';
                     const firstDlg = cut.dialogue?.find(d => d.text);
                     return (
                       <div className="text-center max-w-full">
-                        {cut.action && <p className="text-[10px] text-gray-400 dark:text-zinc-500 line-clamp-2">{prefix}{cut.action}</p>}
-                        {firstDlg && <p className="text-[10px] text-gray-400/70 dark:text-zinc-600 line-clamp-1 italic mt-0.5">"{firstDlg.text}"</p>}
+                        {cut.action && <p className="text-[10px] text-gray-300 dark:text-zinc-500 line-clamp-2">{prefix}{cut.action}</p>}
+                        {firstDlg && <p className="text-[10px] text-gray-300/70 dark:text-zinc-600 line-clamp-1 italic mt-0.5">"{firstDlg.text}"</p>}
                       </div>
                     );
                   })()}
@@ -1116,6 +1119,10 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                   {cut.has_product && (
                     <span className="text-[10px] px-1 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 shrink-0" title="제품 참조 포함">📦</span>
                   )}
+                  {cut.kind === 'explain' && (() => {
+                    const _DK5 = { zoom_inset: '확대 단면', icon_badges: '아이콘 배지', before_after: '전·후', steps: '단계', size_compare: '크기 비교', process: '작용 과정' };
+                    return <span className="text-[10px] px-1 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 shrink-0">설명 · {_DK5[cut.device] || cut.device}</span>;
+                  })()}
                   <span className="truncate">{shotLabel[cut.shot] || cut.shot} · {cut.characters?.map(c => getCharName(c)).join(', ')}</span>
                   {cut.characters?.some(c => isUnknownChar(c)) && (
                     <span className="text-amber-500 shrink-0" title={`알 수 없는 캐릭터: ${cut.characters.filter(c => isUnknownChar(c)).map(c => typeof c === 'string' ? c : c.character_id).join(', ')}`}>⚠</span>
@@ -1861,12 +1868,25 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
 const DRAMA_LABELS = { light: '담백', normal: '보통', strong: '과장' };
 const DRAMA_DESC = { light: '효과 없이 깔끔', normal: '감정 효과 2~3개', strong: '집중선·과장까지' };
 
+const _EXPLAIN_DEVICES = [
+  { key: 'zoom_inset', label: '확대 단면' },
+  { key: 'icon_badges', label: '아이콘 배지' },
+  { key: 'before_after', label: '전·후' },
+  { key: 'steps', label: '단계' },
+  { key: 'size_compare', label: '크기 비교' },
+  { key: 'process', label: '작용 과정' },
+];
+
 function RegenDropdown({ cutId, cutSpec, disabled, onRegenerate, epDramaLevel, hasProduct, purpose, projectId, episodeId }) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef(null);
   const [pos, setPos] = useState(null);
   const [userNote, setUserNote] = useState('');
   const cutDrama = cutSpec?.drama_level;
+  const isExplainCut = cutSpec?.kind === 'explain';
+  const [editDevice, setEditDevice] = useState(cutSpec?.device || 'zoom_inset');
+  const [editLabels, setEditLabels] = useState(cutSpec?.labels || []);
+  const [deviceChanged, setDeviceChanged] = useState(false);
   const isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches;
 
   useEffect(() => {
@@ -1910,6 +1930,30 @@ function RegenDropdown({ cutId, cutSpec, disabled, onRegenerate, epDramaLevel, h
               <span className="text-[10px] text-amber-600/70 dark:text-amber-400/60 ml-auto">GPT 권장</span>
             </div>
           )}
+          {/* 설명 컷 장치 변경 */}
+          {isExplainCut && (
+            <div className="px-1 mb-3">
+              <p className="text-[11px] font-bold text-purple-500 mb-1.5">설명 장치</p>
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {_EXPLAIN_DEVICES.map(d => (
+                  <button key={d.key} onClick={() => { setEditDevice(d.key); setDeviceChanged(true); }}
+                    className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-colors ${
+                      editDevice === d.key ? 'bg-purple-500 text-white' : 'bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-400'
+                    }`}>{d.label}</button>
+                ))}
+              </div>
+              <div className="space-y-1.5">
+                {editLabels.map((lbl, li) => (
+                  <input key={li} value={lbl}
+                    onChange={e => { const n = [...editLabels]; n[li] = e.target.value; setEditLabels(n); setDeviceChanged(true); }}
+                    className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-purple-300 dark:border-purple-700 bg-white dark:bg-zinc-800 text-ink-black dark:text-white"
+                    placeholder={`라벨 ${li + 1}`} />
+                ))}
+              </div>
+              {deviceChanged && <p className="text-[10px] text-purple-400 mt-1">장치 변경 → 다시 그리기 1패킷</p>}
+            </div>
+          )}
+
           <p className="text-xs font-bold text-gray-400 mb-2 px-1">연출 강도</p>
           {['light', 'normal', 'strong'].map((level) => (
             <button
@@ -1935,7 +1979,12 @@ function RegenDropdown({ cutId, cutSpec, disabled, onRegenerate, epDramaLevel, h
             </button>
           )}
           <button
-            onClick={() => { setOpen(false); onRegenerate(cutId, selectedDrama, userNote || undefined); }}
+            onClick={async () => {
+              if (isExplainCut && deviceChanged) {
+                try { await api.put(`/cuts/${cutId}/device`, { device: editDevice, labels: editLabels }); } catch {}
+              }
+              setOpen(false); onRegenerate(cutId, selectedDrama, userNote || undefined);
+            }}
             className="w-full mt-2 h-12 rounded-xl text-sm font-bold bg-comic-blue text-white hover:bg-comic-blue/90 transition-colors shadow-sm"
           >
             이 내용으로 다시 그리기 · 1패킷

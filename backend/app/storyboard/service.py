@@ -270,6 +270,18 @@ def create_cuts_from_script(
             # 장소 설명 (대본 locations 배열에서 추출)
             _loc_hint = _loc_descs.get(_loc_id, "") if _loc_id else ""
 
+            # 설명 컷 (explain) 판정 — 대본이 kind·device·labels를 제공
+            _cut_kind = cut_data.get("kind", "scene")
+            _cut_device = cut_data.get("device")
+            _cut_labels = cut_data.get("labels", [])
+            _cut_mechanism = cut_data.get("mechanism")
+            _cut_elements = cut_data.get("elements", [])
+            _cut_compare = cut_data.get("compare")
+            _is_explain = _cut_kind == "explain"
+            if _is_explain:
+                # explain 컷: bust 고정, has_product 강제
+                has_product = True
+
             # Cut Spec JSON 조립
             spec = {
                 "cut_id": cut_id,
@@ -279,7 +291,7 @@ def create_cuts_from_script(
                 "location_id": _loc_id,
                 "location_name": _loc_name,
                 "location_hint": _loc_hint or None,
-                "shot": cut_data.get("shot", "full"),
+                "shot": "bust" if _is_explain else cut_data.get("shot", "full"),
                 "action": cut_data.get("action", ""),
                 "dialogue": _apply_copy_cut_positions(
                     _apply_narration_box_default(cut_data.get("dialogue", [])),
@@ -288,6 +300,12 @@ def create_cuts_from_script(
                 "emphasis": cut_data.get("emphasis", "normal"),
                 "transition": cut_data.get("transition"),
                 "has_product": has_product,
+                "kind": _cut_kind if _is_explain else None,
+                "device": _cut_device if _is_explain else None,
+                "labels": _cut_labels if _is_explain else None,
+                "mechanism": _cut_mechanism if _is_explain else None,
+                "elements": _cut_elements if _is_explain else None,
+                "compare": _cut_compare if _is_explain else None,
                 "prompt_override": None,
                 "status": "pending",
                 "generation": None,

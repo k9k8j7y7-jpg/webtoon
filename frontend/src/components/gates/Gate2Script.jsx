@@ -87,6 +87,8 @@ export default function Gate2Script({ projectId, episodeId, onRefresh, readOnly 
       shot: cut.shot || 'bust',
       action: cut.action || '',
       dialogue: cut.dialogue ? cut.dialogue.map(d => ({ ...d })) : [],
+      labels: cut.labels ? [...cut.labels] : [],
+      isExplain: cut.kind === 'explain',
     });
     setSaveError('');
     setEditingCut({ sceneIdx, cutIdx });
@@ -123,6 +125,7 @@ export default function Gate2Script({ projectId, episodeId, onRefresh, readOnly 
       cut.shot = editForm.shot;
       cut.action = editForm.action;
       cut.dialogue = editForm.dialogue;
+      if (editForm.isExplain && editForm.labels) cut.labels = editForm.labels;
 
       const { data } = await api.put(
         `/projects/${projectId}/episodes/${episodeId}/script`,
@@ -198,6 +201,10 @@ export default function Gate2Script({ projectId, episodeId, onRefresh, readOnly 
                   </span>
                   {_isHookCut && <span className="bg-rose-500 text-white px-1.5 py-0.5 rounded text-[10px]">훅</span>}
                   {_isCopyCut && <span className="bg-indigo-500 text-white px-1.5 py-0.5 rounded text-[10px]">카피</span>}
+                  {cut.kind === 'explain' && (() => {
+                    const _DK = { zoom_inset: '확대 단면', icon_badges: '아이콘 배지', before_after: '전·후', steps: '단계', size_compare: '크기 비교', process: '작용 과정' };
+                    return <span className="bg-purple-500 text-white px-1.5 py-0.5 rounded text-[10px]">설명 · {_DK[cut.device] || cut.device}</span>;
+                  })()}
                   <span>{SHOT_LABELS[cut.shot] || cut.shot}</span>
                   <span>·</span>
                   <span>{cut.characters?.map(c => typeof c === 'string' ? c : c.character_id).join(', ')}</span>
@@ -219,6 +226,13 @@ export default function Gate2Script({ projectId, episodeId, onRefresh, readOnly 
                     {d.speaker ? `${d.speaker}: ` : ''}{d.text}
                   </p>
                 ))}
+                {cut.kind === 'explain' && cut.labels?.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {cut.labels.map((lbl, li) => (
+                      <span key={li} className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">{lbl}</span>
+                    ))}
+                  </div>
+                )}
               </div>
               );
             })}
@@ -564,6 +578,25 @@ export default function Gate2Script({ projectId, episodeId, onRefresh, readOnly 
                   ))}
                 </div>
               </div>
+
+              {/* 설명 컷 라벨 편집 */}
+              {editForm.isExplain && (
+                <div>
+                  <label className="block text-xs font-bold text-purple-600 dark:text-purple-400 mb-1.5">설명 컷 라벨</label>
+                  <div className="space-y-2">
+                    {(editForm.labels || []).map((lbl, li) => (
+                      <input key={li} value={lbl}
+                        onChange={e => {
+                          const next = [...editForm.labels];
+                          next[li] = e.target.value;
+                          setEditForm(prev => ({ ...prev, labels: next }));
+                        }}
+                        className="w-full px-3 py-1.5 text-sm font-bold border border-purple-300 dark:border-purple-700 rounded-lg bg-white dark:bg-zinc-800 text-ink-black dark:text-white focus:outline-none focus:border-purple-500"
+                        placeholder={`라벨 ${li + 1}`} />
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {saveError && (
                 <p className="text-xs font-bold text-red-500 dark:text-red-400">{saveError}</p>

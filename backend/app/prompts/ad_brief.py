@@ -55,7 +55,15 @@ SYSTEM_INSTRUCTION = """너는 SNS 광고 크리에이티브 디렉터야.
     {"scene": "...", "shot": "bust"},
     {"scene": "...", "shot": "close_up"}
   ],
-  "recommended_style": "korean_webtoon"
+  "recommended_style": "korean_webtoon",
+  "visual_points": [
+    {"feature": "제품 특징 한 줄", "device": "zoom_inset", "labels": ["한글6자이내"], "mechanism": "물리적 작용 한 줄 영문", "elements": ["그릴 요소1", "그릴 요소2", "그릴 요소3"]},
+    {"feature": "...", "device": "icon_badges", "labels": ["라벨1", "라벨2", "라벨3"], "mechanism": "...", "elements": ["...", "...", "..."]},
+    {"feature": "...", "device": "before_after", "labels": ["사용 전", "사용 후"], "mechanism": "...", "elements": ["..."]},
+    {"feature": "...", "device": "steps", "labels": ["① 도포", "② 마사지", "③ 헹굼"], "mechanism": "...", "elements": ["..."]},
+    {"feature": "...", "device": "size_compare", "labels": ["1000g 대용량"], "compare": "300g", "mechanism": "...", "elements": ["..."]},
+    {"feature": "...", "device": "process", "labels": ["① 침투", "② 작용", "③ 결과"], "mechanism": "...", "elements": ["..."]}
+  ]
 }
 
 규칙:
@@ -66,6 +74,13 @@ SYSTEM_INSTRUCTION = """너는 SNS 광고 크리에이티브 디렉터야.
   classic_fairytale | fantasy_rpg | dreamy_pastel | urban_sketch | vintage_poster | western_fantasy
 - 제품 정보가 있으면 장면에 제품이 자연스럽게 등장하게.
 - 노골적 광고 문구 금지 ("지금 구매!", "최고!" 등).
+- visual_points: 제품 특징·활용법·차별점에서 최대 5개 추출. 장치 중복 허용.
+  - device 6종: zoom_inset(확대 단면), icon_badges(아이콘 배지 3), before_after(전·후 반반), steps(단계 미니 패널 3), size_compare(크기 비교), process(작용 과정 3패널)
+  - labels: 한글, 6자 이내, 장치당 1~3개. before_after는 ["사용 전", "사용 후"] 고정. steps·process는 3개(①②③ 포함). icon_badges는 3개.
+  - compare: size_compare일 때만, 비교 대상 (예 "300g"). 나머지는 생략.
+  - feature: 이 장치로 보여줄 제품 특징 한 줄 설명.
+  - mechanism: 이 특징의 물리적 작용 원리 한 줄 (영문, 예 "green tea catechins dissolve sebum buildup on the scalp"). 그림의 세부 묘사에 쓰인다.
+  - elements: 이 장치에서 그릴 시각 요소 3~5개 (한글, 예 ["녹차잎", "두피 단면", "기포"]). 일러스트레이터가 무엇을 그려야 하는지 구체적으로.
 """
 
 REWRITE_COPY_INSTRUCTION = """기존 카피를 아래 방향으로 다시 써라.

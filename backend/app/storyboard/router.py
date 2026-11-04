@@ -235,6 +235,11 @@ async def list_cuts(
             "prompt_override": bool((c.spec or {}).get("prompt_override")),
             "drama_level": (c.spec or {}).get("drama_level"),
             "motion": (c.spec or {}).get("motion"),
+            "kind": (c.spec or {}).get("kind"),
+            "device": (c.spec or {}).get("device"),
+            "labels": (c.spec or {}).get("labels"),
+            "mechanism": (c.spec or {}).get("mechanism"),
+            "elements": (c.spec or {}).get("elements"),
         }
         for c in cuts
     ]
@@ -272,6 +277,45 @@ async def update_cut(
     cut.spec = spec
     db.commit()
     return {"cut_id": cut_id, "updated": True, "auto_added": added}
+
+
+@router.put("/cuts/{cut_id}/device")
+async def update_cut_device(
+    cut_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """설명 컷 장치·라벨 변경 (explain 컷 전용)."""
+    from app.prompts.explain import VALID_DEVICES
+
+    cut = db.query(Cut).filter(Cut.cut_id == cut_id).first()
+    if not cut:
+        raise HTTPException(status_code=404, detail="Cut not found")
+
+    spec = dict(cut.spec)
+    if spec.get("kind") != "explain":
+        raise HTTPException(status_code=400, detail="Only explain cuts can change device")
+
+    device = body.get("device")
+    labels = body.get("labels")
+    if device and device not in VALID_DEVICES:
+        raise HTTPException(status_code=400, detail=f"Invalid device: {device}")
+
+    if device:
+        spec["device"] = device
+    if labels is not None:
+        spec["labels"] = labels
+    if "compare" in body:
+        spec["compare"] = body["compare"]
+    if "mechanism" in body:
+        spec["mechanism"] = body["mechanism"]
+    if "elements" in body:
+        spec["elements"] = body["elements"]
+
+    cut.spec = spec
+    db.commit()
+    return {"cut_id": cut_id, "device": spec.get("device"), "labels": spec.get("labels")}
 
 
 @router.post("/projects/{project_id}/episodes/{episode_id}/storyboard/approve")

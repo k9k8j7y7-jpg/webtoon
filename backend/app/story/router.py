@@ -112,6 +112,12 @@ async def update_idea_brief_selection(
     # brand_series 이번 화 소재
     if "episode_topic" in body:
         ib["episode_topic"] = body["episode_topic"]
+    # 설명 컷 visual_points 사용자 선택 (인덱스 배열)
+    if "visual_points_selected" in body:
+        ib["visual_points_selected"] = body["visual_points_selected"]
+    # 제품 팔레트 (analyze 결과에서 프론트가 전달)
+    if "product_palette" in body:
+        ib["product_palette"] = body["product_palette"]
     # 인스타툰 컷 수 (4/6/8), brand_series 컷 수 (6/8/10)
     if "target_cuts" in body:
         tc = body["target_cuts"]
@@ -557,6 +563,7 @@ async def create_ad_brief(
     idea_brief["ad_brief_result"] = {
         "key_message": result.get("key_message", ""),
         "target_summary": result.get("target_summary", ""),
+        "visual_points": result.get("visual_points", []),
     }
 
     new_gs = _json.loads(_json.dumps(gate_status))

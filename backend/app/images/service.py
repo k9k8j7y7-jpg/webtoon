@@ -450,6 +450,44 @@ async def generate_cut_image(
     if drama_extra:
         logger.info("Cut %s drama: level=%s category=%s motions=%s", cut.cut_id, drama_level, drama_category, drama_motions)
 
+    # 4.8. 설명 컷 프롬프트 (explain cut — kind=explain)
+    _is_explain_cut = spec.get("kind") == "explain"
+    explain_clause = ""
+    if _is_explain_cut:
+        _explain_device = spec.get("device", "zoom_inset")
+        _explain_labels = spec.get("labels") or []
+        _explain_compare = spec.get("compare", "")
+        _explain_mechanism = spec.get("mechanism", "")
+        _explain_elements = spec.get("elements") or []
+        # palette: 제품 analyze 결과에서 가져옴 (products 테이블 description에 색 정보 포함)
+        _explain_palette = []
+        if _should_attach_product:
+            from app.products.models import Product as _ProdModel
+            _prods = db.query(_ProdModel).filter(
+                _ProdModel.episode_id == episode_id, _ProdModel.photo_url.isnot(None)
+            ).all()
+            for _p in _prods:
+                # description에서 color keywords 추출은 비용 — palette는 gate_status에 저장된 것 사용
+                pass
+            # gate_status의 idea_brief에 저장된 palette 참조
+            _gs_for_palette = _ep_for_purpose.gate_status or {}
+            _ib_palette = (_gs_for_palette.get("idea_brief") or {}).get("product_palette", [])
+            if _ib_palette:
+                _explain_palette = _ib_palette
+        from app.prompts.explain import build_explain_clause
+        explain_clause = build_explain_clause(
+            _explain_device, _explain_labels,
+            compare=_explain_compare,
+            elements=_explain_elements,
+            palette=_explain_palette,
+            mechanism=_explain_mechanism,
+        )
+        if explain_clause:
+            drama_extra = (explain_clause + " " + drama_extra) if drama_extra else explain_clause
+            logger.info("Cut %s explain: device=%s labels=%s mechanism=%s elements=%d palette=%s",
+                        cut.cut_id, _explain_device, _explain_labels, _explain_mechanism,
+                        len(_explain_elements), _explain_palette)
+
     # 5. 프롬프트 조립 (Prompt Engine)
     # 참고 광고 분석 텍스트는 제품 설명 뒤에 삽입
     full_product_desc = product_desc
@@ -557,6 +595,33 @@ async def generate_cut_image(
             except Exception as e:
                 logger.warning("Cut %s copy retry failed (using first result): %s", cut.cut_id, e)
 
+    # 6.3.5. 설명 컷 라벨 글자 검사 + 자동 재시도 1회 (0패킷)
+    _label_check_result = None
+    _label_retried = False
+    if _is_explain_cut and spec.get("labels"):
+        _expected_labels = spec["labels"]
+        # labels를 head/sub 형태로 변환: head=전체 라벨 합침, sub=없음
+        _label_head = " ".join(_expected_labels)
+        from app.prompts.copy_render import check_copy_text as _check_labels
+        _label_check_result = _check_labels(result.image_bytes, _label_head, "")
+        logger.info("Cut %s label_check: expected=%s result=%s", cut.cut_id, _expected_labels, _label_check_result)
+
+        if not _label_check_result.get("head_ok", True):
+            logger.warning("Cut %s label_check MISMATCH → retry once", cut.cut_id)
+            _label_retried = True
+            try:
+                result = await adapter.generate_image(
+                    prompt=prompt,
+                    reference_images=ref_images if ref_images else None,
+                    reference_labels=ref_labels if ref_labels else None,
+                    seed=None,
+                    aspect_ratio=ep_aspect_ratio,
+                )
+                _label_check_result = _check_labels(result.image_bytes, _label_head, "")
+                logger.info("Cut %s label_check retry: %s", cut.cut_id, _label_check_result)
+            except Exception as e:
+                logger.warning("Cut %s label retry failed (using first result): %s", cut.cut_id, e)
+
     # 6.4. 손·팔 개수 비전 검사 + 자동 재시도 1회 (instatoon_ad·brand_series의 has_product 컷)
     _anatomy_check_result = None
     _anatomy_retried = False
@@ -650,6 +715,10 @@ async def generate_cut_image(
     if _copy_check_result is not None:
         gen_info["copy_check"] = _copy_check_result
         gen_info["copy_retried"] = _copy_retried
+    # 설명 컷 라벨 검사 결과 기록
+    if _label_check_result is not None:
+        gen_info["label_check"] = _label_check_result
+        gen_info["label_retried"] = _label_retried
     # 손·팔 검사 결과 기록
     if _anatomy_check_result is not None:
         gen_info["anatomy_check"] = _anatomy_check_result
