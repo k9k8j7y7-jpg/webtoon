@@ -171,3 +171,121 @@ Gemini 2.5-flash image-to-image 스타일 변환 불신뢰. 플랜 C(비전 텍�
 - [x] 재포지셔닝 1차 (완료 2026-10-20)
 - [x] 빠른 한 컷 (완료 2026-10-22)
 - [x] 제품 자산 2단계 (완료 2026-10-27)
+
+## 아키텍처·과금 상세
+
+- **패킷 가격:** 체험(15/3,900) · 시작(30/6,900) · 인기(100/19,900) · 대용량(300/54,900). 1회 결제 문구 고정, 유효기간 없음, 자동결제 없음
+- **패킷 사용처:** `frontend/src/utils/packetUsage.js`의 `PACKET_USAGE` 단일 상수 — 가격 페이지·랜딩 FAQ 공유
+- **패킷 가격 정책:** 순마진 = 결제액×0.872 − 93원×패킷수. 소량 45%/중량 40%/대량 35% 계단. 패킷당 판매가 최저 178원. 모델·환율 변경 시 재계산
+- **환불:** 약관 제6조 4항 — 7일 이내 미사용 전액, 사용분 1개당 230원. `REFUND_TEXT` 상수 3곳(가격 페이지·랜딩 FAQ·약관) 통일
+- **환영 패킷:** `auth/router.py` reason=admin_grant. user 생성 분기에서만 → 중복 불가, 기존 회원 소급 없음. 프론트 `sessionStorage('welcome_packets')` → Layout 토스트 5초
+- **랜딩 참조 에피소드:** `LandingPage.jsx`의 `LANDING_EPISODES` 상수. ad=ep30(헤어팩), pet=ep25(반려동물), series=ep26(연작). 경량 릴스 `/storage/landing/reel_hairpack_short.mp4`(720×1280, 13초, 1.3MB) + 포스터 jpg. showcase router `reel` 필드(status=done이면 path)
+- **파일 저장:** 로컬 FS 폴백(`/home/bitnami/project-t/storage/`)
+- **비동기 작업:** FastAPI BackgroundTasks + 인메모리 Job 스토어
+- **무효화 전파:** 대본 수정 → diff 판정 → 영향 자산/컷만 invalidated
+
+## 기능별 규칙 상세
+
+### 문의 게시판
+`inquiries`·`inquiry_messages`(step29). 1:1 본인·관리자만 열람. 첨부 `inquiries/{id}/attachments/`(storage 재사용). 상태 흐름 received→checking→answered→closed, 관리자 상태 변경 POST(`/admin/inquiries/{id}/status`). 읽음은 사용자 엔드포인트(`GET /inquiries/{id}`)만 `user_read_at` 갱신 — 관리자 탭(`GET /admin/inquiries/{id}`)은 미접촉. 🔔 = `GET /inquiries/unread-count`(마운트·라우트 이동·window focus 갱신). 드로어 `MobileDrawer.jsx`(Layout·Landing 공용). 보호 경로 로그인 복귀 `sessionStorage('login_redirect')`. `<select>`·`<option>`은 명시 색상 필수(`dark:text-white` 상속 금지 — OS 기본 흰 배경에 흰 글자 안 보임). 리포트: 카테고리×주·미답변·평균 답변 시간·👍 비율 쿼리 가능(화면은 오픈 후)
+
+### 구독·알림
+구독 = `subscriptions`(작가 단위, step30), 알림 = `notifications` + `notify()` 단일 진입점(새 화·댓글·답글·문의 답변), 댓글 1단계 답글·신고·차단(step31). 웹푸시 = `push_subscriptions` + VAPID(`.env`) + `sw.js` 루트(scope `/WEBTOON/`), PWA `manifest.json`, 열람 공개·행동은 회원. WebAPK는 **별도 SW 컨텍스트**라 `push_enabled_here` localStorage 플래그로 자동 재구독(`PushToggleCard` useEffect — permission granted + 구독 null + 플래그 → `subscribePush()` 자동). 알림 목록(`NotificationsPage`)은 30초 간격 `/unread-count` 폴링 + 증가 시 재조회. `?n={notification_id}` 읽음은 `useAutoReadNotification`(deps `[user, nId]`) — user 로딩 완료 후 호출, `/view` 비보호 라우트에서도 동작. `send_push` 로그(`app.push.service`)는 `main.py`에서 `app` 로거 핸들러 설정. **BackgroundTasks 안에서는 `notify()` 후 `send_push(...)` 직접 호출** — `background=` 인자가 없으므로 `background.add_task` 경로 불가(motion_done·reel_done에 적용됨). 비회원 댓글은 `[댓글을 쓰려면 로그인]` → `navigate('/login', { state: { from: pathname#comments } })` → LoginPage `sessionStorage('login_redirect')` → OAuth 복귀
+
+### 모션 웹툰
+`cuts.spec.motion` JSON 확장(DB 마이그레이션 없음). `app/motion/`(service·router·prompts). Veo lite(`veo-3.1-lite-generate-preview`) 4초 생성→ffmpeg 앞 3초 트림, 비율별 패딩·크롭(1:1→16:9 패딩→크롭, 9:16 그대로, 3:4→9:16 패딩). 프롬프트에 캐릭터 **외모 설명**(appearance_en) — **이름(한글·영문) 절대 금지**(Veo 안전필터 celebrity 거부). 후보 2개 순차(서버 전역 세마포어 1), 격자 몽타주(원본+5프레임) Gemini flash 비전 검사 → 1회 재생성(`MOTION_MAX_RETRY`). **4패킷** 선차감(`packet_transactions.reason='generation'` + `description='motion ...'`), 전부 실패 시 환불+알림. BackgroundTasks에는 **ORM 객체 대신 id·값을 변수로 미리 추출**(세션 닫힘 방지). 실사 컷 제외(400). 이미지 재생성 시 motion 자동 삭제(`images/service.py`). export = `compose_dialogue_on_image(return_overlay=True)` RGBA PNG + ffmpeg overlay → 말풍선 합성 mp4(`export_path`). select 시 자동 생성. 뷰어·미리보기는 DOM 오버레이.
+**릴스:** `gate_status.reel` JSON. `app/motion/reel.py`. 정지 컷 = blurred pillarbox + zoompan(1.0→1.05) 3초, 영상 컷 = export_path 재사용 + pillarbox. 말풍선 RGBA overlay(원본 좌표계 먼저 합성). 1080×1920 blurred pillarbox. concat demuxer + 무음 AAC + faststart. 끝 크레딧 1초(Pillow). **1패킷**, `source_hash`로 stale 판정 — `_compute_source_hash`는 nested `{"image_url":…, "motion":{"selected":…, "export_path":…}}` 구조 필수. stale → Clapperboard 오렌지 점 + 드롭다운 안내. 인스타 공유 3택(이미지·릴스·뷰어 링크). 배포 전 `Reel start`/`Reel done` 로그 쌍 확인
+
+### 인스타 공유
+Web Share API(`navigator.share({files})`) — `share()`는 **`onClick`에서 동기 호출**(await·pointerdown 금지, user activation 소실), 이미지는 모달 열릴 때 사전 렌더. JPEG q0.9 1080×1080 letterbox, 20장 한도(인스타 캐러셀). 캡션은 복사 방식(인스타가 텍스트 무시), 피드 선택 안내. 페이지 형식이면 페이지/컷별 토글(localStorage `insta_share_mode`). 크레딧 `© 닉네임 · EziToon`은 **인스타 경로만**(공유+ZIP, 기본 ON, localStorage `insta_credit`) — letterbox 흰 여백이면 검은 글씨, 이미지 위면 흰+외곽선. 뷰어 공유는 링크만(`share({url})` / clipboard 폴백), 이미지 공유는 작가(게이트5)만. Graph API 자동 발행은 백로그
+
+### 빠른 한 컷
+`/quick`(`QuickPage.jsx`) — 프리셋 6종 + 장면 + 대사(선택) + 스타일/비율 → 1컷. 유저당 '빠른 컷' 프로젝트 1개(`is_quick`, `single_page` 형식, gate 1~4 자동 done), 에피소드는 매 생성 시 새로. **프리셋 = `is_preset` 캐릭터**(시스템 프로젝트 id=7, 캐릭터 53~58 삭제 금지) — link로 복사, 시트·표정 참조 포함. 생성은 `generate_cut_image`·`regenerate_single_cut` 재사용, **1패킷 후차감**(`source='quick'`). 결과: composed_image_url 우선, [인스타 공유]·[PNG 저장]·[말풍선 고치기]·[다시 그리기 · 1패킷]·[이야기 만들기]. **expand** = `POST /quick/{episode_id}/expand` — 새 프로젝트·에피소드 생성(원본 복사, gate1 done, `revert` 금지). 입구 3곳: 랜딩·대시보드·GNB 드로어. 배포 전 quick job 확인
+
+### 제품 자산
+`products`(+`description`·`shape`·`size_hint`·`size_ratio`·`holding_photo_url`·`label_text`·`name_ko`), step34. **analyze** 0패킷(gemini flash 비전) — name·name_ko·colors·label_text·shape·size_hint·description 추출. 들고 사진 → **size_ratio = product_px ÷ hand_px**(손목~중지끝) 교차검증(직접 계산 우선, `parse_ai_json` 실패 시 정규식 폴백). 프롬프트 `app/prompts/product.py` `build_product_clause` 한 곳. **has_product 컷 참조 2순위** 고정(캐릭터 시트 다음, 2인이면 표정 1장으로 축소). `generation_logs.refs`에 제품 포함. **수동 override** = `cut.spec.has_product`(null=자동, true/false=수동) 단일 소스. **product_items** = 실사 오버레이(디테일 컷용). **합성(마스크·마젠타) 보류**. **ep30 실행 금지** — 테스트는 ep71(project 12)
+
+## 개발 규칙 상세
+
+### DB 마이그레이션 상세
+- 리허설 순서: up→verify→down→재-up. `project_t_test` 없으면 먼저 생성(운영 스키마 복제, 데이터 불필요)
+- DB 덤프 .sql 커밋 금지(stepN은 예외). 마이그레이션 백업은 데이터 포함(no-data 금지)
+
+### 서버 .env 안전 상세
+- 변경 후 `GEMINI_API_KEY` 등 기존 키 길이 확인
+- OAuth 키는 콘솔에서만 조회 가능, 서버 .env 백업은 날짜별 유지
+
+### 모달·드롭다운 상세
+- 모달 열려 있는 동안 뒤 액션 버튼에 `pointerEvents:'none'`
+- 드롭다운 PC: `getBoundingClientRect` 좌표, 모바일(<640px `matchMedia`): 바텀시트
+- 메뉴 내부 `data-*-menu` attr로 바깥 클릭에서 제외. RegenDropdown·StepHeader 모두 이 패턴
+
+### StepHeader 상세
+- `locked`는 비활성 + 이유 텍스트. `setViewingGate`가 보기 이동 setter
+- Gate4 승인 문구 예외: "콘티 승인 → 이미지 생성 시작" 유지
+
+### useGateLoad 상세
+- 파일: `frontend/src/hooks/useGateLoad.js`
+- 스켈레톤·자동 재시도 1회(1.5초)·실패 "다시 시도" 카드·언마운트 안전(`cancelled` 플래그)
+- 게이트 컴포넌트 상단 가드: `if (loading) return <GateSkeleton />;` + `if (loadError) return <GateLoadError ... />;`
+
+### 연출 강도 상세
+- `normalize_emotion()`(감정→8카테고리) + `build_drama_prompt()`(light/normal/strong)
+- 기본값: `gate_status.drama_level`(광고형 light, 일반 normal), 컷 덮어쓰기 `spec.drama_level`
+- strong 보호: 집중선 외곽 30%, 얼굴·배경 가독성, 캐릭터 일관성. **효과음 글자 금지**(모든 단계)
+- 주입: `build_cut_prompt`의 `extra_prompt` 인자, `generate_cut_image` 안에서 자동 경유
+- 감정 매핑: `drama.py` 상단 dict(나중에 관리자 편집 가능)
+
+### 아이디어 단락 바꾸기 상세
+- 방향→문구: `SECTION_DIRECTION_PROMPTS`(service.py, 한 곳). 칩: `SECTION_CHIPS`(Gate1Planning.jsx, 단락별 배열)
+- stale 시그니처에 `briefStory` 포함 → 단락 변경 시 기획 재생성 배너 노출
+- **이야기 전개는 단락 다시 쓰기 칩으로 대체**(전체 development 칩 없음, `planning_draft.development` 호환용 읽기만)
+- `DEVELOPMENT_FRAGMENTS` 주입 제거됨 — story 4단락 ideaText로 직접 전달
+
+### 캐릭터 구조 상세
+- `episode_characters` JOIN이 표준 조회. unlink 2단계(409+force), 삭제는 연결 0건만
+- 연결 캐릭터(`episode_id≠현재`)는 이미지 재생성 스킵. `characters.style` 불일치 시 ⚠(차단 아님)
+- 바이블 인물 이름 ≠ 시트 이름 가능(ref_key 매칭). `/characters/link`가 대본 ref_key 자동 매핑
+- 승계: `_dedupe_description`으로 중복 제거. 동물 키워드(강아지·고양이 등) → gender "기타" 자동(카드 값 우선)
+
+### 페이지 형식 상세
+- `cell_ratio` 있으면 비율 강제(2x2→1:1, 3단→16:9), `single_page`는 `cell_ratio: null`(비율 자유)
+- 합성: `composePageGrid`(프론트 Canvas) — `per_page` null이면 세로 경로, 있으면 Grid 페이지
+- 내보내기: `pageFormat` 분기 — vertical이면 현행, 그 외 페이지 단위
+- 템플릿 추가 = 정의 한 줄 + 콘티 가이드 문단
+
+### 작업 환경 상세
+- D: 드라이브 I/O 에러 이력 — 이상 시 즉시 C:로 사본
+- venv는 PC별 Python 경로에 묶임 → 다른 PC면 `backend/venv` 재생성
+- `IMAGE_MODEL` 없으면 config 기본값 2.5로 생성됨(주의)
+- 정적 에셋(`public/`)은 반드시 git 추적 — clone만으로 동일 환경
+
+### 실사 캐릭터 상세 (보완)
+- GPT size 매핑: 9:16·3:4→1024x1536, 16:9·4:3→1536x1024, 1:1→1024x1024. 3:4·4:3 중앙 크롭
+- 편집 폼 순서: 실사 토글+초상권 동의 체크가 사진 업로드 **위**에 배치. 동의 미체크 시 업로드 비활성화
+- 공개(갤러리·공유 링크) 허용, 마켓(판매·배포 목적) 불가. 약관·개인정보처리방침에 초상권 책임 조항
+- 참조 이미지 번호는 `char_descs[...]["ref_images"]` 실제 첨부 순번. 실사 없는 에피소드 프롬프트 수정 전 동일(3,072 조합 비교)
+- 검증 스크립트: `scratch/photo/gpt_realphoto_v2.py`(운영 프롬프트·어댑터, ep41 참조, git 밖)
+
+### GPT Image 실험 상세 (보완)
+- 스크립트: `scripts/gpt_image_test.py`, quality=high, 1024x1536, 출력 1372 tokens 고정
+- 비용: input $8/1M + output $30/1M → 장당 ~$0.073
+
+### 스타일 썸네일 상세 (보완)
+- `STYLE_PRESETS` 키와 1:1 대응. 768px JPEG q85. `--keys a,b` / `--all` / `--force` / `--dry-run`. 장당 ~$0.07
+- marvel·western_fantasy는 도도 판단으로 유지
+
+### 장소 텍스트화 상세 (보완)
+- 로그: `"location_ref: text_only|attached(768px) spec=en|ko"`
+- 프론트 `handleGenerate` 성공 후 `loadLocations()` 호출하여 장소 패널 즉시 갱신
+- 자동 생성 로그: `"auto-created N missing locations"`
+- 콘티 편집 모달에서 `location_id` 드롭다운 변경 가능(게이트4·5 둘 다). 삭제는 콘티 참조 시 409
+- ref_key 직접 노출 금지 → `utils/refNames.js` 공용 헬퍼(`locationName`, `characterName`, `locationOptionLabel`)
+
+### 2층 완공 상세 (보완)
+- 0단계: 스키마 설계 `docs/2층-스키마-설계안.md`
+- 1단계: 소셜 로그인 3사 + 본계정 확정(구글 id=3, 김김준) + 프로젝트 귀속
+- 2단계: 대시보드(step18, 공지 바·헤더·패킷 잔량 API·법률 페이지 3종). 구글 OAuth 앱 프로덕션 게시
+- 3단계: 패킷(5지점 차감 + 402 가드 + admin_grant.py + axios 인터셉터)
+- 4단계: 토스(위젯 SDK v2 + API ck 키, step19 orders, 금액 검증·멱등·패킷 지급). 상품: packet_30(6,900)/packet_100(19,900)/packet_300(54,900)
+- 5단계: 랜딩(네온 다크) + 공개 뷰어(share_token UUID, step20) + 갤러리(showcase, optional auth)
