@@ -1,14 +1,37 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api/client';
 import { Plus, FolderOpen, Trash2, Clock, Sparkles } from 'lucide-react';
 
+const PROJECT_KINDS = [
+  { key: 'story', icon: '📖', label: '이야기', desc: '일상툰·단편·연작' },
+  { key: 'ad', icon: '📣', label: '광고', desc: '한 컷·인스타툰' },
+  { key: 'series', icon: '📚', label: '연재툰', desc: '같은 제품으로 매주 한 편' },
+];
+const SERIES_CUT_OPTIONS = [6, 8, 10];
+const SERIES_RATIO_OPTIONS = [
+  { value: '9:16', label: '세로 9:16' },
+  { value: '1:1', label: '정사각 1:1' },
+];
+
 export default function DashboardPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const startSeries = searchParams.get('new') === 'series';
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showCreate, setShowCreate] = useState(false);
+  const [showCreate, setShowCreate] = useState(startSeries);
   const [title, setTitle] = useState('');
+  const [kind, setKind] = useState(startSeries ? 'series' : 'story');
+  const [seriesCuts, setSeriesCuts] = useState(6);
+  const [seriesRatio, setSeriesRatio] = useState('9:16');
+  const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
+  const isSeriesKind = kind === 'series';
+
+  // 랜딩 링크(?new=series)로 들어오면 폼을 연 뒤 주소는 정리
+  useEffect(() => {
+    if (startSeries) setSearchParams({}, { replace: true });
+  }, []);
 
   const load = () => {
     api.get('/projects').then(({ data }) => {
@@ -21,12 +44,29 @@ export default function DashboardPage() {
 
   const handleCreate = async (e) => {
     e.preventDefault();
-    if (!title.trim()) return;
-    const { data } = await api.post('/projects', { title: title.trim() });
-    setTitle('');
-    setShowCreate(false);
-    navigate(`/projects/${data.id}`);
+    if (!title.trim() || submitting) return;
+    setSubmitting(true);
+    try {
+      const body = { title: title.trim(), kind };
+      if (isSeriesKind) {
+        body.series_cut_count = seriesCuts;
+        body.series_ratio = seriesRatio;
+      }
+      const { data } = await api.post('/projects', body);
+      setTitle('');
+      setShowCreate(false);
+      navigate(data.first_episode_id
+        ? `/projects/${data.id}/episodes/${data.first_episode_id}/workflow`
+        : `/projects/${data.id}`);
+    } catch (err) {
+      alert(err.response?.data?.detail || '프로젝트를 만들지 못했어요.');
+      setSubmitting(false);
+    }
   };
+
+  const chipClass = (active) => `px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${active
+    ? 'bg-comic-orange text-white'
+    : 'bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-zinc-700'}`;
 
   const handleDelete = async (id, e) => {
     e.preventDefault();
@@ -65,17 +105,53 @@ export default function DashboardPage() {
       </div>
 
       {showCreate && (
-        <form onSubmit={handleCreate} className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-xl p-4 mb-4 flex gap-2 shadow-sm">
+        <form onSubmit={handleCreate} className="bg-white dark:bg-surface-dark border-2 border-border dark:border-zinc-800 rounded-xl p-4 mb-4 space-y-3 shadow-sm">
+          <div className="grid grid-cols-3 gap-2">
+            {PROJECT_KINDS.map((k) => (
+              <button
+                key={k.key}
+                type="button"
+                onClick={() => setKind(k.key)}
+                className={`flex flex-col items-center gap-0.5 p-2.5 rounded-xl border-2 text-center transition-all ${kind === k.key
+                  ? 'border-comic-orange bg-comic-orange/5 dark:bg-comic-orange/10'
+                  : 'border-border dark:border-zinc-700 hover:border-gray-300 dark:hover:border-zinc-600'}`}
+              >
+                <span className="text-xl">{k.icon}</span>
+                <span className="text-sm font-bold text-ink-black dark:text-white">{k.label}</span>
+                <span className="text-[10px] leading-tight text-gray-500 dark:text-gray-400 break-keep">{k.desc}</span>
+              </button>
+            ))}
+          </div>
           <input
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="프로젝트 제목"
-            className="flex-1 px-4 py-2 border-2 border-border dark:border-zinc-700 bg-transparent rounded-xl text-sm font-bold text-ink-black dark:text-white focus:outline-none focus:border-comic-orange focus:ring-4 focus:ring-comic-orange/20 transition-all"
+            placeholder={isSeriesKind ? '시리즈 이름' : '프로젝트 제목'}
+            className="w-full px-4 py-2 border-2 border-border dark:border-zinc-700 bg-transparent rounded-xl text-sm font-bold text-ink-black dark:text-white focus:outline-none focus:border-comic-orange focus:ring-4 focus:ring-comic-orange/20 transition-all"
             autoFocus
           />
-          <button type="submit" className="px-5 py-2 bg-comic-orange text-white rounded-full text-sm font-bold hover:-translate-y-0.5 transition-all shadow-sm">생성</button>
-          <button type="button" onClick={() => setShowCreate(false)} className="px-4 py-2 text-gray-500 font-bold text-sm hover:text-comic-orange transition-colors">취소</button>
+          {isSeriesKind && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="w-10 text-xs font-bold text-gray-500 dark:text-gray-400">컷 수</span>
+                {SERIES_CUT_OPTIONS.map((n) => (
+                  <button key={n} type="button" onClick={() => setSeriesCuts(n)} className={chipClass(seriesCuts === n)}>{n}컷</button>
+                ))}
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="w-10 text-xs font-bold text-gray-500 dark:text-gray-400">비율</span>
+                {SERIES_RATIO_OPTIONS.map((r) => (
+                  <button key={r.value} type="button" onClick={() => setSeriesRatio(r.value)} className={chipClass(seriesRatio === r.value)}>{r.label}</button>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="flex gap-2 justify-end">
+            <button type="submit" disabled={!title.trim() || submitting} className="px-5 py-2 bg-comic-orange text-white rounded-full text-sm font-bold hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50 disabled:hover:translate-y-0">
+              {isSeriesKind ? '1화 시작' : '생성'}
+            </button>
+            <button type="button" onClick={() => setShowCreate(false)} className="px-4 py-2 text-gray-500 font-bold text-sm hover:text-comic-orange transition-colors">취소</button>
+          </div>
         </form>
       )}
 
@@ -99,7 +175,15 @@ export default function DashboardPage() {
               className="bg-white/80 dark:bg-surface-dark/80 backdrop-blur-sm border-2 border-border dark:border-zinc-800 rounded-2xl p-6 hover:-translate-y-1 hover:shadow-lg hover:border-comic-orange transition-all group no-underline"
             >
               <div className="flex items-start justify-between">
-                <h3 className="font-bold text-lg font-serif text-ink-black dark:text-white group-hover:text-comic-orange transition-colors">{p.title}</h3>
+                <div className="min-w-0">
+                  {p.kind === 'series' && (
+                    <span className="inline-block mb-1 px-2 py-0.5 text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 rounded-full">연재</span>
+                  )}
+                  <h3 className="font-bold text-lg font-serif text-ink-black dark:text-white group-hover:text-comic-orange transition-colors">{p.title}</h3>
+                  {p.kind === 'series' && p.episode_count > 0 && (
+                    <p className="text-sm font-bold text-gray-500 dark:text-gray-400 mt-0.5">{p.episode_count}화까지</p>
+                  )}
+                </div>
                 <button
                   onClick={(e) => handleDelete(p.id, e)}
                   className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-full opacity-0 group-hover:opacity-100 transition-all"

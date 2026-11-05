@@ -44,6 +44,7 @@ const USE_CASES = [
     text: '우리 가게 제품 사진 한 장이면 광고 웹툰이 완성됩니다. 인스타 캐러셀로 바로 올리세요.',
     tips: ['제품 사진 + 한 줄 소개로 광고 웹툰 생성', '인스타 피드·릴스용 자동 내보내기'],
     token: LANDING_EPISODES.ad.token,
+    seriesLink: true,
   },
   {
     tab: '반려동물·가족',
@@ -296,6 +297,14 @@ export default function LandingPage() {
                 ))}
               </ul>
               <button onClick={() => navigate(`/view/${USE_CASES[useTab].token}`)} className="mt-4 text-sm text-cyan-400 hover:text-cyan-300 font-medium">예시 보기 →</button>
+              {USE_CASES[useTab].seriesLink && (
+                <button
+                  onClick={() => navigate(user ? '/my?new=series' : '/login', user ? undefined : { state: { from: '/my?new=series' } })}
+                  className="block mx-auto md:mx-0 mt-2 text-sm text-cyan-400 hover:text-cyan-300 font-medium"
+                >
+                  매주 연재하고 싶다면 연재툰으로 →
+                </button>
+              )}
             </div>
           </div>
         </section>

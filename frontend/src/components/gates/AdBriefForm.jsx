@@ -32,6 +32,12 @@ const COPY_DIRECTIONS = [
   { key: 'trust', label: '신뢰' },
 ];
 
+// 컷 수 칩 + 직접 입력 범위
+const CUT_COUNT_RULES = {
+  instatoon_ad: { chips: [4, 6, 8], min: 4, max: 10 },
+  brand_series: { chips: [6, 8, 10], min: 4, max: 20 },
+};
+
 const MSG_PLACEHOLDERS = [
   '우리 가게 시그니처 메뉴를 알리고 싶어요',
   '두피 케어 오일, 산뜻하고 가볍게',
@@ -69,8 +75,20 @@ export default function AdBriefForm({ projectId, episodeId, gateStatus, onBriefD
   // brand_series: 이번 화 소재
   const purpose = gateStatus?.purpose || 'story';
   const [episodeTopic, setEpisodeTopic] = useState('');
-  const isPrefilled = gateStatus?.idea_brief?.prefilled_from === 'project';
-  const [savedDefaults, setSavedDefaults] = useState(false);
+  const prefilledFrom = gateStatus?.idea_brief?.prefilled_from;
+  const prefilledEpisodeNo = /^episode (\d+)$/.exec(prefilledFrom || '')?.[1];
+
+  // 컷 수 (instatoon_ad·brand_series)
+  const cutRule = CUT_COUNT_RULES[purpose];
+  const [targetCuts, setTargetCuts] = useState(gateStatus?.target_cuts || cutRule?.chips[0] || null);
+  const [customCuts, setCustomCuts] = useState('');
+  const commitCustomCuts = () => {
+    const n = parseInt(customCuts, 10);
+    if (Number.isNaN(n)) { setCustomCuts(''); return; }
+    const clamped = Math.min(cutRule.max, Math.max(cutRule.min, n));
+    setTargetCuts(clamped);
+    setCustomCuts(cutRule.chips.includes(clamped) ? '' : String(clamped));
+  };
 
   // placeholder 로테이션
   const [phIdx, setPhIdx] = useState(0);
@@ -81,6 +99,9 @@ export default function AdBriefForm({ projectId, episodeId, gateStatus, onBriefD
 
   // 기존 브리프 복원
   useEffect(() => {
+    if (cutRule && gateStatus?.target_cuts && !cutRule.chips.includes(gateStatus.target_cuts)) {
+      setCustomCuts(String(gateStatus.target_cuts));
+    }
     const ib = gateStatus?.idea_brief;
     if (ib?.ad_purpose) {
       setAdPurpose(ib.ad_purpose);
@@ -129,7 +150,7 @@ export default function AdBriefForm({ projectId, episodeId, gateStatus, onBriefD
       setSelectedScene(0);
       // visual_points 기본 체크: 8컷 3개, 6컷 2개, 4컷 1개
       const _vps = data.visual_points || [];
-      const _tc = gateStatus?.target_cuts || 8;
+      const _tc = targetCuts || 8;
       const _defaultCount = _tc >= 8 ? 3 : _tc >= 6 ? 2 : 1;
       setVpChecked(_vps.slice(0, _defaultCount).map((_, i) => i));
     } catch (err) {
@@ -195,15 +216,8 @@ export default function AdBriefForm({ projectId, episodeId, gateStatus, onBriefD
       productInfoWeb: enrichResult && !enrichResult.error ? [enrichResult.features, enrichResult.ingredients, enrichResult.usage].filter(Boolean).join('\n') : '',
       episodeTopic: episodeTopic.trim(),
       visualPointsSelected: vpChecked,
+      targetCuts: cutRule ? targetCuts : undefined,
     });
-  };
-
-  const handleSaveDefaults = async () => {
-    try {
-      await api.post(`/projects/${projectId}/series-defaults`, { episode_id: episodeId });
-      setSavedDefaults(true);
-      setTimeout(() => setSavedDefaults(false), 3000);
-    } catch { /* ignore */ }
   };
 
   return (
@@ -215,9 +229,9 @@ export default function AdBriefForm({ projectId, episodeId, gateStatus, onBriefD
         </h3>
 
         {/* brand_series 프리필 안내 */}
-        {purpose === 'brand_series' && isPrefilled && (
+        {purpose === 'brand_series' && (prefilledEpisodeNo || prefilledFrom === 'project') && (
           <div className="px-3 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-xl text-xs font-bold text-blue-600 dark:text-blue-400">
-            시리즈 기본값에서 불러왔어요 · 이번 화 소재를 적어주세요
+            {prefilledEpisodeNo ? `${prefilledEpisodeNo}화 설정을 가져왔어요` : '시리즈 기본값에서 불러왔어요'} · 이번 화 소재를 적어주세요
           </div>
         )}
 
@@ -228,6 +242,35 @@ export default function AdBriefForm({ projectId, episodeId, gateStatus, onBriefD
             <input type="text" value={episodeTopic} onChange={e => setEpisodeTopic(e.target.value)}
               placeholder="예: 겨울 건조 편 · 비워두면 AI가 골라요"
               className="w-full px-3 py-2.5 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-ink-black dark:text-white placeholder-gray-400 focus:outline-none focus:border-amber-400" />
+          </div>
+        )}
+
+        {/* 컷 수 — 칩 + 직접 입력 */}
+        {cutRule && (
+          <div>
+            <label className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-2 block">몇 컷으로 만들까요?</label>
+            <div className="flex flex-wrap items-center gap-2">
+              {cutRule.chips.map(n => (
+                <button key={n} onClick={() => { setTargetCuts(n); setCustomCuts(''); }}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
+                    targetCuts === n && !customCuts
+                      ? 'bg-amber-500 text-white'
+                      : 'bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-zinc-700'
+                  }`}
+                >{n}컷</button>
+              ))}
+              <input type="number" inputMode="numeric" min={cutRule.min} max={cutRule.max}
+                value={customCuts}
+                onChange={e => setCustomCuts(e.target.value)}
+                onBlur={commitCustomCuts}
+                onKeyDown={e => e.key === 'Enter' && e.currentTarget.blur()}
+                placeholder="직접"
+                aria-label={`컷 수 직접 입력 (${cutRule.min}~${cutRule.max})`}
+                className={`w-16 px-2 py-1.5 text-xs font-bold text-center rounded-full border bg-white dark:bg-zinc-800 text-ink-black dark:text-white placeholder-gray-400 focus:outline-none focus:border-amber-400 ${
+                  customCuts ? 'border-amber-500' : 'border-border dark:border-zinc-700'
+                }`} />
+              <span className="text-[10px] text-gray-400 dark:text-gray-500">{cutRule.min}~{cutRule.max}컷</span>
+            </div>
           </div>
         )}
 
@@ -505,15 +548,6 @@ export default function AdBriefForm({ projectId, episodeId, gateStatus, onBriefD
               <><Check size={14} /> {(gateStatus?.current_gate || 1) >= 2 ? '이 카피로 대본 다시 만들기' : '이대로 진행'}</>
             )}
           </button>
-
-          {/* brand_series: 시리즈 기본값으로 저장 */}
-          {purpose === 'brand_series' && (
-            <button onClick={handleSaveDefaults}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-700 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-            >
-              {savedDefaults ? '✓ 저장했어요 · 다음 화부터 자동으로 채워져요' : '시리즈 기본값으로 저장'}
-            </button>
-          )}
         </div>
       )}
     </div>

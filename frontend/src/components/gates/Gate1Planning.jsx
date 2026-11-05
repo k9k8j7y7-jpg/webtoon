@@ -848,7 +848,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
           episodeId={episodeId}
           gateStatus={gateStatus}
           scriptGenerating={adScriptGenerating}
-          onBriefDone={async ({ selectedCopy, selectedScene, briefResult, productName: pName, productInfo: pInfo, productInfoWeb: pInfoWeb, episodeTopic, visualPointsSelected }) => {
+          onBriefDone={async ({ selectedCopy, selectedScene, briefResult, productName: pName, productInfo: pInfo, productInfoWeb: pInfoWeb, episodeTopic, visualPointsSelected, targetCuts }) => {
             setAdScriptGenerating(true);
             try {
               const currentGate = gateStatus?.current_gate || 1;
@@ -861,6 +861,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
               if (pInfoWeb) ib.product_info_web = pInfoWeb;
               if (episodeTopic !== undefined) ib.episode_topic = episodeTopic;
               if (visualPointsSelected) ib.visual_points_selected = visualPointsSelected;
+              if (targetCuts) ib.target_cuts = targetCuts;
               await api.put(`/projects/${projectId}/episodes/${episodeId}/idea-brief/selection`, ib);
 
               // 2) gate 1 승인 — 광고 3종은 이야기형 POST /planning 금지 (idea-brief/selection이 모델·기획안 설정)

@@ -903,6 +903,19 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
     }
   };
 
+  // 연재툰 새 화: 지난 화 모델 일괄 연결 (0패킷)
+  const linkPreviousCharacters = async () => {
+    setError('');
+    try {
+      const { data } = await api.post(`/projects/${projectId}/episodes/${episodeId}/characters/link-previous`);
+      if (!data.linked_characters?.length) setError('지난 화에 연결된 모델이 없어요. 아래에서 골라주세요');
+      setCacheBuster(Date.now());
+      await loadAssets();
+    } catch (err) {
+      setError(err.response?.data?.detail || '지난 화 모델을 가져오지 못했어요');
+    }
+  };
+
   const confirmMapping = async () => {
     if (!mappingState || !mappingChoice) return;
     await linkCharacter(mappingState.characterId, mappingChoice);
@@ -1418,7 +1431,13 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
           </h2>
           <div className="flex flex-col gap-2">
             {purpose === 'brand_series' ? (<>
-              {/* brand_series: 저장된 캐릭터에서 고르기 / 새로 만들기 */}
+              {/* brand_series: 지난 화 모델 / 저장된 캐릭터에서 고르기 / 새로 만들기 */}
+              {!hasCharacters && !isReadOnly && /^episode \d+$/.test(gateStatus?.idea_brief?.prefilled_from || '') && (
+                <button onClick={linkPreviousCharacters} disabled={!!job}
+                  className="flex items-center justify-center gap-1.5 w-full h-12 px-4 neon-btn !rounded-full text-xs font-bold disabled:opacity-50">
+                  <Users size={12} /> 지난 화 모델 그대로 쓰기 (0패킷)
+                </button>
+              )}
               <button onClick={openPicker} disabled={!!job}
                 className="flex items-center justify-center gap-1.5 w-full h-12 px-4 bg-purple-600 text-white rounded-full text-xs font-bold hover:bg-purple-700 hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50">
                 <Link size={12} /> 저장된 캐릭터에서 고르기

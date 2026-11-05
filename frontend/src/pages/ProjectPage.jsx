@@ -133,6 +133,20 @@ export default function ProjectPage() {
     }
   };
 
+  // 연재툰(kind=series): 새 화는 직전 화 설정을 이어받아 바로 브리프로
+  const handleNextEpisode = async () => {
+    setCreating(true);
+    try {
+      const { data } = episodes.length > 0
+        ? await api.post(`/projects/${projectId}/episodes/next`)
+        : await api.post(`/projects/${projectId}/episodes`, { episode_no: 1, title: '1화', is_ad: true, purpose: 'brand_series' });
+      navigate(`/projects/${projectId}/episodes/${data.id}/workflow`);
+    } catch (e) {
+      alert(e.response?.data?.detail || '새 화를 만들지 못했어요.');
+      setCreating(false);
+    }
+  };
+
   const handleDeleteEpisode = async (e, episodeId) => {
     e.stopPropagation();
     if (!confirm('이 에피소드를 삭제하시겠습니까?')) return;
@@ -224,7 +238,8 @@ export default function ProjectPage() {
     return labels[g] || `STEP ${g}`;
   };
 
-  const hasContent = episodes.length > 0 || seriesList.length > 0;
+  const isSeriesProject = project.kind === 'series';
+  const hasContent = episodes.length > 0 || seriesList.length > 0 || isSeriesProject;
 
   return (
     <div>
@@ -234,7 +249,15 @@ export default function ProjectPage() {
 
       <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
         <h1 className="text-2xl font-bold font-serif text-ink-black dark:text-white">{project.title}</h1>
-        {episodes.length > 0 && episodes[0]?.gate_status?.purpose === 'brand_series' ? (
+        {isSeriesProject ? (
+          <button
+            onClick={handleNextEpisode}
+            disabled={creating}
+            className="neon-btn flex items-center gap-1.5 !px-4 !py-2 !rounded-full text-sm disabled:opacity-50"
+          >
+            <Plus size={16} /> {creating ? '만드는 중...' : '새 화 만들기'}
+          </button>
+        ) : episodes.length > 0 && episodes[0]?.gate_status?.purpose === 'brand_series' ? (
           <button
             onClick={() => {
               setAdTitlePurpose('brand_series');
@@ -368,12 +391,18 @@ export default function ProjectPage() {
                     <span className="shrink-0 px-2 py-0.5 text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 rounded-full">광고</span>
                   )}
                   <h3 className="font-bold font-serif text-ink-black dark:text-white group-hover:text-comic-orange transition-colors">
-                    {ep.gate_status?.purpose === 'brand_series'
+                    {isSeriesProject
+                      ? `${ep.episode_no}화 · ${ep.gate_status?.step_info?.name || '브리프'}`
+                      : ep.gate_status?.purpose === 'brand_series'
                       ? `${ep.episode_no}화`
                       : (ep.title || `에피소드 ${ep.episode_no}`)}
                   </h3>
                 </div>
-                {isEpisodeCompleted(ep.gate_status) ? (
+                {isSeriesProject ? (
+                  ep.gate_status?.idea_brief?.episode_topic && (
+                    <p className="text-sm font-bold text-gray-500 dark:text-gray-400 mt-0.5">{ep.gate_status.idea_brief.episode_topic}</p>
+                  )
+                ) : isEpisodeCompleted(ep.gate_status) ? (
                   <p className="text-sm font-bold text-green-500 mt-0.5 flex items-center gap-1">
                     <CheckCircle size={14} /> 에피소드 완료
                   </p>
@@ -404,11 +433,10 @@ export default function ProjectPage() {
               <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white">무엇을 만들까요?</h2>
               <button onClick={() => setShowPurposeModal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"><X size={20} /></button>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
               {[
                 { purpose: 'onecut_ad', icon: '📸', title: '한 컷 광고', desc: '제품·가게 홍보 한 장', color: 'border-amber-400 dark:border-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20' },
                 { purpose: 'instatoon_ad', icon: '📱', title: '인스타툰 광고', desc: '4~8컷 캐러셀 + 릴스', color: 'border-purple-400 dark:border-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20' },
-                { purpose: 'brand_series', icon: '📚', title: '브랜드 연재툰', desc: '같은 제품으로 매주 한 편 — 1화 만들면 2화부턴 제품 정보는 그대로, 이번 화 소재만', color: 'border-blue-400 dark:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20' },
               ].map(c => (
                 <button
                   key={c.purpose}
