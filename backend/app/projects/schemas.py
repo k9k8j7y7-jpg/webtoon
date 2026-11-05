@@ -6,9 +6,13 @@ from datetime import datetime
 
 class ProjectCreate(BaseModel):
     title: str
+    kind: str = "story"  # story / ad / series
     genre: str | None = None
     language: str = "ko"
     visibility: str = "private"
+    # series 전용 옵션
+    series_cut_count: int | None = None  # 6/8/10
+    series_ratio: str | None = None      # 9:16, 1:1, 4:5
 
 
 class ProjectUpdate(BaseModel):
@@ -21,6 +25,7 @@ class ProjectUpdate(BaseModel):
 class ProjectResponse(BaseModel):
     id: int
     title: str
+    kind: str = "story"
     genre: str | None
     language: str
     visibility: str

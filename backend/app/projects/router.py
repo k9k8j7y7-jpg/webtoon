@@ -23,15 +23,17 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 
 # ── Project CRUD ──────────────────────────────
 
-@router.post("", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED)
 def create_project(
     body: ProjectCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _kind = body.kind if body.kind in ("story", "ad", "series") else "story"
     project = Project(
         user_id=current_user.id,
         title=body.title,
+        kind=_kind,
         genre=body.genre,
         language=body.language,
         visibility=body.visibility,
@@ -43,12 +45,38 @@ def create_project(
     memory = ProjectMemory(project_id=project.id, rules={})
     db.add(memory)
 
+    # ── series 프로젝트: 1화 에피소드 자동 생성 ──
+    first_episode = None
+    if _kind == "series":
+        _cut_count = body.series_cut_count if body.series_cut_count in (4, 6, 8, 10) else 6
+        _ratio = body.series_ratio if body.series_ratio in ("9:16", "1:1", "4:5") else "9:16"
+        gs = create_initial_gate_status(
+            is_ad=True,
+            purpose="brand_series",
+        )
+        gs["target_cuts"] = _cut_count
+        gs["aspect_ratio"] = _ratio
+        first_episode = Episode(
+            project_id=project.id,
+            episode_no=1,
+            title="1화",
+            gate_status=gs,
+        )
+        db.add(first_episode)
+
     db.commit()
     db.refresh(project)
-    return project
+    if first_episode:
+        db.refresh(first_episode)
+
+    resp = ProjectResponse.model_validate(project)
+    # 시리즈면 1화 ID를 응답에 포함
+    if first_episode:
+        return {**resp.model_dump(), "first_episode_id": first_episode.id}
+    return resp
 
 
-@router.get("", response_model=list[ProjectResponse])
+@router.get("")
 def list_projects(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -63,7 +91,23 @@ def list_projects(
         .limit(limit)
         .all()
     )
-    return projects
+    result = []
+    for p in projects:
+        d = ProjectResponse.model_validate(p).model_dump()
+        # 시리즈: 화 수, 최근 화 단계
+        if p.kind == "series":
+            ep_count = db.query(Episode).filter(
+                Episode.project_id == p.id, Episode.deleted_at.is_(None)
+            ).count()
+            latest_ep = db.query(Episode).filter(
+                Episode.project_id == p.id, Episode.deleted_at.is_(None)
+            ).order_by(Episode.episode_no.desc()).first()
+            from app.workflow.gate import get_step_info
+            latest_step = get_step_info(latest_ep.gate_status) if latest_ep else None
+            d["episode_count"] = ep_count
+            d["latest_step"] = latest_step
+        result.append(d)
+    return result
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
@@ -129,8 +173,8 @@ def create_episode(
         if body.page_format_override == "vertical":
             gs.pop("target_cuts", None)  # 세로는 컷 수 자유
 
-    # ── brand_series 프리필: series_defaults에서 idea_brief 채움 ──
-    if body.purpose == "brand_series" and project.series_defaults:
+    # ── brand_series 프리필: 시리즈 프로젝트에서만 series_defaults 사용 ──
+    if body.purpose == "brand_series" and project.kind == "series" and project.series_defaults:
         sd = project.series_defaults
         brief_defaults = sd.get("brief", {})
         if brief_defaults:
@@ -151,8 +195,8 @@ def create_episode(
     db.add(episode)
     db.flush()
 
-    # ── brand_series: 직전 화 제품 복사 (행+파일) ──
-    if body.purpose == "brand_series":
+    # ── brand_series: 직전 화 제품 복사 (시리즈 프로젝트에서만) ──
+    if body.purpose == "brand_series" and project.kind == "series":
         _copy_products_from_latest(db, project_id, episode.id)
 
     db.commit()
@@ -182,6 +226,84 @@ def list_episodes(
         gs["step_info"] = info
         ep.gate_status = gs
     return episodes
+
+
+@router.post("/{project_id}/episodes/next", response_model=EpisodeResponse, status_code=status.HTTP_201_CREATED)
+def create_next_episode(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """시리즈 프로젝트 전용: 직전 화를 복사해 새 화를 만든다."""
+    project = _get_user_project(db, project_id, current_user.id)
+    if project.kind != "series":
+        raise HTTPException(status_code=400, detail="시리즈 프로젝트에서만 사용할 수 있습니다")
+
+    # 직전 brand_series 화 찾기
+    from sqlalchemy import func as sa_func
+    prev_ep = (
+        db.query(Episode)
+        .filter(
+            Episode.project_id == project_id,
+            Episode.deleted_at.is_(None),
+            sa_func.json_unquote(sa_func.json_extract(Episode.gate_status, "$.purpose")) == "brand_series",
+        )
+        .order_by(Episode.episode_no.desc())
+        .first()
+    )
+    if not prev_ep:
+        raise HTTPException(status_code=400, detail="직전 화를 찾을 수 없습니다")
+
+    next_no = prev_ep.episode_no + 1
+    prev_gs = prev_ep.gate_status or {}
+
+    # 새 화 gate_status: 직전 화 설정 복사
+    gs = create_initial_gate_status(is_ad=True, purpose="brand_series")
+    gs["target_cuts"] = prev_gs.get("target_cuts")
+    gs["aspect_ratio"] = prev_gs.get("aspect_ratio", "9:16")
+    if prev_gs.get("page_format"):
+        gs["page_format"] = prev_gs["page_format"]
+
+    # idea_brief: 직전 화에서 복사 (소재·카피 선택 제외)
+    from app.workflow.gate import get_idea_brief
+    prev_ib = get_idea_brief(prev_gs) or {}
+    _EXCLUDE = {
+        "episode_topic", "copy_selected", "scene_selected",
+        "copy_candidates", "scene_ideas", "ad_brief_result",
+        "prefilled_from", "raw",
+    }
+    new_ib = {k: v for k, v in prev_ib.items() if k not in _EXCLUDE}
+    new_ib["prefilled_from"] = f"episode {prev_ep.episode_no}"
+    # visual_points_selected 복사
+    if prev_ib.get("visual_points_selected"):
+        new_ib["visual_points_selected"] = prev_ib["visual_points_selected"]
+    # ad_brief_result.visual_points만 복사 (카피·장면은 제외)
+    prev_abr = prev_ib.get("ad_brief_result", {})
+    if prev_abr.get("visual_points"):
+        new_ib["ad_brief_result"] = {"visual_points": prev_abr["visual_points"]}
+    gs["idea_brief"] = new_ib
+
+    episode = Episode(
+        project_id=project_id,
+        episode_no=next_no,
+        title=f"{next_no}화",
+        gate_status=gs,
+    )
+    db.add(episode)
+    db.flush()
+
+    # 직전 화 제품 복사
+    _copy_products_from_latest(db, project_id, episode.id)
+
+    db.commit()
+    db.refresh(episode)
+
+    import logging
+    logging.getLogger(__name__).info(
+        "series next episode: project=%d ep=%d (from ep %d)",
+        project_id, episode.id, prev_ep.id,
+    )
+    return episode
 
 
 @router.delete("/{project_id}/episodes/{episode_id}", status_code=status.HTTP_204_NO_CONTENT)

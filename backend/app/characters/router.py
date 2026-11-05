@@ -674,6 +674,63 @@ def _get_unmatched_script_ref_keys(episode, episode_id, db) -> list[str]:
     return sorted(script_char_ids - linked_refs)
 
 
+@router.post("/projects/{project_id}/episodes/{episode_id}/characters/link-previous")
+async def link_previous_characters(
+    project_id: int,
+    episode_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """직전 화의 캐릭터를 이 에피소드에 일괄 연결 (0패킷). 시리즈 전용."""
+    episode = _get_episode_for_user(db, project_id, episode_id, current_user.id)
+    from app.projects.models import Project
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project or project.kind != "series":
+        raise HTTPException(status_code=400, detail="시리즈 프로젝트에서만 사용할 수 있습니다")
+
+    # 직전 화 찾기
+    prev_ep = (
+        db.query(Episode)
+        .filter(
+            Episode.project_id == project_id,
+            Episode.id != episode_id,
+            Episode.deleted_at.is_(None),
+        )
+        .order_by(Episode.episode_no.desc())
+        .first()
+    )
+    if not prev_ep:
+        raise HTTPException(status_code=400, detail="직전 화를 찾을 수 없습니다")
+
+    # 직전 화 캐릭터 목록
+    prev_chars = (
+        db.query(Character)
+        .join(EpisodeCharacter, EpisodeCharacter.character_id == Character.id)
+        .filter(EpisodeCharacter.episode_id == prev_ep.id)
+        .all()
+    )
+
+    linked = []
+    for ch in prev_chars:
+        existing = (
+            db.query(EpisodeCharacter)
+            .filter(EpisodeCharacter.episode_id == episode_id, EpisodeCharacter.character_id == ch.id)
+            .first()
+        )
+        if existing:
+            linked.append({"character_id": ch.id, "ref_key": ch.ref_key, "already_linked": True})
+            continue
+        db.add(EpisodeCharacter(episode_id=episode_id, character_id=ch.id))
+        linked.append({"character_id": ch.id, "ref_key": ch.ref_key, "linked": True})
+
+    db.commit()
+    import logging
+    logging.getLogger(__name__).info(
+        "link-previous: ep=%d from_ep=%d chars=%d", episode_id, prev_ep.id, len(linked)
+    )
+    return {"linked_characters": linked, "source_episode_id": prev_ep.id}
+
+
 @router.post("/projects/{project_id}/episodes/{episode_id}/characters/link")
 async def link_character(
     project_id: int,
