@@ -100,17 +100,22 @@ ep30 × 6장, gpt-image-2.5-sunburst. 비용 동급($0.073 vs $0.067). 장점: �
 - 빈 카드 콘티 요약: action 2줄 + 첫 대사. 훅/카피 머리말
 - 생성 버튼 동적 문구. 안내 한 줄. 준비 승인 버튼 문구 분기
 
-### 광고 트랙 6차 — 설명 컷 (2026-11-04)
+### 광고 트랙 6차 — 설명 컷 (2026-11-04~05)
 지시서 `docs/지시서-설명컷.md`
 - **컷 종류** `cut.kind`: `scene`(기본) / `explain`(설명 컷). **시각 장치** `cut.device` 6종: zoom_inset(확대 단면), icon_badges(아이콘 배지 3), before_after(전·후 반반), steps(단계 패널 3), size_compare(크기 비교), process(작용 과정 3패널)
 - **ad_brief**: `visual_points [{feature, device, labels[], mechanism, elements[], compare?}]` 최대 5개. AI가 제품 특징에서 자동 추출. `idea_brief.ad_brief_result.visual_points`에 저장, `visual_points_selected`(인덱스 배열)로 사용자 선택
-- **대본**: 선택된 visual_points를 `get_ad_script_addon(visual_points=)` → 포인트·사용법 자리에 `kind:"explain", device, labels, mechanism, elements` 컷으로 배치
-- **콘티**: explain 컷은 `shot=bust` 고정, `has_product=True` 강제
-- **프롬프트**: `prompts/explain.py` `build_explain_clause(device, labels, compare, elements, palette, mechanism)` — scratch 템플릿 이식. 공통 "clean composition, one focal element, leave negative space for labels". elements→"VISUAL DETAILS" 목록, palette→"use these product colors for infographic accents"
+- **대본 N개 강제**: 선택된 visual_points 수만큼 "정확히 N개의 explain 컷" 프롬프트 강제(`prompt_fragments.py`). 대본 생성 후 explain 수 != 선택 수 → 1회 재생성, 그래도 불일치 → 경고 로그만(422 안 던짐). `instatoon_ad` target_cuts NULL이면 기본 6
+- **콘티**: explain 컷은 `shot=bust` 고정, `has_product=True` 강제. **말풍선 하단 배치**: `_apply_copy_cut_positions(is_copy_cut=True)` 재사용 — 라벨이 상단에 오므로 대사·내레이션 y≥0.70(기존 ep 소급 없음)
+- **프롬프트 라벨 허용**: `build_cut_prompt`에 `explain_clause`·`explain_labels` 파라미터 추가. 끝부분 텍스트 금지 블록 3분기: `copy_clause` → 카피 허용 / `explain_labels` → `"Render ONLY these Korean labels, spelled exactly: {labels}. No other text"` / 기본 → "DO NOT render any text…". explain clause는 스타일 뒤·샷 앞(drama_extra 중간 삽입 아님)
+- **prompt-preview**: `storyboard/router.py` preview API도 explain clause·라벨 허용 문구 반영
+- **제품 미등록 가드**: explain 컷이지만 Product 테이블에 photo_url 있는 행이 0이면 `has_product=False` 강제, 제품 clause 생략(에러 없이 캐릭터만). preview도 동일
+- **before_after 템플릿**: LEFT(사용 전) 제품 등장 금지, RIGHT(사용 후) 제품 들기 명시
+- **used_references에 product 기록**: `gen_info.used_references`에 `"product"` 포함(기존에는 char+location+style만 기록, 모델에는 첨부됐지만 기록 누락)
+- **프롬프트 상세**: `prompts/explain.py` `build_explain_clause(device, labels, compare, elements, palette, mechanism)` — scratch 템플릿 이식. 공통 "clean composition, one focal element, leave negative space for labels". elements→"VISUAL DETAILS" 목록, palette→"use these product colors for infographic accents"
 - **검사**: `check_copy_text`에 labels 전달(head=라벨 합침) → 불일치 재시도 1회(0패킷). `check_anatomy` 그대로 적용. gen_info에 `label_check`·`label_retried` 기록
 - **PUT /cuts/{id}/device**: explain 컷 장치·라벨·mechanism·elements 변경
 - **products analyze**: `palette`(영문 색명 2~3개) 추가. `idea_brief.product_palette`에 저장 → explain clause 강조색
-- **프론트**: AdBriefForm "보여줄 특징" 칩(체크 토글, 기본 8컷→3·6컷→2·4컷→1). Gate2 "설명 · {장치}" 보라 배지+라벨 칩+편집. Gate5 빈 카드 "설명 · 장치" 머리말+(59)요약 밝게. RegenDropdown 장치 6종 칩+라벨 입력
+- **프론트**: AdBriefForm "보여줄 특징" 칩(체크 토글, 기본 8컷→3·6컷→2·4컷→1). Gate2 "설명 · {장치}" 보라 배지+라벨 칩+편집. Gate5 빈 카드 "설명 · 장치" 머리말 보라색+(59)요약 text-gray-200 밝게. RegenDropdown 장치 6종 칩+라벨 입력
 - **onecut_ad 해당 없음** — diff 0줄
 
 ### 브랜드 연재툰 2단계 (2026-11-03)

@@ -1099,7 +1099,11 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                     const firstDlg = cut.dialogue?.find(d => d.text);
                     return (
                       <div className="text-center max-w-full">
-                        {cut.action && <p className="text-[10px] text-gray-300 dark:text-zinc-500 line-clamp-2">{prefix}{cut.action}</p>}
+                        {cut.action && <p className="text-[10px] text-gray-200 dark:text-zinc-400 line-clamp-2">
+                          {_isExplain && <span className="text-purple-400 dark:text-purple-300 font-bold">{prefix}</span>}
+                          {!_isExplain && prefix}
+                          {cut.action}
+                        </p>}
                         {firstDlg && <p className="text-[10px] text-gray-300/70 dark:text-zinc-600 line-clamp-1 italic mt-0.5">"{firstDlg.text}"</p>}
                       </div>
                     );

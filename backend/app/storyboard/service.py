@@ -295,7 +295,7 @@ def create_cuts_from_script(
                 "action": cut_data.get("action", ""),
                 "dialogue": _apply_copy_cut_positions(
                     _apply_narration_box_default(cut_data.get("dialogue", [])),
-                    is_copy_cut=(_is_copy_render_purpose and (global_cut_number == 1 or global_cut_number == _total_cuts)),
+                    is_copy_cut=(_is_explain or (_is_copy_render_purpose and (global_cut_number == 1 or global_cut_number == _total_cuts))),
                 ),
                 "emphasis": cut_data.get("emphasis", "normal"),
                 "transition": cut_data.get("transition"),

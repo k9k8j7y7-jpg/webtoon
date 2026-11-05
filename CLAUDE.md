@@ -80,7 +80,7 @@ WEBTOON/
 - **purpose별 모델 수:** brand_series:2, instatoon_ad:1, onecut_ad:1 (`_PURPOSE_MODEL_LIMIT`)
 - **카피 디자인 3트랙 공통:** 글씨체·위치·강조 → `idea_brief.copy_design`
 - **[다시 그리기] 단일 진입:** 바텀시트/팝오버(메모+연출+제품+인라인 확인)
-- **설명 컷:** `cut.kind=explain` + `device` 6종(`prompts/explain.py` 한 곳, scratch 템플릿 고정). 기획안 `visual_points`→대본 배치, 라벨 카피 검사·손 검사 적용. bust 고정·has_product 강제. onecut_ad 해당 없음
+- **설명 컷:** `cut.kind=explain` + `device` 6종(`prompts/explain.py`). 기획안 `visual_points`→대본 N개 강제 배치(검증+1회 재시도), 라벨 허용 프롬프트(`"Render ONLY…"`), 라벨·손 검사, bust 고정·has_product 강제(미등록 시 자동 해제), 말풍선 하단 배치. onecut_ad 해당 없음
 
 ## 개발 규칙
 
