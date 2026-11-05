@@ -120,7 +120,7 @@ async def create_script(
 
     # 인스타툰 target_cuts (4/6/8), brand_series target_cuts (6/8/10)
     if _purpose == "instatoon_ad":
-        _target_cuts = _gs.get("target_cuts")
+        _target_cuts = _gs.get("target_cuts") or 6  # 기본 6컷
     elif _purpose == "brand_series":
         _target_cuts = _gs.get("target_cuts") or 6  # 기본 6컷
     else:

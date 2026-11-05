@@ -70,6 +70,8 @@ def build_cut_prompt(
     has_photo_real_char: bool = False,
     extra_prompt: str = "",
     copy_clause: str = "",
+    explain_clause: str = "",
+    explain_labels: list[str] | None = None,
     user_note: str | None = None,
 ) -> str:
     """컷 명세로부터 이미지 생성 프롬프트를 조립한다.
@@ -229,6 +231,10 @@ def build_cut_prompt(
     else:
         parts.append(f"{style_prompt}. Apply this art style to coloring and rendering only, preserve character facial identity from references")
 
+    # ── 4.5. 설명 컷 장치 (explain clause — 스타일 뒤, 끝 쪽) ──
+    if explain_clause:
+        parts.append(explain_clause)
+
     # ── 5. 샷 타입·강조 ──
     shot = cut_spec.get("shot", "full")
     parts.append(SHOT_SCALE_GUIDE.get(shot, SHOT_SCALE_GUIDE["full"]))
@@ -274,6 +280,14 @@ def build_cut_prompt(
             f"A single illustration, {format_desc}, clean composition. "
             "No speech bubbles. No text except the headline/subline specified above "
             "and the product's own label"
+        )
+    elif explain_labels:
+        # 설명 컷 라벨 허용 모드: 지정 라벨만 허용
+        label_list = ", ".join(f"'{l}'" for l in explain_labels)
+        parts.append(
+            f"A single illustration, {format_desc}, clean composition. "
+            "No speech bubbles. "
+            f"Render ONLY these Korean labels, spelled exactly: {label_list}. No other text"
         )
     else:
         parts.append(

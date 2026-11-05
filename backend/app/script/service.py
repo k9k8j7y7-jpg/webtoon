@@ -213,6 +213,7 @@ async def generate_script(
                 for idx in _vps:
                     if isinstance(idx, int) and 0 <= idx < len(_all_vps):
                         _selected_vps.append(_all_vps[idx])
+            _expected_explain_count = len(_selected_vps)
             system += get_ad_script_addon(target_cuts, series=(purpose == "brand_series"), visual_points=_selected_vps)
         else:
             system += STANDALONE_SCRIPT_INSTRUCTION_ADDON
@@ -251,6 +252,33 @@ async def generate_script(
                 raise HTTPException(
                     status_code=422,
                     detail=f"대본 컷 수가 맞지 않아요 ({actual}컷/{target_cuts}컷) — 다시 만들어 주세요",
+                )
+
+    # 설명 컷 수 검증: 선택된 visual_points 수 == 실제 explain 컷 수
+    _expected = locals().get("_expected_explain_count", 0)
+    if _expected > 0:
+        import logging
+        _logger = logging.getLogger(__name__)
+        _actual_explain = sum(
+            1 for s in result.get("scenes", [])
+            for c in s.get("cuts", [])
+            if c.get("kind") == "explain"
+        )
+        if _actual_explain != _expected:
+            _logger.warning(
+                "Explain cut count mismatch: expected=%d actual=%d → retry once",
+                _expected, _actual_explain,
+            )
+            result = await _generate_and_parse()
+            _actual_explain = sum(
+                1 for s in result.get("scenes", [])
+                for c in s.get("cuts", [])
+                if c.get("kind") == "explain"
+            )
+            if _actual_explain != _expected:
+                _logger.warning(
+                    "Explain cut count still mismatched after retry: expected=%d actual=%d (proceeding)",
+                    _expected, _actual_explain,
                 )
 
     return result

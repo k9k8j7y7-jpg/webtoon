@@ -306,12 +306,22 @@ async def generate_cut_image(
         logger.info("Cut %s: %s → GPT adapter (ad purpose)", cut.cut_id, _ep_purpose)
     adapter = get_openai_image_adapter() if use_gpt else get_image_adapter()
     spec = cut.spec
+    _is_explain_cut = spec.get("kind") == "explain"
 
     # 1. 캐릭터 레퍼런스 로드
     char_ids = [c.get("character_id") for c in spec.get("characters", []) if c.get("character_id")]
     # 제품 + 장소로 예약할 슬롯 수
     # 광고(instatoon_ad·brand_series)는 제품 등록 시 모든 컷에 제품 참조 → 항상 2슬롯 예약
     cut_has_product = spec.get("has_product", False)
+    # 설명 컷: 제품 미등록이면 has_product 강제 해제 (에러 없이 캐릭터만)
+    if _is_explain_cut and cut_has_product:
+        from app.products.models import Product as _ProdCheck
+        _has_real_product = db.query(_ProdCheck).filter(
+            _ProdCheck.episode_id == episode_id, _ProdCheck.photo_url.isnot(None)
+        ).first() is not None
+        if not _has_real_product:
+            cut_has_product = False
+            logger.info("Cut %s explain: no product registered → has_product forced False", cut.cut_id)
     _ad_needs_product_ref = _is_ad_purpose and _ep_purpose != "onecut_ad"  # instatoon·brand만
     _reserved = 2 if (cut_has_product or _ad_needs_product_ref) else 1
     ref_images, ref_labels, char_descs = _get_character_references(
@@ -451,7 +461,6 @@ async def generate_cut_image(
         logger.info("Cut %s drama: level=%s category=%s motions=%s", cut.cut_id, drama_level, drama_category, drama_motions)
 
     # 4.8. 설명 컷 프롬프트 (explain cut — kind=explain)
-    _is_explain_cut = spec.get("kind") == "explain"
     explain_clause = ""
     if _is_explain_cut:
         _explain_device = spec.get("device", "zoom_inset")
@@ -483,7 +492,6 @@ async def generate_cut_image(
             mechanism=_explain_mechanism,
         )
         if explain_clause:
-            drama_extra = (explain_clause + " " + drama_extra) if drama_extra else explain_clause
             logger.info("Cut %s explain: device=%s labels=%s mechanism=%s elements=%d palette=%s",
                         cut.cut_id, _explain_device, _explain_labels, _explain_mechanism,
                         len(_explain_elements), _explain_palette)
@@ -557,6 +565,8 @@ async def generate_cut_image(
         has_photo_real_char=use_gpt,
         extra_prompt=drama_extra,
         copy_clause=copy_clause,
+        explain_clause=explain_clause if _is_explain_cut else "",
+        explain_labels=spec.get("labels") if _is_explain_cut else None,
         user_note=user_note,
     )
 
@@ -699,6 +709,8 @@ async def generate_cut_image(
     used_refs = char_ids.copy()
     if location_id:
         used_refs.append(location_id)
+    if product_ref_attached:
+        used_refs.append("product")
     if style:
         used_refs.append(f"style:{style.preset_key}")
 

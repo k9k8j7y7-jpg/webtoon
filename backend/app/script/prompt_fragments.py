@@ -152,7 +152,8 @@ def _build_explain_addon(visual_points: list[dict]) -> str:
         "size_compare": "크기 비교",
         "process": "작용 과정 3패널",
     }
-    lines = ["\n\n[설명 컷 배치 — 아래 특징을 캐릭터가 그림으로 설명하는 컷으로 만들어라]"]
+    n = len(visual_points)
+    lines = [f"\n\n[설명 컷 배치 — 아래 {n}개 특징을 정확히 {n}개의 explain 컷으로 만들어라. 하나도 빠뜨리지 말 것]"]
     for i, vp in enumerate(visual_points, 1):
         device = vp.get("device", "zoom_inset")
         labels = vp.get("labels", [])
@@ -168,7 +169,8 @@ def _build_explain_addon(visual_points: list[dict]) -> str:
             line += f", 그릴 요소: {', '.join(elements[:5])}"
         lines.append(line)
     lines.append(
-        "위 설명 컷은 포인트·사용법 자리에 넣어라. "
+        f"위 {n}개 설명 컷을 포인트·사용법·해결 자리에 배치해라. "
+        f"반드시 정확히 {n}개의 kind:\"explain\" 컷이 있어야 한다 — {n - 1}개는 부족, {n + 1}개는 초과. "
         "설명 컷의 JSON에 kind: \"explain\", device: \"영문키(zoom_inset/icon_badges/before_after/steps/size_compare/process 중 택1)\", "
         "labels: [\"라벨\"], mechanism: \"작용 원리 영문 한 줄\", elements: [\"그릴 요소\"] 필드를 추가해라. "
         "일반 장면 컷은 kind 필드 없거나 \"scene\". "

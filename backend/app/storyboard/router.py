@@ -746,9 +746,18 @@ async def get_prompt_preview(
             if loc_image_attached and loc_image_label:
                 ref_labels.append(loc_image_label)
 
-    # 제품
+    # 제품 (설명 컷 + 제품 미등록이면 생략)
+    _is_explain_cut = spec.get("kind") == "explain"
     product_desc = ""
-    if spec.get("has_product", False):
+    _preview_has_product = spec.get("has_product", False)
+    if _is_explain_cut and _preview_has_product:
+        from app.products.models import Product as ProductModel
+        _has_real = db.query(ProductModel).filter(
+            ProductModel.episode_id == episode_id, ProductModel.photo_url.isnot(None)
+        ).first() is not None
+        if not _has_real:
+            _preview_has_product = False
+    if _preview_has_product:
         from app.products.models import Product as ProductModel
         from app.prompts.product import build_product_clause
         products = db.query(ProductModel).filter(
@@ -757,6 +766,20 @@ async def get_prompt_preview(
         for prod in products:
             product_desc = build_product_clause(prod)
             ref_labels.append(f"[이미지] 제품 '{prod.name}' — 참조 사진")
+
+    # 설명 컷 clause
+    _explain_clause = ""
+    _explain_labels = None
+    if _is_explain_cut:
+        _explain_labels = spec.get("labels") or []
+        from app.prompts.explain import build_explain_clause
+        _explain_clause = build_explain_clause(
+            spec.get("device", "zoom_inset"),
+            _explain_labels,
+            compare=spec.get("compare", ""),
+            elements=spec.get("elements") or [],
+            mechanism=spec.get("mechanism", ""),
+        )
 
     # 스타일
     from app.styles.models import Style, STYLE_PRESETS
@@ -785,6 +808,8 @@ async def get_prompt_preview(
         loc_image_attached=loc_image_attached,
         aspect_ratio=ep_aspect_ratio,
         product_desc=product_desc,
+        explain_clause=_explain_clause,
+        explain_labels=_explain_labels if _is_explain_cut else None,
     )
 
     return {

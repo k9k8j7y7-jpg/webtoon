@@ -73,10 +73,12 @@ def _build_before_after(labels: list[str]) -> str:
     after_lbl = labels[1] if len(labels) > 1 else "사용 후"
     return (
         f"DEVICE: Before/After split — the panel is split vertically in half. "
-        f"LEFT side: the character with an uncomfortable expression, "
-        f"a small circular inset shows the problem area. Label: '{before_lbl}'. "
-        f"RIGHT side: the same character with a refreshed happy expression, "
-        f"inset shows improvement. Label: '{after_lbl}'. "
+        f"LEFT side (before use): the character with an uncomfortable expression, "
+        f"a small circular inset shows the problem area. The product must NOT appear on this side. "
+        f"Label: '{before_lbl}'. "
+        f"RIGHT side (after use): the same character with a refreshed happy expression, "
+        f"holding the product in one hand, inset shows improvement. "
+        f"Label: '{after_lbl}'. "
         f"A dividing line separates the two halves."
     )
 
