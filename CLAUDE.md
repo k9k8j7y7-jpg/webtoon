@@ -80,7 +80,8 @@ WEBTOON/
 - **purpose별 모델 수:** brand_series:2, instatoon_ad:1, onecut_ad:1 (`_PURPOSE_MODEL_LIMIT`)
 - **카피 디자인 3트랙 공통:** 글씨체·위치·강조 → `idea_brief.copy_design`
 - **[다시 그리기] 단일 진입:** 바텀시트/팝오버(메모+연출+제품+인라인 확인)
-- **설명 컷:** `cut.kind=explain` + `device` 6종(`prompts/explain.py`). 기획안 `visual_points`→대본 N개 강제 배치(검증+1회 재시도), 라벨 허용 프롬프트(`"Render ONLY…"`), 라벨·손 검사, bust 고정·has_product 강제(미등록 시 자동 해제), 말풍선 하단 배치. onecut_ad 해당 없음
+- **설명 컷:** `cut.kind=explain` + `device` 6종(`prompts/explain.py`). 기획안 `visual_points`→대본 N개 강제 배치(검증+1회 재시도), 라벨 허용 프롬프트(`"Render ONLY…"`), 라벨·손 검사, bust 고정·has_product 강제(미등록 시 자동 해제), 말풍선 하단 배치, **1컷(훅)·마지막(카피) 배치 금지**(위반 1회 재생성). onecut_ad 해당 없음
+- **연재툰 = 시리즈 프로젝트:** `projects.kind='series'`(step36). 새 화 = 직전 화 복사(브리프·제품·보여줄 특징), 모델 link-previous(n-1 우선, 0패킷). 컷 수 직접 입력(brand_series 4~20, instatoon_ad 4~10, 임의 N 구조 비례 배분). 4:5 비율 제외. 섞인 프로젝트엔 연재툰 입구 없음. 중간 컷 font_scale 1.15(brand_series·instatoon_ad)
 
 ## 개발 규칙
 

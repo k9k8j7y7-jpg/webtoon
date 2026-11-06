@@ -185,8 +185,8 @@ def get_ad_script_addon(target_cuts: int | None = None, series: bool = False, vi
     if series:
         return _get_brand_series_addon(target_cuts, visual_points=visual_points)
     explain_addon = _build_explain_addon(visual_points or [])
-    if target_cuts and target_cuts in _AD_CUT_STRUCTURES:
-        structure = _AD_CUT_STRUCTURES[target_cuts]
+    if target_cuts and isinstance(target_cuts, int) and target_cuts >= 4:
+        structure = _build_instatoon_structure(target_cuts)
         return f"""
 추가 원칙 (광고 웹툰 — 완결 필수 + 제품 자연 노출):
 - 이 에피소드는 광고 웹툰이다. 하나의 완결된 이야기를 만들어야 한다.
@@ -215,12 +215,71 @@ _BRAND_SERIES_CUT_STRUCTURES = {
 }
 
 
+def _build_brand_series_structure(n: int) -> str:
+    """brand_series 임의 N컷 구조 생성: 훅 1 + 문제 ⌈N×0.2⌉ + 나머지(포인트·사용법·해결) + CTA 1."""
+    if n in _BRAND_SERIES_CUT_STRUCTURES:
+        return _BRAND_SERIES_CUT_STRUCTURES[n]
+    import math
+    problem_count = math.ceil(n * 0.2)
+    # 훅 1 + 문제 + CTA 1 = 고정, 나머지 = 해결·포인트·사용법
+    middle = n - 1 - problem_count - 1
+    if middle < 1:
+        middle = 1
+        problem_count = max(1, n - 3)
+    parts = ["훅(일상 시작)"]
+    if problem_count == 1:
+        parts.append("문제 인식(고민)")
+    else:
+        for i in range(1, problem_count + 1):
+            parts.append(f"일상·문제{i}(공감·고민)")
+    parts.append("제품 자연 등장(전환)")
+    remaining = middle - 1  # 제품 등장이 1자리 차지
+    if remaining < 0:
+        remaining = 0
+    # 포인트·사용법을 번갈아 배분 (explain 자리)
+    point_count = (remaining + 1) // 2
+    usage_count = remaining - point_count
+    for i in range(1, point_count + 1):
+        label = f"포인트{i}(장점)" if point_count > 1 else "포인트(핵심 장점)"
+        parts.append(label)
+    for i in range(1, usage_count + 1):
+        label = f"사용법{i}(활용)" if usage_count > 1 else "사용법(활용 장면)"
+        parts.append(label)
+    parts.append("여운(마무리·CTA 선택)")
+    return "[" + ", ".join(parts) + "]"
+
+
+def _build_instatoon_structure(n: int) -> str:
+    """인스타툰 임의 N컷 구조: 4/6/8 중 가장 가까운 구조를 N에 맞춰 늘리거나 줄임."""
+    if n in _AD_CUT_STRUCTURES:
+        return _AD_CUT_STRUCTURES[n]
+    # 가장 가까운 기준 구조 선택
+    base_keys = sorted(_AD_CUT_STRUCTURES.keys())
+    closest = min(base_keys, key=lambda k: abs(k - n))
+    base_parts = _AD_CUT_STRUCTURES[closest]
+    # 기본 뼈대: 훅·문제·해결·CTA 고정, 중간(포인트·사용법) 조절
+    fixed_head = ["훅(상황 제시)", "문제(갈등·고민)"]
+    fixed_tail = ["CTA(결과·마무리)"]
+    middle_budget = n - len(fixed_head) - len(fixed_tail)
+    if middle_budget < 1:
+        middle_budget = 1
+    parts = list(fixed_head)
+    parts.append("해결(제품 등장·사용)")
+    remaining = middle_budget - 1
+    point_count = (remaining + 1) // 2
+    usage_count = remaining - point_count
+    for i in range(1, point_count + 1):
+        parts.append(f"포인트{i}(효과·장점)" if point_count > 1 else "포인트(효과·장점)")
+    for i in range(1, usage_count + 1):
+        parts.append(f"사용법{i}(활용 장면)" if usage_count > 1 else "사용법(활용 장면)")
+    parts.extend(fixed_tail)
+    return "[" + ", ".join(parts) + "]"
+
+
 def _get_brand_series_addon(target_cuts: int | None = None, visual_points: list[dict] | None = None) -> str:
     """brand_series 전용 대본 addon — 연재 구조 + 이번 화 소재."""
     tc = target_cuts or 6
-    if tc not in _BRAND_SERIES_CUT_STRUCTURES:
-        tc = 6
-    structure = _BRAND_SERIES_CUT_STRUCTURES[tc]
+    structure = _build_brand_series_structure(tc)
     return f"""
 추가 원칙 (브랜드 연재툰 — 완결 필수 + 제품 자연 노출):
 - 이 에피소드는 브랜드 연재 웹툰의 한 화다. 이번 화 안에서 완결되는 이야기를 만들어야 한다.

@@ -229,6 +229,18 @@ def _apply_copy_cut_positions(dialogue: list[dict], is_copy_cut: bool) -> list[d
     return dialogue
 
 
+def _apply_middle_cut_font_boost(dialogue: list[dict]) -> list[dict]:
+    """brand_series 중간 컷(첫/마지막 아닌)의 말풍선·나레이션 기본 font_scale을 한 단계 키운다."""
+    for item in dialogue:
+        layout = item.get("bubble_layout")
+        if layout and isinstance(layout, dict):
+            if "font_scale" not in layout:
+                layout["font_scale"] = 1.15
+        elif not layout:
+            item.setdefault("bubble_layout", {})["font_scale"] = 1.15
+    return dialogue
+
+
 def create_cuts_from_script(
     episode_id: int, script_data: dict, db: Session,
     product_names: list[str] | None = None,
@@ -294,7 +306,10 @@ def create_cuts_from_script(
                 "shot": "bust" if _is_explain else cut_data.get("shot", "full"),
                 "action": cut_data.get("action", ""),
                 "dialogue": _apply_copy_cut_positions(
-                    _apply_narration_box_default(cut_data.get("dialogue", [])),
+                    _apply_middle_cut_font_boost(
+                        _apply_narration_box_default(cut_data.get("dialogue", []))
+                    ) if (purpose in ("brand_series", "instatoon_ad") and global_cut_number != 1 and global_cut_number != _total_cuts)
+                    else _apply_narration_box_default(cut_data.get("dialogue", [])),
                     is_copy_cut=(_is_explain or (_is_copy_render_purpose and (global_cut_number == 1 or global_cut_number == _total_cuts))),
                 ),
                 "emphasis": cut_data.get("emphasis", "normal"),

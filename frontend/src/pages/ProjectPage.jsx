@@ -248,7 +248,12 @@ export default function ProjectPage() {
       </button>
 
       <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
-        <h1 className="text-2xl font-bold font-serif text-ink-black dark:text-white">{project.title}</h1>
+        <div className="flex items-center gap-2">
+          {isSeriesProject && (
+            <span className="inline-block px-2 py-0.5 text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 rounded-full">연재</span>
+          )}
+          <h1 className="text-2xl font-bold font-serif text-ink-black dark:text-white">{project.title}</h1>
+        </div>
         {isSeriesProject ? (
           <button
             onClick={handleNextEpisode}

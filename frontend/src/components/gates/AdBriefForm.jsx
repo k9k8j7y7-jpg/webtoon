@@ -39,10 +39,10 @@ const CUT_COUNT_RULES = {
 };
 
 const MSG_PLACEHOLDERS = [
-  '우리 가게 시그니처 메뉴를 알리고 싶어요',
-  '두피 케어 오일, 산뜻하고 가볍게',
-  '겨울 한정 딸기라떼 출시!',
-  '반려동물 전용 영양제, 건강하게',
+  '예: 우리 가게 시그니처 메뉴를 알리고 싶어요',
+  '예: 두피 케어 오일, 산뜻하고 가볍게',
+  '예: 겨울 한정 딸기라떼 출시!',
+  '예: 반려동물 전용 영양제, 건강하게',
 ];
 
 export default function AdBriefForm({ projectId, episodeId, gateStatus, onBriefDone, scriptGenerating = false }) {
@@ -297,7 +297,7 @@ export default function AdBriefForm({ projectId, episodeId, gateStatus, onBriefD
             value={keyMessage} onChange={e => setKeyMessage(e.target.value)}
             placeholder={MSG_PLACEHOLDERS[phIdx]}
             rows={2}
-            className="w-full px-3 py-2.5 border-2 border-border dark:border-zinc-700 rounded-xl bg-white dark:bg-zinc-800 text-sm text-ink-black dark:text-white placeholder-gray-400 focus:border-amber-500 focus:outline-none resize-none"
+            className="w-full px-3 py-2.5 border-2 border-border dark:border-zinc-700 rounded-xl bg-white dark:bg-zinc-800 text-sm text-ink-black dark:text-white placeholder-gray-500 dark:placeholder-gray-500 focus:border-amber-500 focus:outline-none resize-none"
           />
         </div>
 

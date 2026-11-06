@@ -688,17 +688,30 @@ async def link_previous_characters(
     if not project or project.kind != "series":
         raise HTTPException(status_code=400, detail="시리즈 프로젝트에서만 사용할 수 있습니다")
 
-    # 직전 화 찾기
+    # 직전 화 찾기: 현재 화 episode_no - 1 우선, 없으면 가장 가까운 이전 화
+    current_ep_no = episode.episode_no or 0
     prev_ep = (
         db.query(Episode)
         .filter(
             Episode.project_id == project_id,
             Episode.id != episode_id,
             Episode.deleted_at.is_(None),
+            Episode.episode_no == current_ep_no - 1,
         )
-        .order_by(Episode.episode_no.desc())
         .first()
     )
+    if not prev_ep:
+        prev_ep = (
+            db.query(Episode)
+            .filter(
+                Episode.project_id == project_id,
+                Episode.id != episode_id,
+                Episode.deleted_at.is_(None),
+                Episode.episode_no < current_ep_no,
+            )
+            .order_by(Episode.episode_no.desc())
+            .first()
+        )
     if not prev_ep:
         raise HTTPException(status_code=400, detail="직전 화를 찾을 수 없습니다")
 

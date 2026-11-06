@@ -118,12 +118,17 @@ async def update_idea_brief_selection(
     # 제품 팔레트 (analyze 결과에서 프론트가 전달)
     if "product_palette" in body:
         ib["product_palette"] = body["product_palette"]
-    # 인스타툰 컷 수 (4/6/8), brand_series 컷 수 (6/8/10)
+    # 인스타툰 컷 수 (4~10), brand_series 컷 수 (4~20)
     if "target_cuts" in body:
         tc = body["target_cuts"]
         purpose_for_tc = gs.get("purpose", "story")
-        valid_tc = (6, 8, 10) if purpose_for_tc == "brand_series" else (4, 6, 8)
-        if tc in valid_tc:
+        if purpose_for_tc == "brand_series":
+            valid = isinstance(tc, int) and 4 <= tc <= 20
+        elif purpose_for_tc == "instatoon_ad":
+            valid = isinstance(tc, int) and 4 <= tc <= 10
+        else:
+            valid = False
+        if valid:
             gs["target_cuts"] = tc
     gs["idea_brief"] = ib
 

@@ -48,7 +48,7 @@ def create_project(
     # ── series 프로젝트: 1화 에피소드 자동 생성 ──
     first_episode = None
     if _kind == "series":
-        _cut_count = body.series_cut_count if body.series_cut_count in (4, 6, 8, 10) else 6
+        _cut_count = body.series_cut_count if isinstance(body.series_cut_count, int) and 4 <= body.series_cut_count <= 20 else 6
         _ratio = body.series_ratio if body.series_ratio in ("9:16", "1:1", "4:5") else "9:16"
         gs = create_initial_gate_status(
             is_ad=True,

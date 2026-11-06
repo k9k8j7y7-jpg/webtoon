@@ -238,7 +238,7 @@ async def generate_script(
     result = await _generate_and_parse()
 
     # 인스타툰/brand_series 컷 수 검증: target_cuts != 실제 컷 수 → 1회 재생성
-    if target_cuts and target_cuts in (4, 6, 8, 10) and purpose != "onecut_ad":
+    if target_cuts and isinstance(target_cuts, int) and 4 <= target_cuts <= 20 and purpose != "onecut_ad":
         actual = sum(len(s.get("cuts", [])) for s in result.get("scenes", []))
         if actual != target_cuts:
             import logging
@@ -280,6 +280,22 @@ async def generate_script(
                     "Explain cut count still mismatched after retry: expected=%d actual=%d (proceeding)",
                     _expected, _actual_explain,
                 )
+
+    # 설명 컷 위치 검증: 1컷(훅)·마지막 컷(카피)에 explain 배치 금지 → 1회 재생성
+    if _expected > 0:
+        _all_cuts = [c for s in result.get("scenes", []) for c in s.get("cuts", [])]
+        if len(_all_cuts) >= 2:
+            _first_is_explain = _all_cuts[0].get("kind") == "explain"
+            _last_is_explain = _all_cuts[-1].get("kind") == "explain"
+            if _first_is_explain or _last_is_explain:
+                if "_logger" not in dir():
+                    import logging
+                    _logger = logging.getLogger(__name__)
+                _logger.warning(
+                    "Explain cut in forbidden position (first=%s last=%s) → retry once",
+                    _first_is_explain, _last_is_explain,
+                )
+                result = await _generate_and_parse()
 
     return result
 

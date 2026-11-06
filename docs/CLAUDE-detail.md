@@ -4,6 +4,15 @@
 
 ## 현재 상태 이력
 
+**브랜드 연재툰 2차 완료 (2026-11-06):** 지시서 `docs/지시서-연재툰-2차.md`
+- 시리즈 = 프로젝트(`projects.kind='series'`, step36). 새 프로젝트 3택(이야기/광고/연재툰), 시리즈 이름·컷 수·비율 선택 → 1화 자동 생성
+- 새 화 = 직전 화 복사(브리프·제품·보여줄 특징·target_cuts·비율). prefilled_from 안내 줄. series_defaults UI 제거
+- 모델 link-previous: episode_no n-1 우선, 없으면 가장 가까운 이전 화 fallback (0패킷)
+- 컷 수 직접 입력: brand_series 4~20, instatoon_ad 4~10 정수. 임의 N 구조 비례 배분(brand_series: 훅 1 + 문제 ⌈N×0.2⌉ + 포인트·사용법 나머지 + CTA 1 / instatoon: 가장 가까운 4/6/8 기반 확장·축소). 4:5 비율 제외
+- 설명 컷 위치 제한: 1컷(훅)·마지막(카피) 배치 금지 — addon 프롬프트 + service.py 위치 검증(위반 1회 재생성)
+- 중간 컷 font_scale 1.15: brand_series·instatoon_ad 중간 컷(첫/마지막 제외) 말풍선·나레이션 기본 글자 크기 한 단계 키움
+- 프론트: DashboardPage "연재" 배지 + ProjectPage "연재" 배지·[새 화 만들기], AdBriefForm 컷 수 칩+직접 입력·프리필 안내·placeholder "예:"·placeholder 회색, Gate3 "지난 화 모델 그대로 쓰기", LandingPage 연재툰→/my?new=series, 섞인 프로젝트 용도 모달에서 brand_series 제거
+
 **제품 자산 2단계 완료 (2026-10-27):** 지시서 `docs/지시서-제품자산.md`
 - Gate3 제품 섹션: isAd 조건 제거 → 항상 표시. [제품 추가] 모달(사진 필수·들고 사진 선택·[분석]→이름·한글이름·색·라벨글자·형태 칩7·크기 칩5 자동 선택→저장). 누끼 썸네일 카드+형태·크기 칩. 편집도 같은 모달
 - Gate4 콘티: 컷 카드 "📦 제품 등장"/"📦 제품 없음" 배지(자동이면 "자동" 표시), 상단 "N컷 중 M컷에 제품" 요약, 편집 모달 토글 hasProducts 조건
