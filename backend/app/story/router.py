@@ -532,7 +532,8 @@ async def create_ad_brief(
     from app.workflow.gate import set_idea_brief as _set_brief
 
     gate_status = episode.gate_status
-    idea_brief = gate_status.get("idea_brief") or {}
+    # 복사본에서 수정 — 제자리 수정 시 SQLAlchemy JSON 변경 감지 실패로 저장 누락
+    idea_brief = dict(gate_status.get("idea_brief") or {})
     product = idea_brief.get("product", {})
 
     # 참고 광고 분석 텍스트 수집

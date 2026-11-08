@@ -1,5 +1,7 @@
 """게이트 5 — 이미지 생성·재생성·대사수정·되돌리기. API-Spec 7장."""
 
+import copy
+
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -112,7 +114,8 @@ async def regenerate_cut(
 
     # 재생성 파라미터 적용
     if body and body.params:
-        spec = dict(cut.spec)
+        # deepcopy — characters 중첩 dict 제자리 수정 시 JSON 변경 감지 실패로 저장 누락
+        spec = copy.deepcopy(cut.spec)
         if body.mode == "emotion" and "emotion" in body.params:
             for char in spec.get("characters", []):
                 if "character_id" in body.params:

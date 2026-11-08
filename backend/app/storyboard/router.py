@@ -1,5 +1,6 @@
 """게이트 4 — 콘티 엔드포인트. API-Spec 6장."""
 
+import copy
 import json
 import logging
 from fastapi import APIRouter, Depends, HTTPException
@@ -257,8 +258,9 @@ async def update_cut(
     if not cut:
         raise HTTPException(status_code=404, detail="Cut not found")
 
-    spec = dict(cut.spec)
-    old_char_ids = {c.get("character_id") for c in spec.get("characters", []) if c.get("character_id")}
+    # deepcopy — auto_add_mentioned_characters가 characters 리스트를 제자리 append
+    spec = copy.deepcopy(cut.spec)
+    old_char_ids ={c.get("character_id") for c in spec.get("characters", []) if c.get("character_id")}
     for key in ["shot", "action", "emphasis", "transition", "prompt_override", "location_id"]:
         if key in body:
             spec[key] = body[key]
