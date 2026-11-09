@@ -4,6 +4,16 @@
 
 ## 현재 상태 이력
 
+**내 작품 단일 목록 (2026-11-09):** 지시서 `docs/지시서 내작품 · MD`
+- 프로젝트/에피소드 2층 → 한 화면 "내 작품"(`/my`). 한 컷·인스타툰 = 사용자별 기본 프로젝트(`projects.is_default=1`, kind=ad, title="내 광고", step37) 안에 에피소드. 연재툰 = kind=series 프로젝트 1행. story = 메뉴 "이야기 만들기" → `/projects`(기존 화면, story만)
+- 화면에 "프로젝트"·"에피소드" 단어 금지. "작품"·"이야기"·"만들기" 사용
+- 입구 카드 3(한 컷/인스타툰/연재) + 빈 4번째 + 빠른 한 컷 배너 + 필터 칩 + 단일 목록(updated_at desc, 광고 ep 개별 + 시리즈 1행)
+- POST /my/works?type=onecut_ad|instatoon_ad|brand_series — 기본 프로젝트 find-or-create, 제목 자동("한 컷 광고 11/09")
+- GET /my/works — 광고 ep(어느 프로젝트든) + series 프로젝트 1행, story 제외
+- 공개 API 5곳(갤러리·뷰어·작가페이지·구독피드·댓글알림)에서 `is_default` 프로젝트명("내 광고") 폴백 차단
+- MySeriesPage(`/my/series/:id`): 화 목록 + [새 화 만들기] + "← 내 작품"
+- WorkflowPage: 광고 "← 내 작품", story "← 이야기 목록", 시리즈 "← 시리즈 홈"
+
 **브랜드 연재툰 2차 완료 (2026-11-06):** 지시서 `docs/지시서-연재툰-2차.md`
 - 시리즈 = 프로젝트(`projects.kind='series'`, step36). 새 프로젝트 3택(이야기/광고/연재툰), 시리즈 이름·컷 수·비율 선택 → 1화 자동 생성
 - 새 화 = 직전 화 복사(브리프·제품·보여줄 특징·target_cuts·비율). prefilled_from 안내 줄. series_defaults UI 제거

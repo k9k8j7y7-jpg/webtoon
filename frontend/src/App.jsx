@@ -6,6 +6,8 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
+import MyWorksPage from './pages/MyWorksPage';
+import MySeriesPage from './pages/MySeriesPage';
 import ProjectPage from './pages/ProjectPage';
 import WorkflowPage from './pages/WorkflowPage';
 import SeriesPage from './pages/SeriesPage';
@@ -74,7 +76,9 @@ function AppRoutes() {
       <Route path="/quick" element={<ProtectedRoute><QuickPage /></ProtectedRoute>} />
 
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-        <Route path="/my" element={<DashboardPage />} />
+        <Route path="/my" element={<MyWorksPage />} />
+        <Route path="/my/series/:projectId" element={<MySeriesPage />} />
+        <Route path="/projects" element={<DashboardPage />} />
         <Route path="/subscriptions" element={<SubscriptionsPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/projects/:projectId" element={<ProjectPage />} />

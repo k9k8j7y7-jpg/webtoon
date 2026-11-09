@@ -85,7 +85,8 @@ def publish_episode(
     # 새 화 알림은 최초 공개 1회만 (비공개→재공개는 published_at이 남아 있어 알림 없음)
     notified = 0
     if first_publish:
-        title = episode.title or db.query(Project.title).filter(Project.id == episode.project_id).scalar() or ""
+        _proj_row = db.query(Project.title, Project.is_default).filter(Project.id == episode.project_id).first()
+        title = episode.title or ("" if (_proj_row and _proj_row.is_default) else (_proj_row.title if _proj_row else "")) or ""
         notified = notify_followers(db, current_user, episode, title, background=background)
 
     db.commit()
@@ -156,7 +157,7 @@ def get_author_page(
         "works": [
             {
                 "share_token": ep.share_token,
-                "title": ep.title or proj.title,
+                "title": ep.title or ("" if proj.is_default else proj.title),
                 "genre": proj.genre,
                 "category": ep.showcase_category or default_category(ep),
                 "thumbnail_url": first_cut_image(db, ep.id),
@@ -249,7 +250,7 @@ def my_subscriptions(
         feed = [
             {
                 "share_token": ep.share_token,
-                "title": ep.title or proj.title,
+                "title": ep.title or ("" if proj.is_default else proj.title),
                 "category": ep.showcase_category or default_category(ep),
                 "thumbnail_url": first_cut_image(db, ep.id),
                 "published_at": ep.published_at.isoformat() if ep.published_at else None,

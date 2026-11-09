@@ -100,3 +100,12 @@ body {
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+/* 모달 슬라이드-업 애니메이션 */
+@keyframes slide-up {
+  from { transform: translateY(24px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+.animate-slide-up {
+  animation: slide-up 0.25s ease-out;
+}

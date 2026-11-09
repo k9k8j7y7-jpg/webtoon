@@ -244,7 +244,7 @@ export default function ProjectPage() {
   return (
     <div>
       <button onClick={() => navigate('/my')} className="flex items-center gap-1 text-sm font-bold text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 mb-4 transition-colors">
-        <ArrowLeft size={16} /> 프로젝트 목록
+        <ArrowLeft size={16} /> 이야기 목록
       </button>
 
       <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
@@ -430,44 +430,25 @@ export default function ProjectPage() {
         </div>
       )}
 
-      {/* 용도 선택 모달 */}
+      {/* 용도 선택 모달 — story 전용 (광고·연재는 /my 내 작품에서) */}
       {showPurposeModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowPurposeModal(false)}>
-          <div className="glass-card p-6 w-full max-w-lg mx-4 shadow-xl" onClick={e => e.stopPropagation()}>
+          <div className="glass-card p-6 w-full max-w-sm mx-4 shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white">무엇을 만들까요?</h2>
+              <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white">이야기 만들기</h2>
               <button onClick={() => setShowPurposeModal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"><X size={20} /></button>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-              {[
-                { purpose: 'onecut_ad', icon: '📸', title: '한 컷 광고', desc: '제품·가게 홍보 한 장', color: 'border-amber-400 dark:border-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20' },
-                { purpose: 'instatoon_ad', icon: '📱', title: '인스타툰 광고', desc: '4~8컷 캐러셀 + 릴스', color: 'border-purple-400 dark:border-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20' },
-              ].map(c => (
-                <button
-                  key={c.purpose}
-                  onClick={() => {
-                    setAdTitlePurpose(c.purpose);
-                    setAdTitle('');
-                    setAdFormat('grid_2x2');
-                    setShowAdTitleModal(true);
-                    setShowPurposeModal(false);
-                  }}
-                  className={`flex flex-col items-center gap-2 p-5 border-2 rounded-2xl transition-all cursor-pointer ${c.color} bg-white/50 dark:bg-zinc-800/50`}
-                >
-                  <span className="text-3xl">{c.icon}</span>
-                  <span className="font-bold text-sm text-ink-black dark:text-white">{c.title}</span>
-                  <span className="text-[11px] text-gray-500 dark:text-gray-400 text-center">{c.desc}</span>
-                </button>
-              ))}
-            </div>
-            <div className="text-center">
-              <button
-                onClick={() => openModal(null, false, 'story')}
-                className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 underline transition-colors"
-              >
-                광고가 아니에요 → 일상툰·이야기로 만들기
-              </button>
-            </div>
+            <button
+              onClick={() => openModal(null, false, 'story')}
+              className="w-full flex flex-col items-center gap-2 p-5 border-2 rounded-2xl border-comic-blue/40 hover:bg-comic-blue/5 dark:hover:bg-comic-blue/10 transition-all cursor-pointer bg-white/50 dark:bg-zinc-800/50"
+            >
+              <span className="text-3xl">📖</span>
+              <span className="font-bold text-sm text-ink-black dark:text-white">새 이야기</span>
+              <span className="text-[11px] text-gray-500 dark:text-gray-400 text-center">일상툰·단편·연작</span>
+            </button>
+            <p className="text-xs text-gray-400 dark:text-gray-500 text-center mt-4">
+              광고·연재툰은 <a href="/WEBTOON/my" className="text-comic-orange hover:underline">내 작품</a>에서 만들어요
+            </p>
           </div>
         </div>
       )}
@@ -484,7 +465,7 @@ export default function ProjectPage() {
             </div>
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">에피소드 제목</label>
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">작품 이름</label>
                 <input
                   type="text" value={adTitle} onChange={e => setAdTitle(e.target.value)}
                   placeholder="예: 밀본 오일 홍보"
@@ -543,7 +524,7 @@ export default function ProjectPage() {
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">에피소드 제목</label>
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">작품 이름</label>
                 <input
                   type="text"
                   value={modalTitle}

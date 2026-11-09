@@ -39,6 +39,7 @@ from app.comments.router import router as comments_router
 from app.push.router import router as push_router
 from app.motion.router import router as motion_router
 from app.quick.router import router as quick_router
+from app.myworks.router import router as myworks_router
 
 settings = get_settings()
 
@@ -84,6 +85,7 @@ app.include_router(comments_router, prefix=settings.API_V1_PREFIX)
 app.include_router(push_router, prefix=settings.API_V1_PREFIX)
 app.include_router(motion_router, prefix=settings.API_V1_PREFIX)
 app.include_router(quick_router, prefix=settings.API_V1_PREFIX)
+app.include_router(myworks_router, prefix=settings.API_V1_PREFIX)
 
 
 import os

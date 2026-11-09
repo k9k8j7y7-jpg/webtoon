@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { X, Home, Palette, Image, Package, Bell, HelpCircle, MessageSquare, FileText, Shield, Sun, Moon, LogOut, Settings, Users, Inbox, ShieldCheck, UserCircle, Sparkles } from 'lucide-react';
+import { X, Home, Palette, Image, Package, Bell, HelpCircle, MessageSquare, FileText, Shield, Sun, Moon, LogOut, Settings, Users, Inbox, ShieldCheck, UserCircle, Sparkles, PenLine } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 
 export default function MobileDrawer({ open, onClose, user, packets, unreadCount = 0, onLogout }) {
@@ -73,6 +73,7 @@ export default function MobileDrawer({ open, onClose, user, packets, unreadCount
               <SectionLabel>만들기</SectionLabel>
               <MenuItem to="/quick" icon={Sparkles} label="빠른 한 컷" />
               <MenuItem to="/my" icon={Palette} label="내 작품" />
+              <MenuItem to="/projects" icon={PenLine} label="이야기 만들기" />
 
               <SectionLabel>둘러보기</SectionLabel>
               <MenuItem to="/#gallery" icon={Image} label="갤러리" />

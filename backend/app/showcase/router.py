@@ -72,9 +72,11 @@ def list_showcase_episodes(
     result = {"short": [], "series": [], "ad": []}
     for ep, proj, author in q.all():
         cat = ep.showcase_category or default_category(ep)
+        # is_default 프로젝트(숨은 "내 광고")면 프로젝트명 폴백 차단
+        _title = ep.title or ("" if proj.is_default else proj.title)
         result.setdefault(cat, []).append({
             "share_token": ep.share_token,
-            "title": ep.title or proj.title,
+            "title": _title,
             "genre": proj.genre,
             "thumbnail_url": first_cut_image(db, ep.id),
             "view_count": ep.view_count,
@@ -134,8 +136,10 @@ def get_viewer_data(
             AuthorSubscription.author_id == project.user_id,
         ).first() is not None
 
+    # is_default 프로젝트(숨은 "내 광고")면 프로젝트명 폴백 차단
+    _title = episode.title or ("" if project.is_default else project.title)
     return {
-        "title": episode.title or project.title,
+        "title": _title,
         "episode_no": episode.episode_no,
         "author": author_payload(author),
         "episode_id": episode.id,  # 댓글 API용

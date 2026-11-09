@@ -163,7 +163,7 @@ def create_comment(
     db.flush()
 
     # 알림: 댓글 → 작가, 답글 → 원댓글 작성자 (자기 자신에게는 안 보냄)
-    title = ep.title or proj.title or ""
+    title = ep.title or ("" if proj.is_default else proj.title) or ""
     link = f"/view/{ep.share_token}#comment-{comment.id}"
     snippet = body[:80]
     if parent is None:

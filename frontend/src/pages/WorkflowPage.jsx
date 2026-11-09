@@ -132,12 +132,19 @@ export default function WorkflowPage() {
             {seriesInfo.title} · {seriesInfo.episode_no || '?'}/{seriesInfo.outline_count}화
           </span>
         </div>
+      ) : ['onecut_ad', 'instatoon_ad', 'brand_series'].includes(purpose) ? (
+        <button
+          onClick={() => navigate('/my')}
+          className="flex items-center gap-1 text-sm font-bold text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 mb-4 transition-colors"
+        >
+          <ArrowLeft size={16} /> 내 작품
+        </button>
       ) : (
         <button
           onClick={() => navigate(`/projects/${projectId}`)}
           className="flex items-center gap-1 text-sm font-bold text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 mb-4 transition-colors"
         >
-          <ArrowLeft size={16} /> 에피소드 목록
+          <ArrowLeft size={16} /> 이야기 목록
         </button>
       )}
 

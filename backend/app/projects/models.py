@@ -35,6 +35,7 @@ class Project(Base):
     user_id = Column(BigInteger, ForeignKey("users.id"), nullable=False, index=True)
     title = Column(String(200), nullable=False)
     kind = Column(Enum("story", "ad", "series", name="project_kind_enum"), nullable=False, default="story")
+    is_default = Column(Boolean, nullable=False, default=False, server_default="0")
     genre = Column(String(50), nullable=True)
     language = Column(String(10), default="ko")
     visibility = Column(Enum("private", "public", name="visibility_enum"), default="private")
