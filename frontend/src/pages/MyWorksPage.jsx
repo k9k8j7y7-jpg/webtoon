@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import api from '../api/client';
+import resolveUrl from '../utils/resolveUrl';
 import { Sparkles, Image, Smartphone, BookOpen, Clock, FolderOpen, X, ChevronRight } from 'lucide-react';
 
 /* ── 상수 ── */
@@ -38,6 +39,7 @@ export default function MyWorksPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState(searchParams.get('filter') || 'all');
   const [modal, setModal] = useState(null); // 'onecut' | 'instatoon' | 'series'
+  const [toast, setToast] = useState('');
 
   /* URL ?new= 파라미터로 모달 자동 열기 */
   useEffect(() => {
@@ -97,8 +99,16 @@ export default function MyWorksPage() {
             <p className="text-[11px] leading-snug text-gray-500 dark:text-gray-400 mt-0.5 break-keep">{c.desc}</p>
           </button>
         ))}
-        {/* 4번째 빈 슬롯 */}
-        <div className="rounded-2xl border-2 border-dashed border-gray-200 dark:border-zinc-700/50 opacity-40" />
+        {/* 4번째: 상세페이지 (준비 중) */}
+        <button
+          onClick={() => { setToast('상세페이지 만들기는 곧 열려요'); setTimeout(() => setToast(''), 2500); }}
+          className="glass-card p-4 text-left hover:-translate-y-0.5 transition-all group relative"
+        >
+          <span className="absolute top-2.5 right-2.5 px-1.5 py-0.5 text-[9px] font-bold bg-gray-200 dark:bg-zinc-700 text-gray-500 dark:text-gray-400 rounded-full">준비 중</span>
+          <span className="text-2xl">🖼️</span>
+          <p className="mt-2 font-bold text-sm text-ink-black dark:text-white group-hover:text-comic-orange transition-colors">상세페이지</p>
+          <p className="text-[11px] leading-snug text-gray-500 dark:text-gray-400 mt-0.5 break-keep">제품 상세 이미지 한 번에</p>
+        </button>
       </div>
 
       {/* ── 2. 빠른 한 컷 배너 ── */}
@@ -155,6 +165,13 @@ export default function MyWorksPage() {
         </div>
       )}
 
+      {/* 토스트 */}
+      {toast && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-ink-black dark:bg-white text-white dark:text-ink-black px-5 py-2.5 rounded-full text-sm font-bold shadow-lg animate-slide-up">
+          {toast}
+        </div>
+      )}
+
       {/* ── 5. 생성 모달 ── */}
       {modal === 'onecut' && <OnecutModal onClose={() => setModal(null)} onCreated={onCreated} />}
       {modal === 'instatoon' && <InstatoonModal onClose={() => setModal(null)} onCreated={onCreated} />}
@@ -180,7 +197,7 @@ function WorkCard({ item, onClick }) {
       {/* 썸네일 */}
       <div className="w-14 h-14 rounded-xl bg-gray-100 dark:bg-zinc-800 shrink-0 overflow-hidden flex items-center justify-center">
         {item.thumbnail_url ? (
-          <img src={item.thumbnail_url} alt="" className="w-full h-full object-cover" />
+          <img src={resolveUrl(item.thumbnail_url)} alt="" className="w-full h-full object-cover" loading="lazy" />
         ) : (
           <Image size={20} className="text-gray-300 dark:text-zinc-600" />
         )}

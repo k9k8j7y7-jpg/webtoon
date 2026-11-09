@@ -5,6 +5,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../api/client';
+import resolveUrl from '../utils/resolveUrl';
 import { ArrowLeft, Plus, Clock, Image, Check, ChevronRight } from 'lucide-react';
 
 const STATUS_BADGE = {
@@ -84,7 +85,7 @@ export default function MySeriesPage() {
                 {/* 썸네일 */}
                 <div className="w-14 h-14 rounded-xl bg-gray-100 dark:bg-zinc-800 shrink-0 overflow-hidden flex items-center justify-center">
                   {ep.thumbnail_url ? (
-                    <img src={ep.thumbnail_url} alt="" className="w-full h-full object-cover" />
+                    <img src={resolveUrl(ep.thumbnail_url)} alt="" className="w-full h-full object-cover" loading="lazy" />
                   ) : (
                     <Image size={20} className="text-gray-300 dark:text-zinc-600" />
                   )}

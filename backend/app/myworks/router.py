@@ -83,7 +83,7 @@ def _episode_card(ep: Episode, db: Session) -> dict:
     purpose = get_purpose(gs)
     step = get_step_info(gs)
     completed = _is_completed(gs)
-    thumb = first_cut_image(db, ep.id) if completed or gs.get("current_gate", 1) >= 5 else None
+    thumb = first_cut_image(db, ep.id)
     return {
         "kind": "episode",
         "id": ep.id,
