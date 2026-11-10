@@ -13,7 +13,7 @@ from app.database import get_db, SessionLocal
 from app.jobs import create_job, get_job, run_job_in_background
 from app.packets.service import require_packets
 from app.characters.models import Character, EpisodeCharacter
-from app.projects.models import Project, Episode
+from app.projects.models import Project, Episode, QUICK_PROJECT_TITLE
 from app.products.models import Product
 from app.storyboard.models import Cut
 from app.styles.models import Style, STYLE_PRESETS
@@ -179,11 +179,11 @@ async def create_quick_cut(
     # 5. "빠른 컷" 프로젝트 (재사용)
     project = db.query(Project).filter(
         Project.user_id == user_id,
-        Project.title == "빠른 컷",
+        Project.title == QUICK_PROJECT_TITLE,
         Project.deleted_at.is_(None),
     ).first()
     if not project:
-        project = Project(user_id=user_id, title="빠른 컷")
+        project = Project(user_id=user_id, title=QUICK_PROJECT_TITLE)
         db.add(project)
         db.flush()
 

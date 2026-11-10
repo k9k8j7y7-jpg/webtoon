@@ -76,7 +76,7 @@ export default function MySeriesPage() {
         <div className="space-y-3">
           {episodes.map((ep) => {
             const badgeCls = STATUS_BADGE[ep.status] || STATUS_BADGE.default;
-            const statusLabel = ep.completed ? '완료' : (ep.has_images ? '완성 단계' : ep.status);
+            const statusLabel = ep.completed ? '완료' : ((ep.in_final_step ?? ep.has_images) ? '완성 단계' : ep.status);
             return (
               <button
                 key={ep.id}

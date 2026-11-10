@@ -19,6 +19,7 @@ from app.social.service import first_cut_image
 from app.users.models import User
 from app.workflow.gate import (
     create_initial_gate_status,
+    get_gate_number,
     get_purpose,
     get_step_info,
     is_ad_purpose,
@@ -77,6 +78,13 @@ def _is_completed(gs: dict) -> bool:
     return gates.get("5_review", {}).get("status") == "approved"
 
 
+# 완성 단계(마지막 STEP 진입 또는 컷 이미지 있음) & 미완료
+def _in_final_step(gs: dict, thumb: str | None) -> bool:
+    if _is_completed(gs):
+        return False
+    return thumb is not None or get_gate_number(gs) == 5
+
+
 # 에피소드 → 목록 카드 dict
 def _episode_card(ep: Episode, db: Session) -> dict:
     gs = ep.gate_status or {}
@@ -107,6 +115,9 @@ def _series_card(proj: Project, db: Session) -> dict:
         .all()
     )
     completed_count = sum(1 for e in eps if _is_completed(e.gate_status or {}))
+    thumbs = {e.id: first_cut_image(db, e.id) for e in eps}
+    # 완성 단계(마지막 STEP·미완료) 화 수
+    in_progress_count = sum(1 for e in eps if _in_final_step(e.gate_status or {}, thumbs[e.id]))
     # 가장 최근 미완료 화 상태
     in_progress = None
     for e in reversed(eps):
@@ -118,16 +129,14 @@ def _series_card(proj: Project, db: Session) -> dict:
     ip_label = ""
     if in_progress:
         ip_no = in_progress.episode_no
-        ip_name = ip_step.get("name", "") if ip_step else ""
-        ip_label = f"{ip_no}화 {ip_name} 중"
+        if _in_final_step(in_progress.gate_status or {}, thumbs[in_progress.id]):
+            ip_label = f"{ip_no}화 완성 단계"
+        else:
+            ip_name = ip_step.get("name", "") if ip_step else ""
+            ip_label = f"{ip_no}화 {ip_name} 중"
 
     # 최근 화 썸네일
-    thumb = None
-    for e in reversed(eps):
-        t = first_cut_image(db, e.id)
-        if t:
-            thumb = t
-            break
+    thumb = next((thumbs[e.id] for e in reversed(eps) if thumbs[e.id]), None)
 
     return {
         "kind": "series",
@@ -137,6 +146,8 @@ def _series_card(proj: Project, db: Session) -> dict:
         "purpose": "brand_series",
         "episode_count": len(eps),
         "completed_count": completed_count,
+        "in_progress_count": in_progress_count,
+        "completed": bool(eps) and completed_count == len(eps),
         "in_progress_label": ip_label,
         "status": f"{completed_count}화 완료" if completed_count else (ip_label or "시작 전"),
         "thumbnail_url": thumb,
@@ -338,8 +349,11 @@ def list_series_episodes(
                 "status": "완성" if _is_completed(e.gate_status or {}) else get_step_info(e.gate_status or {}).get("name", ""),
                 "step": get_step_info(e.gate_status or {}),
                 "completed": _is_completed(e.gate_status or {}),
-                "thumbnail_url": first_cut_image(db, e.id),
+                "has_images": thumb is not None,
+                "in_final_step": _in_final_step(e.gate_status or {}, thumb),
+                "thumbnail_url": thumb,
             }
             for e in eps
+            for thumb in [first_cut_image(db, e.id)]
         ],
     }

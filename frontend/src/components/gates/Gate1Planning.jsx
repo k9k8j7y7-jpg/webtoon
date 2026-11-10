@@ -1136,7 +1136,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                   };
 
                   const handleLabelChange = (i, v) => {
-                    const n = [...onecutLabels]; n[i] = v.slice(0, 6); setOnecutLabels(n);
+                    const n = [...onecutLabels]; n[i] = v.slice(0, 8); setOnecutLabels(n);
                     saveDevice(true, onecutDevice, n, onecutCompare);
                   };
 
@@ -1180,7 +1180,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                             <input key={li} value={lbl}
                               onChange={e => handleLabelChange(li, e.target.value)}
                               className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-purple-300 dark:border-purple-700 bg-white dark:bg-zinc-800 text-ink-black dark:text-white placeholder-zinc-400 focus:outline-none focus:border-purple-500"
-                              placeholder={curDev.ph[li] || `라벨 ${li + 1}`} maxLength={6} />
+                              placeholder={curDev.ph[li] || `라벨 ${li + 1}`} maxLength={8} />
                           ))}
                           {Array.isArray(curDev.count) && (
                             <div className="flex gap-2">

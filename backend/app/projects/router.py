@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.auth.deps import get_current_user
 from app.users.models import User
-from app.projects.models import Project, ProjectMemory, Episode
+from app.projects.models import Project, ProjectMemory, Episode, is_system_project
 from app.projects.schemas import (
     ProjectCreate, ProjectUpdate, ProjectResponse,
     EpisodeCreate, EpisodeResponse,
@@ -94,6 +94,8 @@ def list_projects(
     result = []
     for p in projects:
         d = ProjectResponse.model_validate(p).model_dump()
+        d["is_default"] = bool(p.is_default)
+        d["is_system"] = is_system_project(p)
         # 시리즈: 화 수, 최근 화 단계
         if p.kind == "series":
             ep_count = db.query(Episode).filter(

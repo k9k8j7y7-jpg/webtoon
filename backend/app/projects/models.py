@@ -28,6 +28,15 @@ class Series(Base):
     project = relationship("Project", back_populates="series_list")
 
 
+# 시스템 프로젝트 판별 (DB 컬럼 없이) — 목록에서 숨김
+SYSTEM_PROJECT_IDS = frozenset({7})  # 빠른 한 컷 프리셋 캐릭터 53~58 보관 (삭제 금지)
+QUICK_PROJECT_TITLE = "빠른 컷"      # quick 라우터가 사용자별로 만드는 재사용 프로젝트 표식
+
+
+def is_system_project(p: "Project") -> bool:
+    return p.id in SYSTEM_PROJECT_IDS or (p.kind == "story" and p.title == QUICK_PROJECT_TITLE)
+
+
 class Project(Base):
     __tablename__ = "projects"
 

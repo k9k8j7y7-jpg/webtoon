@@ -322,7 +322,7 @@ async def update_cut_device(
         for k in ("kind", "device", "labels", "compare", "mechanism", "elements"):
             spec[k] = None
     if labels is not None:
-        spec["labels"] = [str(l)[:6] for l in labels[:4]]
+        spec["labels"] = [str(l)[:8] for l in labels[:4]]
     if "compare" in body:
         spec["compare"] = body["compare"]
     if "mechanism" in body:

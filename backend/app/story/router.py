@@ -126,7 +126,7 @@ async def update_idea_brief_selection(
             if dev in VALID_DEVICES:
                 ib["onecut_device"] = {
                     "device": dev,
-                    "labels": [str(l)[:6] for l in (od.get("labels") or [])[:4]],
+                    "labels": [str(l)[:8] for l in (od.get("labels") or [])[:4]],
                     "compare": od.get("compare") if dev == "size_compare" else None,
                 }
             else:

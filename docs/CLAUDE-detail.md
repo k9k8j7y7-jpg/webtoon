@@ -351,5 +351,12 @@ Web Share API(`navigator.share({files})`) — `share()`는 **`onClick`에서 동
 - ② ep159 `PUT /cuts/ep159_c001/device`(→steps) → `POST /cuts/ep159_c001/regenerate` → v3. head·sub OK, 라벨 4/4 OK
 - ③ ep160 device OFF: 콘티 kind=None·device=None. 이미지는 테스트 계정 잔량 0으로 미생성. `build_cut_prompt` 구버전(77c56dd) vs 현재를 ep160 실제 spec으로 돌려 **diff 0** (2147자)
 - ④ ep161 인스타툰 steps 라벨 4 → 대본 컷4 kind=explain·labels 4개 유지, explain_clause Panel 1~4
-- **알려진 빈틈:** (76) 프론트가 `in_progress_count`(시리즈 카드)·`has_images`(화 배지)를 읽지만 `myworks/router.py`가 안 내려줌 → "완성 단계" 미표시(기존 문구 폴백). (77) `/projects` 응답에 `is_default` 없음·`is_system` 컬럼 자체 없음 → 필터 무동작(기본 프로젝트는 kind=ad라 이미 숨김). 라벨 6자 자르기로 "슬라이드 생성"→"슬라이드 생"(ep159 v2). 대본 프롬프트 `_DEVICE_KR`의 "단계 미니 패널 3개"·ad_brief 장치 설명 "3" 표기 잔존(④는 4개 유지됨)
+- **알려진 빈틈(→ 아래 2차 보강에서 해소):** (76) 프론트가 `in_progress_count`(시리즈 카드)·`has_images`(화 배지)를 읽지만 `myworks/router.py`가 안 내려줌 → "완성 단계" 미표시(기존 문구 폴백). (77) `/projects` 응답에 `is_default` 없음·`is_system` 컬럼 자체 없음 → 필터 무동작(기본 프로젝트는 kind=ad라 이미 숨김). 라벨 6자 자르기로 "슬라이드 생성"→"슬라이드 생"(ep159 v2). 대본 프롬프트 `_DEVICE_KR`의 "단계 미니 패널 3개"·ad_brief 장치 설명 "3" 표기 잔존(④는 4개 유지됨)
+
+### 한 컷 2차 보강 (2026-11-10)
+- ③ 확정: user 1 admin_grant 10(packet_transactions에 description 컬럼 없음 → reason=admin_grant) → ep160 `/storage/episodes/160/cuts/ep160_c001_v2.png`, copy_check OK. 프롬프트는 서버 로그에 안 남아 **운영 서버에서 어댑터만 가로채 캡처**(DB 쓰기·차감 없음, rollback) — 현재 vs 77c56dd 파일 교체본 2332자 **diff 0**
+- (76) `myworks/router.py`: 시리즈 카드 `in_progress_count`·`completed`, 마지막 STEP 진입 시 `in_progress_label`="N화 완성 단계". 화 목록 `has_images`·`in_final_step`(미완료 & (컷 이미지 있음 or gate 5)). MySeriesPage는 `in_final_step` 우선
+- (77) `/projects` 응답에 `is_default`·`is_system`. 시스템 판별은 DB 컬럼 없이 `projects/models.py` `SYSTEM_PROJECT_IDS={7}` + `QUICK_PROJECT_TITLE`("빠른 컷", quick 라우터 동일 상수, kind=story)
+- 라벨 6→**8자**: Gate1 입력·Gate5 장치 편집 maxLength 8, `PUT selection`·`PUT /cuts/{id}/device` `[:8]`, ad_brief "8자 이내"
+- 장치 설명 문구 steps "단계 미니 패널 3~4", process "작용 과정 3~4패널" (ad_brief·대본 `_DEVICE_KR`)
 - 캡처: `frontend/scripts/mobile-check-7377.mjs` (TOKEN 환경변수, 375 다크 @2x → `scratch/captures/`)

@@ -148,9 +148,9 @@ def _build_explain_addon(visual_points: list[dict]) -> str:
         "zoom_inset": "확대 단면",
         "icon_badges": "아이콘 배지 3개",
         "before_after": "전·후 반반",
-        "steps": "단계 미니 패널 3개",
+        "steps": "단계 미니 패널 3~4개",
         "size_compare": "크기 비교",
-        "process": "작용 과정 3패널",
+        "process": "작용 과정 3~4패널",
     }
     n = len(visual_points)
     lines = [f"\n\n[설명 컷 배치 — 아래 {n}개 특징을 정확히 {n}개의 explain 컷으로 만들어라. 하나도 빠뜨리지 말 것]"]

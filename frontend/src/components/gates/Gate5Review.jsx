@@ -1951,7 +1951,7 @@ function RegenDropdown({ cutId, cutSpec, disabled, onRegenerate, epDramaLevel, h
                   <input key={li} value={lbl}
                     onChange={e => { const n = [...editLabels]; n[li] = e.target.value; setEditLabels(n); setDeviceChanged(true); }}
                     className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-purple-300 dark:border-purple-700 bg-white dark:bg-zinc-800 text-ink-black dark:text-white"
-                    placeholder={`라벨 ${li + 1}`} />
+                    placeholder={`라벨 ${li + 1}`} maxLength={8} />
                 ))}
               </div>
               {deviceChanged && <p className="text-[10px] text-purple-400 mt-1">장치 변경 → 다시 그리기 1패킷</p>}
@@ -2029,7 +2029,7 @@ function RegenDropdown({ cutId, cutSpec, disabled, onRegenerate, epDramaLevel, h
                 <input key={li} value={lbl}
                   onChange={e => { const n = [...editLabels]; n[li] = e.target.value; setEditLabels(n); setDeviceChanged(true); }}
                   className="w-full px-2 py-1 text-[10px] rounded-md border border-purple-300 dark:border-purple-700 bg-white dark:bg-zinc-800 text-ink-black dark:text-white"
-                  placeholder={`라벨 ${li + 1}`} />
+                  placeholder={`라벨 ${li + 1}`} maxLength={8} />
               ))}
             </div>
           </div>
