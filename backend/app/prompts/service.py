@@ -72,6 +72,8 @@ def build_cut_prompt(
     copy_clause: str = "",
     explain_clause: str = "",
     explain_labels: list[str] | None = None,
+    copy_head: str = "",
+    copy_sub: str = "",
     user_note: str | None = None,
 ) -> str:
     """컷 명세로부터 이미지 생성 프롬프트를 조립한다.
@@ -274,7 +276,20 @@ def build_cut_prompt(
         )
     else:
         format_desc = "square format"
-    if copy_clause:
+    if copy_clause and explain_labels:
+        # 카피+설명 장치 복합 모드: 헤드카피·서브카피 + 라벨만 허용
+        label_list = ", ".join(f"'{l}'" for l in explain_labels)
+        if copy_head and copy_sub:
+            allowed = f"Render ONLY the headline '{copy_head}', the subline '{copy_sub}' and these labels, spelled exactly: {label_list}. No other text"
+        elif copy_head:
+            allowed = f"Render ONLY the headline '{copy_head}' and these labels, spelled exactly: {label_list}. No other text"
+        else:
+            allowed = f"Render ONLY the headline/subline specified above and these labels, spelled exactly: {label_list}. No other text"
+        parts.append(
+            f"A single illustration, {format_desc}, clean composition. "
+            f"No speech bubbles. {allowed}"
+        )
+    elif copy_clause:
         # 카피 렌더 모드: 지정된 카피만 허용, 그 외 텍스트 금지
         parts.append(
             f"A single illustration, {format_desc}, clean composition. "

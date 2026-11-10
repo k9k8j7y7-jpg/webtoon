@@ -21,8 +21,8 @@ export default function DashboardPage() {
 
   const load = () => {
     api.get('/projects').then(({ data }) => {
-      // 이야기(story) 프로젝트만 표시 (광고·연재는 /my에서)
-      setProjects((data || []).filter(p => p.kind === 'story' || !p.kind));
+      // 이야기(story) 프로젝트만 표시 (광고·연재는 /my에서, 시스템 프로젝트 숨김)
+      setProjects((data || []).filter(p => (p.kind === 'story' || !p.kind) && !p.is_default && !p.is_system));
       setLoading(false);
     });
   };

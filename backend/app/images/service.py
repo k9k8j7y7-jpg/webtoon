@@ -462,6 +462,7 @@ async def generate_cut_image(
 
     # 4.8. 설명 컷 프롬프트 (explain cut — kind=explain)
     explain_clause = ""
+    _onecut_has_device = False  # 한 컷 광고 + 설명 장치 복합 모드
     if _is_explain_cut:
         _explain_device = spec.get("device", "zoom_inset")
         _explain_labels = spec.get("labels") or []
@@ -483,6 +484,9 @@ async def generate_cut_image(
             _ib_palette = (_gs_for_palette.get("idea_brief") or {}).get("product_palette", [])
             if _ib_palette:
                 _explain_palette = _ib_palette
+        # 한 컷 광고 + 설명 장치: 카피 렌더와 결합, 제품 미등록 시 제품 문구 제거
+        _onecut_has_device = _ep_purpose == "onecut_ad"
+        _product_registered = product_ref_attached
         from app.prompts.explain import build_explain_clause
         explain_clause = build_explain_clause(
             _explain_device, _explain_labels,
@@ -490,11 +494,19 @@ async def generate_cut_image(
             elements=_explain_elements,
             palette=_explain_palette,
             mechanism=_explain_mechanism,
+            product_registered=_product_registered,
+            allow_copy_text=_onecut_has_device,
         )
         if explain_clause:
-            logger.info("Cut %s explain: device=%s labels=%s mechanism=%s elements=%d palette=%s",
+            logger.info("Cut %s explain: device=%s labels=%s mechanism=%s elements=%d palette=%s onecut=%s",
                         cut.cut_id, _explain_device, _explain_labels, _explain_mechanism,
-                        len(_explain_elements), _explain_palette)
+                        len(_explain_elements), _explain_palette, _onecut_has_device)
+        # 한 컷 + 설명 장치: 캐릭터 포즈에 가이드 힌트 추가
+        if _onecut_has_device:
+            for ch in spec.get("characters", []):
+                pose = ch.get("pose", "")
+                if "guide" not in pose.lower() and "point" not in pose.lower():
+                    ch["pose"] = (pose + ", guide gesture toward the panel").strip(", ")
 
     # 5. 프롬프트 조립 (Prompt Engine)
     # 참고 광고 분석 텍스트는 제품 설명 뒤에 삽입
@@ -550,7 +562,11 @@ async def generate_cut_image(
         if _copy_head or _copy_sub:
             from app.prompts.copy_render import build_copy_clause
             copy_clause = build_copy_clause(_copy_head, _copy_sub, copy_design)
-            logger.info("Cut %s copy_clause: head='%s' sub='%s' hook=%s design=%s", cut.cut_id, _copy_head, _copy_sub, _is_hook_cut, copy_design)
+            # 한 컷 + 설명 장치 복합: copy_clause에서 "No other text" 제거 (끝 블록에서 통합 처리)
+            if _onecut_has_device:
+                copy_clause = copy_clause.replace(". No other text anywhere except the product's own label", "")
+            logger.info("Cut %s copy_clause: head='%s' sub='%s' hook=%s design=%s onecut_device=%s",
+                        cut.cut_id, _copy_head, _copy_sub, _is_hook_cut, copy_design, _onecut_has_device)
 
     prompt = build_cut_prompt(
         cut_spec=spec,
@@ -567,6 +583,8 @@ async def generate_cut_image(
         copy_clause=copy_clause,
         explain_clause=explain_clause if _is_explain_cut else "",
         explain_labels=spec.get("labels") if _is_explain_cut else None,
+        copy_head=_copy_head,
+        copy_sub=_copy_sub,
         user_note=user_note,
     )
 
@@ -610,13 +628,17 @@ async def generate_cut_image(
     _label_retried = False
     if _is_explain_cut and spec.get("labels"):
         _expected_labels = spec["labels"]
-        # labels를 head/sub 형태로 변환: head=전체 라벨 합침, sub=없음
-        _label_head = " ".join(_expected_labels)
         from app.prompts.copy_render import check_copy_text as _check_labels
-        _label_check_result = _check_labels(result.image_bytes, _label_head, "")
+        # 개별 라벨 검사: 각 라벨을 head로 검사
+        _label_detail = {}
+        for _lbl in _expected_labels:
+            _lbl_r = _check_labels(result.image_bytes, _lbl, "")
+            _label_detail[_lbl] = _lbl_r.get("head_ok", True)
+        _all_labels_ok = all(_label_detail.values())
+        _label_check_result = {"labels": _label_detail, "all_ok": _all_labels_ok, "found_text": _lbl_r.get("found_text", "")}
         logger.info("Cut %s label_check: expected=%s result=%s", cut.cut_id, _expected_labels, _label_check_result)
 
-        if not _label_check_result.get("head_ok", True):
+        if not _all_labels_ok:
             logger.warning("Cut %s label_check MISMATCH → retry once", cut.cut_id)
             _label_retried = True
             try:
@@ -627,7 +649,11 @@ async def generate_cut_image(
                     seed=None,
                     aspect_ratio=ep_aspect_ratio,
                 )
-                _label_check_result = _check_labels(result.image_bytes, _label_head, "")
+                _label_detail = {}
+                for _lbl in _expected_labels:
+                    _lbl_r = _check_labels(result.image_bytes, _lbl, "")
+                    _label_detail[_lbl] = _lbl_r.get("head_ok", True)
+                _label_check_result = {"labels": _label_detail, "all_ok": all(_label_detail.values()), "found_text": _lbl_r.get("found_text", "")}
                 logger.info("Cut %s label_check retry: %s", cut.cut_id, _label_check_result)
             except Exception as e:
                 logger.warning("Cut %s label retry failed (using first result): %s", cut.cut_id, e)

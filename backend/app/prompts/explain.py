@@ -84,7 +84,7 @@ def _build_before_after(labels: list[str]) -> str:
 
 
 def _build_steps(labels: list[str]) -> str:
-    steps = labels[:3] if labels else ["① 1단계", "② 2단계", "③ 3단계"]
+    steps = labels[:4] if labels else ["① 1단계", "② 2단계", "③ 3단계"]
     step_lines = []
     for i, lbl in enumerate(steps):
         step_lines.append(f"Panel {i+1}: {lbl}")
@@ -112,14 +112,15 @@ def _build_size_compare(labels: list[str], compare: str = "") -> str:
 
 
 def _build_process(labels: list[str]) -> str:
-    """작용 과정 — steps 변형, 제품이 어떻게 작용하는지 물리적 과정 3패널."""
-    panels = labels[:3] if labels else ["① 과정1", "② 과정2", "③ 과정3"]
+    """작용 과정 — steps 변형, 제품이 어떻게 작용하는지 물리적 과정 3~4패널."""
+    panels = labels[:4] if labels else ["① 과정1", "② 과정2", "③ 과정3"]
     panel_lines = []
     for i, lbl in enumerate(panels):
         panel_lines.append(f"Panel {i+1}: {lbl}")
+    count_word = {2: "Two", 3: "Three", 4: "Four"}.get(len(panels), str(len(panels)))
     return (
         f"DEVICE: Process mini-panels — the character presents the product mechanism. "
-        f"Three small panels showing how the product works on a physical level: "
+        f"{count_word} small panels showing how the product works on a physical level: "
         f"{'. '.join(panel_lines)}. "
         f"Draw each panel as a simple diagram/cross-section in webtoon style. "
         f"Each panel has its Korean label."
@@ -144,6 +145,8 @@ def build_explain_clause(
     elements: list[str] | None = None,
     palette: list[str] | None = None,
     mechanism: str = "",
+    product_registered: bool = True,
+    allow_copy_text: bool = False,
 ) -> str:
     """설명 컷 프롬프트 clause — 장치별 템플릿.
 
@@ -154,13 +157,30 @@ def build_explain_clause(
         elements: 그릴 요소 3~5개 (한글)
         palette: 제품 주색 2~3개 (영문 색명)
         mechanism: 물리적 작용 한 줄
+        product_registered: 제품 등록 여부 (False면 제품 관련 문구 제거)
+        allow_copy_text: 카피 렌더와 결합 시 True (글자 금지 문구 제거)
 
     Returns: build_cut_prompt의 extra_prompt로 주입할 문자열.
     """
     if device not in _DEVICE_BUILDERS:
         return ""
 
-    parts = [_COMMON_HEAD]
+    head = _COMMON_HEAD
+    if not product_registered:
+        head = head.replace(
+            "The character is the guide — holding or pointing at the product. ",
+            "The character is the guide — pointing at the infographic. ",
+        )
+        head = head.replace(
+            "CRITICAL: reproduce the product label text exactly as on the reference photo. ",
+            "",
+        )
+    if allow_copy_text:
+        head = head.replace(
+            "No other text, slogans, signs, or posters with words anywhere in the image. ",
+            "",
+        )
+    parts = [head]
 
     # 장치별 템플릿
     if device == "size_compare":

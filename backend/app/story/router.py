@@ -115,6 +115,22 @@ async def update_idea_brief_selection(
     # 설명 컷 visual_points 사용자 선택 (인덱스 배열)
     if "visual_points_selected" in body:
         ib["visual_points_selected"] = body["visual_points_selected"]
+    # 한 컷 설명 장치 (onecut_ad 전용)
+    if "onecut_device" in body:
+        od = body["onecut_device"]
+        if od is None:
+            ib["onecut_device"] = None
+        elif isinstance(od, dict):
+            from app.prompts.explain import VALID_DEVICES
+            dev = od.get("device", "")
+            if dev in VALID_DEVICES:
+                ib["onecut_device"] = {
+                    "device": dev,
+                    "labels": [str(l)[:6] for l in (od.get("labels") or [])[:4]],
+                    "compare": od.get("compare") if dev == "size_compare" else None,
+                }
+            else:
+                ib["onecut_device"] = None
     # 제품 팔레트 (analyze 결과에서 프론트가 전달)
     if "product_palette" in body:
         ib["product_palette"] = body["product_palette"]
@@ -566,10 +582,15 @@ async def create_ad_brief(
     idea_brief["copy_candidates"] = result.get("copy_candidates", [])
     idea_brief["scene_ideas"] = result.get("scene_ideas", [])
     idea_brief["recommended_style"] = result.get("recommended_style", "korean_webtoon")
+    # 한 컷 광고: visual_points 1개만 제안 (장치 1개 옵션)
+    _vps = result.get("visual_points", [])
+    purpose_for_vp = gate_status.get("purpose", "story")
+    if purpose_for_vp == "onecut_ad":
+        _vps = _vps[:1]
     idea_brief["ad_brief_result"] = {
         "key_message": result.get("key_message", ""),
         "target_summary": result.get("target_summary", ""),
-        "visual_points": result.get("visual_points", []),
+        "visual_points": _vps,
     }
 
     new_gs = _json.loads(_json.dumps(gate_status))

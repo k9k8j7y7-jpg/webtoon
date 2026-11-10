@@ -173,12 +173,17 @@ async def create_storyboard(
     from app.workflow.gate import get_purpose
     _purpose = get_purpose(episode.gate_status)
     _no_readjust = _purpose in ("onecut_ad", "instatoon_ad")
+    # 한 컷 설명 장치 (idea_brief에서 가져옴)
+    _onecut_dev = None
+    if _purpose == "onecut_ad":
+        from app.workflow.gate import get_idea_brief as _get_ib
+        _onecut_dev = (_get_ib(episode.gate_status) or {}).get("onecut_device")
     if target and not _no_readjust:
         readjusted = await readjust_storyboard(script_data, target, page_format=page_format)
         adjusted_script = {"scenes": readjusted.get("scenes", [])}
-        cuts = create_cuts_from_script(episode_id, adjusted_script, db, product_names=product_names, purpose=_purpose)
+        cuts = create_cuts_from_script(episode_id, adjusted_script, db, product_names=product_names, purpose=_purpose, onecut_device=_onecut_dev)
     else:
-        cuts = create_cuts_from_script(episode_id, script_data, db, product_names=product_names, purpose=_purpose)
+        cuts = create_cuts_from_script(episode_id, script_data, db, product_names=product_names, purpose=_purpose, onecut_device=_onecut_dev)
 
     # 재생성 후 게이트4 상태가 invalidated이면 draft로 변경
     # create_cuts_from_script가 db.commit()을 호출하므로 episode를 refresh해야 함
@@ -295,8 +300,12 @@ async def update_cut_device(
     if not cut:
         raise HTTPException(status_code=404, detail="Cut not found")
 
-    spec = dict(cut.spec)
-    if spec.get("kind") != "explain":
+    # onecut_ad: device 없는 컷도 변경 가능 (장치 추가/해제)
+    from app.workflow.gate import get_purpose as _gp_dev
+    episode = db.query(Episode).filter(Episode.id == cut.episode_id).first()
+    _purpose_dev = _gp_dev(episode.gate_status) if episode else "story"
+    spec = copy.deepcopy(cut.spec)
+    if spec.get("kind") != "explain" and _purpose_dev != "onecut_ad":
         raise HTTPException(status_code=400, detail="Only explain cuts can change device")
 
     device = body.get("device")
@@ -306,8 +315,14 @@ async def update_cut_device(
 
     if device:
         spec["device"] = device
+        spec["kind"] = "explain"
+        spec["shot"] = "bust"
+    elif device is None and _purpose_dev == "onecut_ad":
+        # 장치 해제
+        for k in ("kind", "device", "labels", "compare", "mechanism", "elements"):
+            spec[k] = None
     if labels is not None:
-        spec["labels"] = labels
+        spec["labels"] = [str(l)[:6] for l in labels[:4]]
     if "compare" in body:
         spec["compare"] = body["compare"]
     if "mechanism" in body:

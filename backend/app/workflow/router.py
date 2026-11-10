@@ -94,7 +94,12 @@ async def approve_assets(
                         description=loc_data.get("description", ""),
                         status="approved",
                     ))
-            cuts = create_cuts_from_script(episode_id, script_data, db, product_names=product_names, purpose=purpose)
+            # 한 컷 설명 장치
+            _onecut_dev = None
+            if purpose == "onecut_ad":
+                from app.workflow.gate import get_idea_brief as _get_ib_wf
+                _onecut_dev = (_get_ib_wf(episode.gate_status) or {}).get("onecut_device")
+            cuts = create_cuts_from_script(episode_id, script_data, db, product_names=product_names, purpose=purpose, onecut_device=_onecut_dev)
             db.flush()
             # gate 4 자동 승인
             new_status = approve_gate(episode.gate_status, 4)

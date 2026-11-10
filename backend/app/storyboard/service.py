@@ -245,6 +245,7 @@ def create_cuts_from_script(
     episode_id: int, script_data: dict, db: Session,
     product_names: list[str] | None = None,
     purpose: str = "story",
+    onecut_device: dict | None = None,
 ) -> list[dict]:
     """대본에서 컷 명세를 추출해 DB에 저장한다."""
     cuts_result = []
@@ -289,6 +290,12 @@ def create_cuts_from_script(
             _cut_mechanism = cut_data.get("mechanism")
             _cut_elements = cut_data.get("elements", [])
             _cut_compare = cut_data.get("compare")
+            # 한 컷 광고: idea_brief의 onecut_device로 설명 장치 주입
+            if purpose == "onecut_ad" and onecut_device and onecut_device.get("device"):
+                _cut_kind = "explain"
+                _cut_device = onecut_device["device"]
+                _cut_labels = onecut_device.get("labels", [])
+                _cut_compare = onecut_device.get("compare")
             _is_explain = _cut_kind == "explain"
             if _is_explain:
                 # explain 컷: bust 고정, has_product 강제

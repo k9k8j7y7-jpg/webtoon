@@ -1277,7 +1277,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
       </div>
 
       {/* 페이지 형식 — onecut_ad에서는 숨김 */}
-      {purpose !== 'onecut_ad' && <div className="glass-card p-6">
+      {!['onecut_ad', 'brand_series'].includes(purpose) && <div className="glass-card p-6">
         <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2 mb-4">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="text-indigo-500"><rect x="2" y="2" width="16" height="16" rx="2" stroke="currentColor" strokeWidth="1.5"/><line x1="10" y1="2" x2="10" y2="18" stroke="currentColor" strokeWidth="1.2"/><line x1="2" y1="10" x2="18" y2="10" stroke="currentColor" strokeWidth="1.2"/></svg>
           형식
@@ -1354,7 +1354,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
       </div>}
 
       {/* 컷 비율 — onecut_ad에서는 숨김 */}
-      {purpose !== 'onecut_ad' && <div className="glass-card p-6">
+      {!['onecut_ad', 'brand_series'].includes(purpose) && <div className="glass-card p-6">
         <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2 mb-4">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="text-blue-500"><rect x="2" y="2" width="16" height="16" rx="2" stroke="currentColor" strokeWidth="1.5"/><rect x="6" y="4" width="8" height="12" rx="1" stroke="currentColor" strokeWidth="1.2" strokeDasharray="2 1"/></svg>
           컷 비율

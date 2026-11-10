@@ -61,7 +61,7 @@ export default function AdBriefForm({ projectId, episodeId, gateStatus, onBriefD
   const [briefResult, setBriefResult] = useState(null);
   const [selectedCopy, setSelectedCopy] = useState(0);
   const [selectedScene, setSelectedScene] = useState(0);
-  const [rewriting, setRewriting] = useState(false);
+  const [rewriting, setRewriting] = useState(null); // null | direction key string
   const [vpChecked, setVpChecked] = useState([]);  // visual_points 체크 상태 (인덱스 배열)
 
   // 제품 정보
@@ -161,18 +161,22 @@ export default function AdBriefForm({ projectId, episodeId, gateStatus, onBriefD
   };
 
   const handleRewrite = async (direction) => {
-    if (!briefResult?.copy_candidates?.[selectedCopy]) return;
-    setRewriting(true);
+    if (!briefResult?.copy_candidates?.[selectedCopy] || rewriting) return;
+    setRewriting(direction);
     try {
       const c = briefResult.copy_candidates[selectedCopy];
       const { data } = await api.post(`/projects/${projectId}/episodes/${episodeId}/ad-brief/rewrite-copy`, {
         head: c.head, sub: c.sub, direction, key_message: keyMessage,
       });
-      const newCandidates = [...briefResult.copy_candidates];
-      newCandidates[selectedCopy] = data;
+      // 3후보 전부 갱신
+      const newCandidates = briefResult.copy_candidates.map((old, i) =>
+        i === selectedCopy ? data : old
+      );
       setBriefResult(prev => ({ ...prev, copy_candidates: newCandidates }));
-    } catch { /* ignore */ }
-    finally { setRewriting(false); }
+    } catch {
+      alert('다시 쓰기에 실패했어요. 다시 시도해 주세요.');
+    }
+    finally { setRewriting(null); }
   };
 
   const handleEnrichProduct = async () => {
@@ -471,11 +475,16 @@ export default function AdBriefForm({ projectId, episodeId, gateStatus, onBriefD
             {/* 다시 쓰기 칩 */}
             <div className="flex flex-wrap gap-1.5 mt-2">
               <span className="text-[10px] text-gray-400 dark:text-gray-500 self-center mr-1">✨ 다시 쓰기:</span>
-              {COPY_DIRECTIONS.map(d => (
-                <button key={d.key} onClick={() => handleRewrite(d.key)} disabled={rewriting}
-                  className="px-2 py-1 rounded-full text-[10px] font-bold bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-zinc-700 disabled:opacity-50 transition-colors"
-                >{d.label}</button>
-              ))}
+              {COPY_DIRECTIONS.map(d => {
+                const isActive = rewriting === d.key;
+                return (
+                  <button key={d.key} onClick={() => handleRewrite(d.key)} disabled={!!rewriting}
+                    className={`px-2 py-1 rounded-full text-[10px] font-bold transition-colors ${
+                      isActive ? 'bg-amber-500 text-white' : 'bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-zinc-700'
+                    } disabled:opacity-50`}
+                  >{isActive ? <span className="inline-flex items-center gap-1"><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>{d.label}</span> : d.label}</button>
+                );
+              })}
             </div>
           </div>
 

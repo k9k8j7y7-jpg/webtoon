@@ -186,7 +186,13 @@ function WorkCard({ item, onClick }) {
   const isSeries = item.kind === 'series';
 
   const statusText = isSeries
-    ? item.in_progress_label || `${item.completed_count || 0}화 완료`
+    ? (() => {
+        const comp = item.completed_count || 0;
+        const inProg = item.in_progress_count || 0;
+        if (inProg > 0) return `${inProg}화 완성 단계` + (comp > 0 ? ` · ${comp}화 완료` : '');
+        if (comp > 0) return `${comp}화 완료`;
+        return item.in_progress_label || '';
+      })()
     : item.step?.name || item.status || '';
 
   return (

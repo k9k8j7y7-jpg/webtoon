@@ -2012,6 +2012,28 @@ function RegenDropdown({ cutId, cutSpec, disabled, onRegenerate, epDramaLevel, h
             📦 제품 참조 포함 <span className="text-amber-500/70 ml-auto">GPT 권장</span>
           </div>
         )}
+        {/* PC 설명 컷 장치 변경 */}
+        {isExplainCut && (
+          <div className="px-3 py-2 space-y-1.5 border-b border-border dark:border-night-border">
+            <p className="text-[10px] font-bold text-purple-500">설명 장치</p>
+            <div className="flex flex-wrap gap-1">
+              {_EXPLAIN_DEVICES.map(d => (
+                <button key={d.key} onClick={() => { setEditDevice(d.key); setDeviceChanged(true); }}
+                  className={`px-2 py-1 rounded-md text-[10px] font-bold transition-colors ${
+                    editDevice === d.key ? 'bg-purple-500 text-white' : 'bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-400'
+                  }`}>{d.label}</button>
+              ))}
+            </div>
+            <div className="space-y-1">
+              {editLabels.map((lbl, li) => (
+                <input key={li} value={lbl}
+                  onChange={e => { const n = [...editLabels]; n[li] = e.target.value; setEditLabels(n); setDeviceChanged(true); }}
+                  className="w-full px-2 py-1 text-[10px] rounded-md border border-purple-300 dark:border-purple-700 bg-white dark:bg-zinc-800 text-ink-black dark:text-white"
+                  placeholder={`라벨 ${li + 1}`} />
+              ))}
+            </div>
+          </div>
+        )}
         <p className="px-3 pt-1 pb-0.5 text-[10px] font-bold text-gray-400">연출 강도</p>
         {['light', 'normal', 'strong'].map((level) => (
           <button
@@ -2035,7 +2057,12 @@ function RegenDropdown({ cutId, cutSpec, disabled, onRegenerate, epDramaLevel, h
         )}
         <div className="p-2 border-t border-border dark:border-night-border">
           <button
-            onClick={() => { setOpen(false); onRegenerate(cutId, selectedDrama, userNote || undefined); }}
+            onClick={async () => {
+              if (isExplainCut && deviceChanged) {
+                try { await api.put(`/cuts/${cutId}/device`, { device: editDevice, labels: editLabels }); } catch {}
+              }
+              setOpen(false); onRegenerate(cutId, selectedDrama, userNote || undefined);
+            }}
             className="w-full h-8 rounded-lg text-xs font-bold bg-comic-blue text-white hover:bg-comic-blue/90 transition-colors"
           >
             이 내용으로 다시 그리기 · 1패킷

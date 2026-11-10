@@ -326,3 +326,22 @@ Web Share API(`navigator.share({files})`) — `share()`는 **`onClick`에서 동
 - 3단계: 패킷(5지점 차감 + 402 가드 + admin_grant.py + axios 인터셉터)
 - 4단계: 토스(위젯 SDK v2 + API ck 키, step19 orders, 금액 검증·멱등·패킷 지급). 상품: packet_30(6,900)/packet_100(19,900)/packet_300(54,900)
 - 5단계: 랜딩(네온 다크) + 공개 뷰어(share_token UUID, step20) + 갤러리(showcase, optional auth)
+
+### 한 컷 설명 장치 옵션 (2026-11-10)
+- **onecut_device** — Gate1 "설명 장치 추가(선택)" 토글. OFF(기본)면 기존 한 컷 경로 100% 동일
+- 장치 6종(zoom_inset·icon_badges·before_after·steps·size_compare·process)
+- ad_brief visual_points 한 컷은 **1개**만 제안 → 프리필
+- steps/process 라벨 **최대 4** 허용 (기존 3→4, 인스타툰·연재툰도 동일 확장)
+- 콘티: onecut_device 있으면 kind=explain·device·labels 주입, 없으면 기존 spec
+- 이미지: copy_clause + explain_clause 복합, "Render ONLY headline + subline + labels" 허용 문구
+- explain_clause: `product_registered=False`면 제품 문구 제거, `allow_copy_text=True`면 글자 금지 제거
+- 글자 검사: head·sub + 라벨 **개별** 검사(0패킷, 1회 재시도), copy-report에 라벨 포함
+- `PUT /cuts/{id}/device` — 재생성 전 장치 변경(onecut만), PC·모바일 양쪽 지원
+- 가이드 포즈 힌트: device 있으면 캐릭터 pose에 "guide gesture toward the panel" 자동 추가
+
+### 73~77 같이 처리 (2026-11-10)
+- **(73)** Gate3Assets: brand_series 형식·비율 섹션 숨김 (세로 웹툰·시리즈 비율 고정)
+- **(74)** MySeriesPage: "{N+1}화 만들기" 버튼 텍스트 + 완성 화 1개 이상일 때 하단에도 같은 버튼
+- **(75)** AdBriefForm: 다시 쓰기 칩별 스피너+비활성, 실패 시 alert 토스트
+- **(76)** 상태 표기: 컷 생성 전="완성 단계", 전 컷 완료="완료". MyWorksPage 시리즈 카드, MySeriesPage 화 배지
+- **(77)** DashboardPage: is_default·is_system 프로젝트 /projects 목록에서 숨김

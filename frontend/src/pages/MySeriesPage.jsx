@@ -63,7 +63,7 @@ export default function MySeriesPage() {
           disabled={creating}
           className="neon-btn flex items-center gap-1.5 !px-4 !py-2 !rounded-full text-sm disabled:opacity-50"
         >
-          <Plus size={16} /> {creating ? '만드는 중...' : '새 화 만들기'}
+          <Plus size={16} /> {creating ? '만드는 중...' : `${(episodes.length || 0) + 1}화 만들기`}
         </button>
       </div>
 
@@ -76,6 +76,7 @@ export default function MySeriesPage() {
         <div className="space-y-3">
           {episodes.map((ep) => {
             const badgeCls = STATUS_BADGE[ep.status] || STATUS_BADGE.default;
+            const statusLabel = ep.completed ? '완료' : (ep.has_images ? '완성 단계' : ep.status);
             return (
               <button
                 key={ep.id}
@@ -100,8 +101,8 @@ export default function MySeriesPage() {
                     <p className="text-[11px] text-gray-400 dark:text-gray-500 truncate mt-0.5">{ep.subtitle}</p>
                   )}
                   <div className="flex items-center gap-2 mt-1">
-                    <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full ${badgeCls}`}>
-                      {ep.completed ? '완성' : ep.status}
+                    <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full ${ep.completed ? STATUS_BADGE['완성'] : badgeCls}`}>
+                      {statusLabel}
                     </span>
                   </div>
                 </div>
@@ -110,6 +111,16 @@ export default function MySeriesPage() {
               </button>
             );
           })}
+          {/* 완성 화가 1개 이상이면 하단에도 다음 화 버튼 */}
+          {episodes.some(ep => ep.completed) && (
+            <button
+              onClick={handleNewEpisode}
+              disabled={creating}
+              className="w-full glass-card p-4 flex items-center justify-center gap-2 text-sm font-bold text-comic-blue dark:text-comic-orange hover:-translate-y-0.5 hover:border-comic-orange transition-all disabled:opacity-50"
+            >
+              <Plus size={16} /> {creating ? '만드는 중...' : `${(episodes.length || 0) + 1}화 만들기`}
+            </button>
+          )}
         </div>
       )}
     </div>

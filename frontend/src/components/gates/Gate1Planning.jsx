@@ -84,6 +84,11 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
   const [adScriptHighlight, setAdScriptHighlight] = useState(false);
   // 카피 디자인 (onecut_ad 전용)
   const [copyDesign, setCopyDesign] = useState(() => gateStatus?.idea_brief?.copy_design || { font: 'handwritten', position: 'auto', emphasis: null });
+  // 설명 장치 (onecut_ad 전용)
+  const [onecutDeviceOn, setOnecutDeviceOn] = useState(() => !!gateStatus?.idea_brief?.onecut_device?.device);
+  const [onecutDevice, setOnecutDevice] = useState(() => gateStatus?.idea_brief?.onecut_device?.device || 'process');
+  const [onecutLabels, setOnecutLabels] = useState(() => gateStatus?.idea_brief?.onecut_device?.labels || []);
+  const [onecutCompare, setOnecutCompare] = useState(() => gateStatus?.idea_brief?.onecut_device?.compare || '');
 
   const [characters, setCharacters] = useState([]);
   const [charTouched, setCharTouched] = useState(false); // 등장인물 user_touched
@@ -1083,6 +1088,117 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                           <span className="text-[10px] text-zinc-400 dark:text-zinc-500">비워두면 AI가 골라요</span>
                         </div>
                       )}
+                    </div>
+                  );
+                })()}
+
+                {/* 설명 장치 추가 (onecut_ad 전용) */}
+                {purpose === 'onecut_ad' && !readOnly && (() => {
+                  const DEVICES = [
+                    { key: 'zoom_inset', label: '확대 단면', count: 1, ph: ['특징'] },
+                    { key: 'icon_badges', label: '아이콘 배지', count: 3, ph: ['특징1', '특징2', '특징3'] },
+                    { key: 'before_after', label: '전·후', count: 2, ph: ['사용 전', '사용 후'] },
+                    { key: 'steps', label: '단계', count: [3,4], ph: ['① 1단계', '② 2단계', '③ 3단계'] },
+                    { key: 'size_compare', label: '크기 비교', count: 1, ph: ['대용량'] },
+                    { key: 'process', label: '작용 과정', count: [3,4], ph: ['① 과정1', '② 과정2', '③ 과정3'] },
+                  ];
+                  const curDev = DEVICES.find(d => d.key === onecutDevice) || DEVICES[5];
+                  const labelCount = Array.isArray(curDev.count) ? (onecutLabels.length >= curDev.count[1] ? curDev.count[1] : Math.max(curDev.count[0], onecutLabels.length)) : curDev.count;
+                  // AI 제안 (visual_points[0])에서 프리필
+                  const aiVp = (gateStatus?.idea_brief?.ad_brief_result?.visual_points || [])[0];
+
+                  const saveDevice = (on, dev, labels, compare) => {
+                    const payload = on ? { device: dev, labels: labels.slice(0, Array.isArray(curDev.count) ? curDev.count[1] : curDev.count), compare: dev === 'size_compare' ? compare : undefined } : null;
+                    api.put(`/projects/${projectId}/episodes/${episodeId}/idea-brief/selection`, { onecut_device: payload }).catch(() => {});
+                  };
+
+                  const handleToggle = () => {
+                    const next = !onecutDeviceOn;
+                    setOnecutDeviceOn(next);
+                    if (next && onecutLabels.length === 0 && aiVp) {
+                      setOnecutDevice(aiVp.device || 'process');
+                      setOnecutLabels(aiVp.labels || []);
+                      setOnecutCompare(aiVp.compare || '');
+                      saveDevice(true, aiVp.device || 'process', aiVp.labels || [], aiVp.compare || '');
+                    } else {
+                      saveDevice(next, onecutDevice, onecutLabels, onecutCompare);
+                    }
+                  };
+
+                  const handleDeviceChange = (key) => {
+                    const d = DEVICES.find(x => x.key === key);
+                    setOnecutDevice(key);
+                    const cnt = Array.isArray(d.count) ? d.count[0] : d.count;
+                    const newLabels = d.ph.slice(0, cnt);
+                    setOnecutLabels(newLabels);
+                    setOnecutCompare('');
+                    saveDevice(true, key, newLabels, '');
+                  };
+
+                  const handleLabelChange = (i, v) => {
+                    const n = [...onecutLabels]; n[i] = v.slice(0, 6); setOnecutLabels(n);
+                    saveDevice(true, onecutDevice, n, onecutCompare);
+                  };
+
+                  const handleAddLabel = () => {
+                    if (!Array.isArray(curDev.count) || onecutLabels.length >= curDev.count[1]) return;
+                    const n = [...onecutLabels, '']; setOnecutLabels(n);
+                    saveDevice(true, onecutDevice, n, onecutCompare);
+                  };
+
+                  const handleRemoveLabel = () => {
+                    const minC = Array.isArray(curDev.count) ? curDev.count[0] : curDev.count;
+                    if (onecutLabels.length <= minC) return;
+                    const n = onecutLabels.slice(0, -1); setOnecutLabels(n);
+                    saveDevice(true, onecutDevice, n, onecutCompare);
+                  };
+
+                  return (
+                    <div className="bg-purple-50/50 dark:bg-purple-900/10 rounded-lg px-3 py-3 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-bold text-purple-600 dark:text-purple-400">설명 장치 추가 (선택)</p>
+                        <button onClick={handleToggle}
+                          className={`relative w-10 h-5 rounded-full transition-colors ${onecutDeviceOn ? 'bg-purple-500' : 'bg-zinc-300 dark:bg-zinc-600'}`}>
+                          <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${onecutDeviceOn ? 'left-5.5 translate-x-0' : 'left-0.5'}`}
+                            style={{ left: onecutDeviceOn ? '22px' : '2px' }} />
+                        </button>
+                      </div>
+                      {onecutDeviceOn && <>
+                        <p className="text-[10px] text-zinc-400 dark:text-zinc-500">캐릭터가 제품 특징을 그림 안에서 설명해요 · 패킷 동일</p>
+                        {/* 장치 칩 */}
+                        <div className="flex flex-wrap gap-1.5">
+                          {DEVICES.map(d => (
+                            <button key={d.key} onClick={() => handleDeviceChange(d.key)}
+                              className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-colors ${
+                                onecutDevice === d.key ? 'bg-purple-500 text-white' : 'bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-purple-100 dark:hover:bg-purple-900/20'
+                              }`}>{d.label}</button>
+                          ))}
+                        </div>
+                        {/* 라벨 입력 */}
+                        <div className="space-y-1.5">
+                          {onecutLabels.slice(0, labelCount).map((lbl, li) => (
+                            <input key={li} value={lbl}
+                              onChange={e => handleLabelChange(li, e.target.value)}
+                              className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-purple-300 dark:border-purple-700 bg-white dark:bg-zinc-800 text-ink-black dark:text-white placeholder-zinc-400 focus:outline-none focus:border-purple-500"
+                              placeholder={curDev.ph[li] || `라벨 ${li + 1}`} maxLength={6} />
+                          ))}
+                          {Array.isArray(curDev.count) && (
+                            <div className="flex gap-2">
+                              {onecutLabels.length < curDev.count[1] && (
+                                <button onClick={handleAddLabel} className="text-[10px] font-bold text-purple-500 hover:text-purple-600">+ 라벨 추가</button>
+                              )}
+                              {onecutLabels.length > curDev.count[0] && (
+                                <button onClick={handleRemoveLabel} className="text-[10px] font-bold text-zinc-400 hover:text-zinc-600">− 라벨 삭제</button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        {onecutDevice === 'size_compare' && (
+                          <input value={onecutCompare} onChange={e => { setOnecutCompare(e.target.value); saveDevice(true, onecutDevice, onecutLabels, e.target.value); }}
+                            className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-purple-300 dark:border-purple-700 bg-white dark:bg-zinc-800 text-ink-black dark:text-white placeholder-zinc-400 focus:outline-none focus:border-purple-500"
+                            placeholder="비교 대상 (예: 300g)" maxLength={20} />
+                        )}
+                      </>}
                     </div>
                   );
                 })()}
