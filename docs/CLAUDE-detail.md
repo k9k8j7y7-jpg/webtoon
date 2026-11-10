@@ -345,3 +345,11 @@ Web Share API(`navigator.share({files})`) — `share()`는 **`onClick`에서 동
 - **(75)** AdBriefForm: 다시 쓰기 칩별 스피너+비활성, 실패 시 alert 토스트
 - **(76)** 상태 표기: 컷 생성 전="완성 단계", 전 컷 완료="완료". MyWorksPage 시리즈 카드, MySeriesPage 화 배지
 - **(77)** DashboardPage: is_default·is_system 프로젝트 /projects 목록에서 숨김
+
+### 한 컷 설명 장치 2차 검증 (2026-11-10)
+- ① ep159 device=process 라벨 4 → v2. copy_check head·sub OK, label_check 4/4 OK, 재시도 없음
+- ② ep159 `PUT /cuts/ep159_c001/device`(→steps) → `POST /cuts/ep159_c001/regenerate` → v3. head·sub OK, 라벨 4/4 OK
+- ③ ep160 device OFF: 콘티 kind=None·device=None. 이미지는 테스트 계정 잔량 0으로 미생성. `build_cut_prompt` 구버전(77c56dd) vs 현재를 ep160 실제 spec으로 돌려 **diff 0** (2147자)
+- ④ ep161 인스타툰 steps 라벨 4 → 대본 컷4 kind=explain·labels 4개 유지, explain_clause Panel 1~4
+- **알려진 빈틈:** (76) 프론트가 `in_progress_count`(시리즈 카드)·`has_images`(화 배지)를 읽지만 `myworks/router.py`가 안 내려줌 → "완성 단계" 미표시(기존 문구 폴백). (77) `/projects` 응답에 `is_default` 없음·`is_system` 컬럼 자체 없음 → 필터 무동작(기본 프로젝트는 kind=ad라 이미 숨김). 라벨 6자 자르기로 "슬라이드 생성"→"슬라이드 생"(ep159 v2). 대본 프롬프트 `_DEVICE_KR`의 "단계 미니 패널 3개"·ad_brief 장치 설명 "3" 표기 잔존(④는 4개 유지됨)
+- 캡처: `frontend/scripts/mobile-check-7377.mjs` (TOKEN 환경변수, 375 다크 @2x → `scratch/captures/`)
