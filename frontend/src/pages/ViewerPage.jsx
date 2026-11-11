@@ -8,6 +8,7 @@ import EffectLayer from '../components/EffectLayer';
 import ProductLayer from '../components/ProductLayer';
 import PngBubbleLayer from '../components/PngBubbleLayer';
 import { PAGE_FORMATS } from '../utils/pageFormats';
+import { AD_PURPOSES, AD_MOODS, COPY_FONTS, COPY_POSITIONS, DEVICE_KR, labelOf } from '../utils/adBriefLabels';
 import AuthorLink from '../components/AuthorLink';
 import SubscribeButton from '../components/SubscribeButton';
 import CommentSection from '../components/CommentSection';
@@ -116,10 +117,12 @@ function ViewerShareButton({ title, author }) {
 }
 
 function Row({ label, value }) {
+  // 값 없는 줄은 숨김
+  if (value === null || value === undefined || (typeof value === 'string' && !value.trim())) return null;
   return (
     <div className="flex gap-3 text-sm">
       <span className="text-gray-500 shrink-0 w-20">{label}</span>
-      <span className="text-gray-200">{value}</span>
+      <span className="text-gray-200 min-w-0 break-words">{value}</span>
     </div>
   );
 }
@@ -321,44 +324,65 @@ export default function ViewerPage() {
           {/* 뭘 말했나 */}
           <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-3">
             <h4 className="text-sm font-bold text-cyan-400 mb-2">뭘 말했나</h4>
-            {data.brief.ad_purpose && <Row label="광고 목적" value={data.brief.ad_purpose} />}
-            {data.brief.message && <Row label="전달 내용" value={data.brief.message} />}
-            {data.brief.product_name && <Row label="제품명" value={data.brief.product_name} />}
-            {data.brief.product_info && (
-              <details className="text-sm">
-                <summary className="text-gray-400 cursor-pointer hover:text-gray-300">특징/활용법</summary>
-                <p className="text-gray-300 mt-1 pl-2 border-l-2 border-white/10">{data.brief.product_info}</p>
-              </details>
-            )}
-            {data.brief.mood && <Row label="분위기" value={data.brief.mood} />}
-            {data.brief.copy_selected && (
-              <div>
-                <span className="text-xs text-gray-500">카피</span>
-                <p className="text-white font-bold text-base">{data.brief.copy_selected.head}</p>
-                {data.brief.copy_selected.sub && <p className="text-gray-400 text-sm">{data.brief.copy_selected.sub}</p>}
-              </div>
-            )}
-            {data.brief.copy_design && (
-              <Row label="카피 디자인" value={`${data.brief.copy_design.font === 'bold_gothic' ? '굵은 고딕' : data.brief.copy_design.font === 'handwritten' ? '손글씨' : data.brief.copy_design.font || ''} · ${data.brief.copy_design.position === 'top' ? '상단' : data.brief.copy_design.position === 'bottom' ? '하단' : data.brief.copy_design.position || '자동'}`} />
-            )}
-            {data.brief.onecut_device && (
-              <Row label="설명 장치" value={`${data.brief.onecut_device.device === 'steps' ? '단계' : data.brief.onecut_device.device === 'process' ? '작용 과정' : data.brief.onecut_device.device}${data.brief.onecut_device.labels?.length ? ' · ' + data.brief.onecut_device.labels.join(', ') : ''}`} />
-            )}
-            {data.brief.visual_points_selected?.length > 0 && (
-              <Row label="보여줄 특징" value={data.brief.visual_points_selected.map(v => v.label || v).join(', ')} />
-            )}
-            {data.brief.target_cuts && <Row label="컷 수" value={`${data.brief.target_cuts}컷`} />}
-            {data.brief.episode_topic && <Row label="이번 화 소재" value={data.brief.episode_topic} />}
+            {(() => {
+              const b = data.brief;
+              const cd = b.copy_design || {};
+              const copyDesign = [
+                labelOf(COPY_FONTS, cd.font),
+                labelOf(COPY_POSITIONS, cd.position) && `위치 ${labelOf(COPY_POSITIONS, cd.position)}`,
+                cd.emphasis && `강조 '${cd.emphasis}'`,
+              ].filter(Boolean).join(' · ');
+              const od = b.onecut_device;
+              const deviceText = od && DEVICE_KR[od.device]
+                ? `${DEVICE_KR[od.device]}${od.labels?.length ? ' · ' + od.labels.join(', ') : ''}`
+                : null;
+              const points = (b.visual_points || [])
+                .map(p => p.feature + (DEVICE_KR[p.device] ? ` (${DEVICE_KR[p.device]})` : ''));
+              return (
+                <>
+                  <Row label="광고 목적" value={labelOf(AD_PURPOSES, b.ad_purpose)} />
+                  <Row label="전달 내용" value={b.message} />
+                  <Row label="제품명" value={b.product_name} />
+                  {b.product_info && (
+                    <details className="text-sm">
+                      <summary className="text-gray-500 cursor-pointer hover:text-gray-300">제품 특징 <span className="text-gray-600">(펼치기)</span></summary>
+                      <p className="text-gray-300 mt-2 pl-2 border-l-2 border-white/10 whitespace-pre-line break-words">{b.product_info}</p>
+                    </details>
+                  )}
+                  <Row label="분위기" value={labelOf(AD_MOODS, b.mood)} />
+                  {b.copy_selected && (b.copy_selected.head || b.copy_selected.sub) && (
+                    <div className="flex gap-3 text-sm">
+                      <span className="text-gray-500 shrink-0 w-20">카피</span>
+                      <div className="min-w-0">
+                        {b.copy_selected.head && <p className="text-white font-bold">{b.copy_selected.head}</p>}
+                        {b.copy_selected.sub && <p className="text-gray-400">{b.copy_selected.sub}</p>}
+                      </div>
+                    </div>
+                  )}
+                  <Row label="카피 디자인" value={copyDesign} />
+                  <Row label="설명 장치" value={deviceText} />
+                  <Row label="보여줄 특징" value={points.join(', ')} />
+                  <Row label="컷 수" value={b.target_cuts ? `${b.target_cuts}컷` : null} />
+                  <Row label="이번 화 소재" value={b.episode_topic} />
+                </>
+              );
+            })()}
           </div>
 
           {/* 어떻게 그렸나 */}
           {data.how && (
             <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-3">
               <h4 className="text-sm font-bold text-purple-400 mb-2">어떻게 그렸나</h4>
-              {data.how.style && <Row label="그림 스타일" value={data.how.style.name_ko} />}
-              {data.how.characters?.length > 0 && <Row label="캐릭터" value={data.how.characters.join(' / ')} />}
-              {data.how.product && <Row label="제품 사진" value={`사용${data.how.product.has_label_text ? ' · 라벨 글자 있음' : ''}`} />}
-              {data.how.reference_ads && <Row label="참고 광고" value={`사용${data.how.reference_ads.follow_layout ? ' · 구도 따라가기 ON' : ''}`} />}
+              <Row label="그림 스타일" value={data.how.style?.name_ko} />
+              <Row label="캐릭터" value={data.how.characters?.join(' / ')} />
+              <Row label="제품" value={data.how.product?.photo_count
+                ? `제품 사진 ${data.how.product.photo_count}장 · 라벨 글자 ${data.how.product.has_label_text ? '있음' : '없음'}`
+                : null} />
+              <Row label="참고 광고" value={data.how.reference_ads
+                ? (data.how.reference_ads.used
+                    ? `사용${data.how.reference_ads.follow_layout ? ' · 구도 따라가기 ON' : ''}`
+                    : '사용 안 함')
+                : null} />
             </div>
           )}
 

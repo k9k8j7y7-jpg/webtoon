@@ -24,34 +24,68 @@ def _extract_public_brief(gate_status: dict) -> dict | None:
         return None
 
     brief: dict = {}
-
-    # "뭘 말했나" 덩어리
-    for k in ("ad_purpose", "message", "product_name", "mood", "episode_topic"):
-        if ib.get(k):
-            brief[k] = ib[k]
-
-    # product_info (특징/활용법) — 사진 URL 제외
-    if ib.get("product", {}).get("features"):
-        brief["product_info"] = ib["product"]["features"]
-
-    # 선택된 카피
     abr = ib.get("ad_brief_result") or {}
-    if abr.get("copy_selected"):
-        brief["copy_selected"] = abr["copy_selected"]
-    elif ib.get("copy_selected"):
-        brief["copy_selected"] = ib["copy_selected"]
+
+    # "뭘 말했나" 덩어리 — 키는 그대로 내려보내고 한글 매핑은 프론트(adBriefLabels.js)
+    for k in ("ad_purpose", "product_name", "mood", "episode_topic"):
+        v = ib.get(k)
+        if isinstance(v, str) and v.strip():
+            brief[k] = v.strip()
+
+    # 전달 내용 — 사용자 입력 key_message(양끝 따옴표 제거)
+    msg = ib.get("key_message") or ib.get("message") or ""
+    if isinstance(msg, str):
+        msg = msg.strip().strip('"“”').strip()
+        if msg:
+            brief["message"] = msg
+
+    # 제품 특징 (특징/활용법) — 문자열만
+    pinfo = ib.get("product_info")
+    if not (isinstance(pinfo, str) and pinfo.strip()):
+        pinfo = (ib.get("product") or {}).get("features") if isinstance(ib.get("product"), dict) else None
+    if isinstance(pinfo, str) and pinfo.strip():
+        brief["product_info"] = pinfo.strip()
+
+    # 선택된 카피 — copy_selected는 copy_candidates 인덱스(이미지 생성 경로와 동일 규칙)
+    copies = ib.get("copy_candidates") or []
+    sel = ib.get("copy_selected", 0)
+    chosen = None
+    if isinstance(sel, dict):
+        chosen = sel
+    elif copies:
+        chosen = copies[sel] if isinstance(sel, int) and 0 <= sel < len(copies) else copies[0]
+    if isinstance(chosen, dict):
+        head = (chosen.get("head") or "").strip()
+        sub = (chosen.get("sub") or "").strip()
+        if head or sub:
+            brief["copy_selected"] = {"head": head, "sub": sub}
 
     # 카피 디자인
-    if ib.get("copy_design"):
-        brief["copy_design"] = ib["copy_design"]
+    cd = ib.get("copy_design")
+    if isinstance(cd, dict) and any(cd.get(k) for k in ("font", "position", "emphasis")):
+        brief["copy_design"] = {k: cd.get(k) for k in ("font", "position", "emphasis")}
 
-    # 설명 장치
-    if ib.get("onecut_device"):
-        brief["onecut_device"] = ib["onecut_device"]
-    # visual_points_selected (라벨)
-    vps = ib.get("visual_points_selected")
-    if vps:
-        brief["visual_points_selected"] = vps
+    # 설명 장치 (한 컷)
+    od = ib.get("onecut_device")
+    if isinstance(od, dict) and od.get("device"):
+        brief["onecut_device"] = {
+            "device": od.get("device"),
+            "labels": [l for l in (od.get("labels") or []) if isinstance(l, str) and l.strip()],
+        }
+
+    # 보여줄 특징 — 인덱스 → visual_points의 feature 이름 + device
+    vps_all = abr.get("visual_points") or []
+    points = []
+    for idx in ib.get("visual_points_selected") or []:
+        vp = None
+        if isinstance(idx, int) and 0 <= idx < len(vps_all):
+            vp = vps_all[idx]
+        elif isinstance(idx, dict):
+            vp = idx
+        if isinstance(vp, dict) and vp.get("feature"):
+            points.append({"feature": vp["feature"], "device": vp.get("device")})
+    if points:
+        brief["visual_points"] = points
 
     # 컷 수
     tc = gate_status.get("target_cuts")
@@ -96,21 +130,24 @@ def _extract_public_how(gate_status: dict, db: Session, episode_id: int) -> dict
             parts.append(f"실사 사진 캐릭터 {len(photo_chars)}명")
         how["characters"] = parts
 
-    # 제품 요약
-    ib = (gate_status or {}).get("idea_brief") or {}
-    prod = ib.get("product") or {}
-    if prod.get("name"):
+    # 제품 요약 — Product 테이블(사진 있는 것만). 사진 URL·라벨 원문은 내보내지 않음
+    prods = [
+        p for p in db.query(Product).filter(Product.episode_id == episode_id).all()
+        if p.photo_url
+    ]
+    if prods:
         how["product"] = {
-            "has_product": True,
-            "has_label_text": bool(prod.get("label_text")),
+            "photo_count": len(prods),
+            "has_label_text": any((p.label_text or "").strip() for p in prods),
         }
 
-    # 참고 광고 요약
-    ref_ads = ib.get("reference_ads")
-    if ref_ads:
+    # 참고 광고 요약 — 광고 트랙만 (gate_status.reference_ads[].follow_layout)
+    gs = gate_status or {}
+    if gs.get("purpose") in ("onecut_ad", "instatoon_ad", "brand_series"):
+        ref_ads = [r for r in (gs.get("reference_ads") or []) if isinstance(r, dict)]
         how["reference_ads"] = {
-            "used": True,
-            "follow_layout": bool(ib.get("follow_layout")),
+            "used": bool(ref_ads),
+            "follow_layout": any(r.get("follow_layout") for r in ref_ads),
         }
 
     return how
