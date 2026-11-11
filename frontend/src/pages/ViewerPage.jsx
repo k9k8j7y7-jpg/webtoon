@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { Share2, Check } from 'lucide-react';
 import BubbleOverlay from '../components/BubbleOverlay';
@@ -115,11 +115,23 @@ function ViewerShareButton({ title, author }) {
   );
 }
 
+function Row({ label, value }) {
+  return (
+    <div className="flex gap-3 text-sm">
+      <span className="text-gray-500 shrink-0 w-20">{label}</span>
+      <span className="text-gray-200">{value}</span>
+    </div>
+  );
+}
+
 export default function ViewerPage() {
   const { shareToken } = useParams();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [likeInfo, setLikeInfo] = useState({ liked: false, like_count: 0 });
+  const [fromExampleBusy, setFromExampleBusy] = useState(false);
 
   useEffect(() => {
     const headers = {};
@@ -134,6 +146,32 @@ export default function ViewerPage() {
       .then(res => setLikeInfo({ liked: res.data.liked, like_count: res.data.like_count }))
       .catch(err => console.error(err));
   }, [shareToken]);
+
+  const handleFromExample = async () => {
+    if (fromExampleBusy) return;
+    setFromExampleBusy(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.post(
+        `${API_BASE}/api/v1/my/works/from-example?token=${shareToken}`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const { project_id, episode_id } = res.data;
+      navigate(`/workflow/${project_id}/${episode_id}`);
+    } catch (err) {
+      alert(err.response?.data?.detail || '만들지 못했어요');
+    } finally {
+      setFromExampleBusy(false);
+    }
+  };
+
+  // 로그인 후 복귀 시 자동 from-example 실행
+  useEffect(() => {
+    if (searchParams.get('action') === 'from-example' && localStorage.getItem('token') && data?.brief) {
+      handleFromExample();
+    }
+  }, [data, searchParams]);
 
   const toggleLike = async () => {
     try {
@@ -274,6 +312,74 @@ export default function ViewerPage() {
           </main>
         );
       })()}
+
+      {/* "이렇게 만들었어요" — brief 카드 */}
+      {data.brief && (
+        <section className="max-w-2xl mx-auto px-4 py-8 space-y-6">
+          <h3 className="text-lg font-bold text-white flex items-center gap-2">📋 이렇게 만들었어요</h3>
+
+          {/* 뭘 말했나 */}
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-3">
+            <h4 className="text-sm font-bold text-cyan-400 mb-2">뭘 말했나</h4>
+            {data.brief.ad_purpose && <Row label="광고 목적" value={data.brief.ad_purpose} />}
+            {data.brief.message && <Row label="전달 내용" value={data.brief.message} />}
+            {data.brief.product_name && <Row label="제품명" value={data.brief.product_name} />}
+            {data.brief.product_info && (
+              <details className="text-sm">
+                <summary className="text-gray-400 cursor-pointer hover:text-gray-300">특징/활용법</summary>
+                <p className="text-gray-300 mt-1 pl-2 border-l-2 border-white/10">{data.brief.product_info}</p>
+              </details>
+            )}
+            {data.brief.mood && <Row label="분위기" value={data.brief.mood} />}
+            {data.brief.copy_selected && (
+              <div>
+                <span className="text-xs text-gray-500">카피</span>
+                <p className="text-white font-bold text-base">{data.brief.copy_selected.head}</p>
+                {data.brief.copy_selected.sub && <p className="text-gray-400 text-sm">{data.brief.copy_selected.sub}</p>}
+              </div>
+            )}
+            {data.brief.copy_design && (
+              <Row label="카피 디자인" value={`${data.brief.copy_design.font === 'bold_gothic' ? '굵은 고딕' : data.brief.copy_design.font === 'handwritten' ? '손글씨' : data.brief.copy_design.font || ''} · ${data.brief.copy_design.position === 'top' ? '상단' : data.brief.copy_design.position === 'bottom' ? '하단' : data.brief.copy_design.position || '자동'}`} />
+            )}
+            {data.brief.onecut_device && (
+              <Row label="설명 장치" value={`${data.brief.onecut_device.device === 'steps' ? '단계' : data.brief.onecut_device.device === 'process' ? '작용 과정' : data.brief.onecut_device.device}${data.brief.onecut_device.labels?.length ? ' · ' + data.brief.onecut_device.labels.join(', ') : ''}`} />
+            )}
+            {data.brief.visual_points_selected?.length > 0 && (
+              <Row label="보여줄 특징" value={data.brief.visual_points_selected.map(v => v.label || v).join(', ')} />
+            )}
+            {data.brief.target_cuts && <Row label="컷 수" value={`${data.brief.target_cuts}컷`} />}
+            {data.brief.episode_topic && <Row label="이번 화 소재" value={data.brief.episode_topic} />}
+          </div>
+
+          {/* 어떻게 그렸나 */}
+          {data.how && (
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-3">
+              <h4 className="text-sm font-bold text-purple-400 mb-2">어떻게 그렸나</h4>
+              {data.how.style && <Row label="그림 스타일" value={data.how.style.name_ko} />}
+              {data.how.characters?.length > 0 && <Row label="캐릭터" value={data.how.characters.join(' / ')} />}
+              {data.how.product && <Row label="제품 사진" value={`사용${data.how.product.has_label_text ? ' · 라벨 글자 있음' : ''}`} />}
+              {data.how.reference_ads && <Row label="참고 광고" value={`사용${data.how.reference_ads.follow_layout ? ' · 구도 따라가기 ON' : ''}`} />}
+            </div>
+          )}
+
+          {/* [이 설정으로 만들기] */}
+          <button
+            onClick={() => {
+              const token = localStorage.getItem('token');
+              if (!token) {
+                // 비로그인 → 로그인 후 복귀
+                const returnUrl = `/view/${shareToken}?action=from-example`;
+                window.location.href = `/WEBTOON/login?redirect=${encodeURIComponent(returnUrl)}`;
+                return;
+              }
+              handleFromExample();
+            }}
+            className="w-full py-3.5 rounded-2xl text-sm font-bold bg-gradient-to-r from-purple-600 to-cyan-500 hover:opacity-90 transition-opacity text-white"
+          >
+            이 설정으로 만들기
+          </button>
+        </section>
+      )}
 
       {/* 좋아요 & 조회수 영역 */}
       <div className="max-w-2xl mx-auto py-12 flex flex-col items-center border-t border-white/5">

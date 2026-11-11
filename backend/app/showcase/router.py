@@ -11,8 +11,109 @@ from app.storyboard.models import Cut
 from app.products.models import Product
 from app.social.models import AuthorSubscription
 from app.social.service import author_payload, default_category, first_cut_image
+from app.styles.models import Style, STYLE_PRESETS
 
 router = APIRouter(prefix="/showcase", tags=["showcase"])
+
+
+# ── brief 공개용 화이트리스트 추출 ─────────────────────────────
+def _extract_public_brief(gate_status: dict) -> dict | None:
+    """idea_brief에서 공개 가능 필드만 추출. 내부 키·사진 URL·이미지 모델 제외."""
+    ib = (gate_status or {}).get("idea_brief")
+    if not ib:
+        return None
+
+    brief: dict = {}
+
+    # "뭘 말했나" 덩어리
+    for k in ("ad_purpose", "message", "product_name", "mood", "episode_topic"):
+        if ib.get(k):
+            brief[k] = ib[k]
+
+    # product_info (특징/활용법) — 사진 URL 제외
+    if ib.get("product", {}).get("features"):
+        brief["product_info"] = ib["product"]["features"]
+
+    # 선택된 카피
+    abr = ib.get("ad_brief_result") or {}
+    if abr.get("copy_selected"):
+        brief["copy_selected"] = abr["copy_selected"]
+    elif ib.get("copy_selected"):
+        brief["copy_selected"] = ib["copy_selected"]
+
+    # 카피 디자인
+    if ib.get("copy_design"):
+        brief["copy_design"] = ib["copy_design"]
+
+    # 설명 장치
+    if ib.get("onecut_device"):
+        brief["onecut_device"] = ib["onecut_device"]
+    # visual_points_selected (라벨)
+    vps = ib.get("visual_points_selected")
+    if vps:
+        brief["visual_points_selected"] = vps
+
+    # 컷 수
+    tc = gate_status.get("target_cuts")
+    if tc:
+        brief["target_cuts"] = tc
+
+    return brief
+
+
+def _extract_public_how(gate_status: dict, db: Session, episode_id: int) -> dict:
+    """'어떻게 그렸나' 덩어리 — 스타일·모델 요약·제품 요약·참고 광고 요약."""
+    how: dict = {}
+
+    # 스타일
+    style_row = db.query(Style).filter(Style.episode_id == episode_id).first()
+    if style_row:
+        preset = STYLE_PRESETS.get(style_row.preset_key, {})
+        how["style"] = {
+            "key": style_row.preset_key,
+            "name_ko": preset.get("label", style_row.preset_key),
+        }
+
+    # 캐릭터 모델 요약
+    from app.characters.models import Character, EpisodeCharacter
+    chars = (
+        db.query(Character)
+        .join(EpisodeCharacter, EpisodeCharacter.character_id == Character.id)
+        .filter(EpisodeCharacter.episode_id == episode_id)
+        .all()
+    )
+    if chars:
+        preset_chars = [c for c in chars if c.is_preset]
+        photo_chars = [c for c in chars if c.is_photo_real]
+        custom_chars = [c for c in chars if not c.is_preset and not c.is_photo_real]
+        parts = []
+        if preset_chars:
+            names = ", ".join(c.name or c.ref_key for c in preset_chars)
+            parts.append(f"프리셋 {names}")
+        if custom_chars:
+            parts.append(f"직접 만든 캐릭터 {len(custom_chars)}명")
+        if photo_chars:
+            parts.append(f"실사 사진 캐릭터 {len(photo_chars)}명")
+        how["characters"] = parts
+
+    # 제품 요약
+    ib = (gate_status or {}).get("idea_brief") or {}
+    prod = ib.get("product") or {}
+    if prod.get("name"):
+        how["product"] = {
+            "has_product": True,
+            "has_label_text": bool(prod.get("label_text")),
+        }
+
+    # 참고 광고 요약
+    ref_ads = ib.get("reference_ads")
+    if ref_ads:
+        how["reference_ads"] = {
+            "used": True,
+            "follow_layout": bool(ib.get("follow_layout")),
+        }
+
+    return how
 
 # ── 조회수 중복 완화: 인메모리 (기기/세션당 24시간 1회) ──────────
 _view_seen: dict[str, float] = {}          # "ep_id:fp" → timestamp
@@ -53,10 +154,13 @@ def _record_view(episode_id: int, fp: str, db: Session) -> None:
 @router.get("/episodes")
 def list_showcase_episodes(
     scope: str = Query("featured", pattern="^(featured|all)$"),
+    example: int = Query(0),
+    purpose: str | None = Query(None),
     db: Session = Depends(get_db),
 ):
     """공개 갤러리 목록 (카테고리별 그룹).
-    scope=featured(기본, 랜딩) → 관리자 추천작 / scope=all(갤러리 전체) → 작가 공개작 전부."""
+    scope=featured(기본, 랜딩) → 관리자 추천작 / scope=all(갤러리 전체) → 작가 공개작 전부.
+    example=1 → 예시 작품만 / purpose → 용도 필터(onecut_ad, instatoon_ad, brand_series)."""
     q = (
         db.query(Episode, Project, User)
         .join(Project, Episode.project_id == Project.id)
@@ -67,22 +171,34 @@ def list_showcase_episodes(
         q = q.filter(Episode.featured == True)
         q = q.order_by(Episode.id.desc())
     else:
-        q = q.order_by(Episode.published_at.desc(), Episode.id.desc())
+        # example=1 → 예시 먼저 (is_example DESC), 이후 최신순
+        if example:
+            q = q.filter(Episode.is_example == True)
+        q = q.order_by(Episode.is_example.desc(), Episode.published_at.desc(), Episode.id.desc())
+
+    if purpose:
+        from sqlalchemy import func as sa_func
+        q = q.filter(
+            sa_func.json_unquote(sa_func.json_extract(Episode.gate_status, "$.purpose")) == purpose
+        )
 
     result = {"short": [], "series": [], "ad": []}
     for ep, proj, author in q.all():
         cat = ep.showcase_category or default_category(ep)
-        # is_default 프로젝트(숨은 "내 광고")면 프로젝트명 폴백 차단
+        gs = ep.gate_status or {}
         _title = ep.title or ("" if proj.is_default else proj.title)
-        result.setdefault(cat, []).append({
+        item = {
             "share_token": ep.share_token,
             "title": _title,
             "genre": proj.genre,
+            "purpose": gs.get("purpose", "story"),
+            "is_example": bool(ep.is_example),
             "thumbnail_url": first_cut_image(db, ep.id),
             "view_count": ep.view_count,
             "like_count": ep.like_count,
             "author": author_payload(author),
-        })
+        }
+        result.setdefault(cat, []).append(item)
 
     return result
 
@@ -138,7 +254,9 @@ def get_viewer_data(
 
     # is_default 프로젝트(숨은 "내 광고")면 프로젝트명 폴백 차단
     _title = episode.title or ("" if project.is_default else project.title)
-    return {
+    gs = episode.gate_status or {}
+
+    resp = {
         "title": _title,
         "episode_no": episode.episode_no,
         "author": author_payload(author),
@@ -147,10 +265,13 @@ def get_viewer_data(
         "is_me": is_me,
         "is_subscribed": is_subscribed,
         "is_public": bool(episode.is_public),
+        "is_example": bool(episode.is_example),
+        "brief_public": bool(episode.brief_public),
+        "purpose": gs.get("purpose", "story"),
         "view_count": episode.view_count,
         "like_count": episode.like_count,
-        "page_format": get_page_format(episode.gate_status or {}),
-        "reel": (episode.gate_status or {}).get("reel", {}).get("path") if (episode.gate_status or {}).get("reel", {}).get("status") == "done" else None,
+        "page_format": get_page_format(gs),
+        "reel": gs.get("reel", {}).get("path") if gs.get("reel", {}).get("status") == "done" else None,
         "products": [
             {"id": p.id, "name": p.name, "photo_url": p.photo_url}
             for p in ep_products if p.photo_url
@@ -170,6 +291,17 @@ def get_viewer_data(
             for c in cuts
         ],
     }
+
+    # brief 카드: brief_public 또는 is_example일 때만 노출
+    if episode.brief_public or episode.is_example:
+        public_brief = _extract_public_brief(gs)
+        if public_brief:
+            resp["brief"] = public_brief
+        how = _extract_public_how(gs, db, episode.id)
+        if how:
+            resp["how"] = how
+
+    return resp
 
 
 # ── 좋아요 토글 ──────────────────────────────────────────────

@@ -232,6 +232,120 @@ def create_work(
     }
 
 
+# ── 예시 설정으로 만들기 ────────────────────────────────────────
+
+@router.post("/from-example")
+def create_from_example(
+    token: str = Query(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """예시 작품의 브리프를 프리필해서 새 작품 생성.
+
+    - brief_public 또는 is_example인 에피소드만 허용
+    - 같은 purpose로 생성 (onecut_ad/instatoon_ad → 기본 프로젝트, brand_series → 새 시리즈)
+    - 제품 사진·직접 만든 캐릭터·참고 광고 복사 없음
+    - 프리셋 캐릭터는 자동 link
+    """
+    source = db.query(Episode).filter(
+        Episode.share_token == token,
+        Episode.deleted_at.is_(None),
+    ).first()
+    if not source:
+        raise HTTPException(status_code=404, detail="작품을 찾을 수 없어요")
+    if not source.brief_public and not source.is_example:
+        raise HTTPException(status_code=403, detail="브리프가 공개되지 않은 작품이에요")
+
+    src_gs = source.gate_status or {}
+    purpose = src_gs.get("purpose", "story")
+    if purpose == "story":
+        raise HTTPException(status_code=400, detail="이야기 트랙은 지원하지 않아요")
+
+    # --- 새 에피소드 생성 ---
+    gs = create_initial_gate_status(is_ad=True, purpose=purpose)
+
+    # 프리필: target_cuts, aspect_ratio, drama_level
+    for k in ("target_cuts", "aspect_ratio", "drama_level"):
+        if src_gs.get(k):
+            gs[k] = src_gs[k]
+
+    # 프리필: idea_brief (공개 필드만)
+    src_ib = src_gs.get("idea_brief") or {}
+    new_ib = gs.get("idea_brief") or {}
+    for k in ("ad_purpose", "message", "mood", "episode_topic",
+              "copy_design", "onecut_device", "visual_points_selected"):
+        if src_ib.get(k):
+            new_ib[k] = src_ib[k]
+    # 제품명(복사) — 사진·분석 결과 제외
+    if src_ib.get("product", {}).get("name"):
+        new_ib.setdefault("product", {})["name"] = src_ib["product"]["name"]
+        if src_ib["product"].get("features"):
+            new_ib["product"]["features"] = src_ib["product"]["features"]
+    # ad_brief_result에서 visual_points만
+    src_abr = src_ib.get("ad_brief_result") or {}
+    if src_abr.get("visual_points"):
+        new_ib.setdefault("ad_brief_result", {})["visual_points"] = src_abr["visual_points"]
+    new_ib["prefilled_from"] = f"example {token}"
+    gs["idea_brief"] = new_ib
+
+    if purpose == "brand_series":
+        src_proj = db.query(Project).filter(Project.id == source.project_id).first()
+        proj = Project(
+            user_id=current_user.id,
+            title=f"{src_proj.title if src_proj else '연재툰'} 참고",
+            kind="series",
+        )
+        db.add(proj)
+        db.flush()
+        db.add(ProjectMemory(project_id=proj.id, rules={}))
+        ep = Episode(
+            project_id=proj.id,
+            episode_no=1,
+            title="1화",
+            gate_status=gs,
+        )
+    else:
+        proj = _find_or_create_default_project(db, current_user)
+        ep = Episode(
+            project_id=proj.id,
+            episode_no=0,
+            title=_auto_title(purpose),
+            gate_status=gs,
+        )
+
+    db.add(ep)
+    db.flush()
+
+    # 프리셋 캐릭터 자동 link
+    from app.characters.models import Character, EpisodeCharacter
+    src_chars = (
+        db.query(Character)
+        .join(EpisodeCharacter, EpisodeCharacter.character_id == Character.id)
+        .filter(EpisodeCharacter.episode_id == source.id, Character.is_preset == True)
+        .all()
+    )
+    for c in src_chars:
+        existing = db.query(EpisodeCharacter).filter(
+            EpisodeCharacter.episode_id == ep.id,
+            EpisodeCharacter.character_id == c.id,
+        ).first()
+        if not existing:
+            db.add(EpisodeCharacter(episode_id=ep.id, character_id=c.id))
+
+    db.commit()
+    db.refresh(ep)
+    logger.info(
+        "from-example: user=%d token=%s purpose=%s ep=%d presets=%d",
+        current_user.id, token, purpose, ep.id, len(src_chars),
+    )
+    return {
+        "project_id": proj.id,
+        "episode_id": ep.id,
+        "type": purpose,
+        "prefilled_from": f"example {token}",
+    }
+
+
 # ── 단일 목록 ─────────────────────────────────────────────────
 
 @router.get("")

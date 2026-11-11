@@ -4,6 +4,14 @@
 
 ## 현재 상태 이력
 
+**갤러리 레퍼런스 (2026-11-11):** 지시서 `docs/지시서 갤러리레퍼런스 · MD`
+- step38: `episodes.brief_public`(기본 0)·`is_example`(admin만, brief 강제 공개)
+- 공개 뷰어에 "이렇게 만들었어요" 카드: brief_public/is_example일 때만 → "뭘 말했나"(ad_purpose·message·product_name·product_info·mood·copy_selected·copy_design·onecut_device·visual_points·target_cuts·episode_topic) + "어떻게 그렸나"(style name_ko·characters 요약·product 요약·reference_ads 요약). 웹 보완 출처·캐릭터 id·제품/참고 광고 사진 URL·이미지 모델 제외
+- [이 설정으로 만들기] → POST /my/works/from-example?token= → 같은 purpose 새 작품, idea_brief 프리필, 프리셋 캐릭터 자동 link, 제품·직접 캐릭터·참고 광고 복사 없음. 비로그인→로그인→?action=from-example 복귀
+- 갤러리 필터: example=1(예시만)·purpose(onecut_ad/instatoon_ad/brand_series). 카드에 purpose 배지+예시 배지
+- 공개하기: POST /publish?brief_public=true. PUT /brief-public 토글. 기본 OFF
+- admin: POST /admin/episodes/{id}/example → is_example ON/OFF, ON이면 brief_public 강제 ON
+
 **내 작품 단일 목록 (2026-11-09):** 지시서 `docs/지시서 내작품 · MD`
 - 프로젝트/에피소드 2층 → 한 화면 "내 작품"(`/my`). 한 컷·인스타툰 = 사용자별 기본 프로젝트(`projects.is_default=1`, kind=ad, title="내 광고", step37) 안에 에피소드. 연재툰 = kind=series 프로젝트 1행. story = 메뉴 "이야기 만들기" → `/projects`(기존 화면, story만)
 - 화면에 "프로젝트"·"에피소드" 단어 금지. "작품"·"이야기"·"만들기" 사용

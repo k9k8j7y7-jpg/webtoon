@@ -4,7 +4,7 @@ import logging
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -46,6 +46,7 @@ def _publish_state(episode: Episode) -> dict:
         "id": episode.id,
         "is_public": bool(episode.is_public),
         "featured": bool(episode.featured),
+        "brief_public": bool(episode.brief_public),
         "published_at": episode.published_at.isoformat() if episode.published_at else None,
         "share_token": episode.share_token,
         "showcase_category": episode.showcase_category,
@@ -58,10 +59,12 @@ def _publish_state(episode: Episode) -> dict:
 def publish_episode(
     episode_id: int,
     background: BackgroundTasks,
+    brief_public: bool = Query(False),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """본인 에피소드 공개. 닉네임 없으면 400 NICKNAME_REQUIRED(프론트가 닉네임 모달)."""
+    """본인 에피소드 공개. 닉네임 없으면 400 NICKNAME_REQUIRED(프론트가 닉네임 모달).
+    brief_public=true → 브리프도 함께 공개."""
     episode = _get_own_episode(db, episode_id, current_user)
 
     if not current_user.nickname:
@@ -75,6 +78,7 @@ def publish_episode(
 
     first_publish = episode.published_at is None
     episode.is_public = True
+    episode.brief_public = brief_public
     if first_publish:
         episode.published_at = datetime.utcnow()
     if not episode.share_token:
@@ -93,6 +97,23 @@ def publish_episode(
     db.refresh(episode)
     logger.info("publish ep=%s user=%s first=%s notified=%s", episode.id, current_user.id, first_publish, notified)
     return {**_publish_state(episode), "first_publish": first_publish, "notified": notified}
+
+
+@router.put("/episodes/{episode_id}/brief-public")
+def toggle_brief_public(
+    episode_id: int,
+    brief_public: bool = Query(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """이미 공개한 작품의 브리프 공개 여부 토글."""
+    episode = _get_own_episode(db, episode_id, current_user)
+    if not episode.is_public:
+        raise HTTPException(status_code=400, detail="공개된 작품에서만 설정할 수 있어요")
+    episode.brief_public = brief_public
+    db.commit()
+    db.refresh(episode)
+    return _publish_state(episode)
 
 
 @router.post("/episodes/{episode_id}/unpublish")

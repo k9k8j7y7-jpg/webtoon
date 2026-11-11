@@ -126,6 +126,16 @@ function GalleryTab() {
     }
   };
 
+  const handleExampleToggle = async (ep) => {
+    const newExample = !ep.is_example;
+    try {
+      const { data } = await api.post(`/admin/episodes/${ep.id}/example`, { is_example: newExample });
+      setEpisodes(prev => prev.map(e => e.id === ep.id ? { ...e, ...data } : e));
+    } catch (err) {
+      alert('변경 실패: ' + (err.response?.data?.detail || err.message));
+    }
+  };
+
   const copyUrl = (shareToken) => {
     const url = `${window.location.origin}/WEBTOON/view/${shareToken}`;
     navigator.clipboard.writeText(url).then(() => {
@@ -183,6 +193,7 @@ function GalleryTab() {
               <th className="text-left px-4 py-3 font-medium">프로젝트</th>
               <th className="text-left px-4 py-3 font-medium">게이트</th>
               <th className="text-center px-4 py-3 font-medium">랜딩 추천</th>
+              <th className="text-center px-4 py-3 font-medium">예시</th>
               <th className="text-left px-4 py-3 font-medium">카테고리</th>
               <th className="text-right px-4 py-3 font-medium">조회</th>
               <th className="text-right px-4 py-3 font-medium">좋아요</th>
@@ -228,6 +239,19 @@ function GalleryTab() {
                     {ep.is_public ? '작가 공개' : '비공개'}
                   </div>
                 </td>
+                <td className="px-4 py-3 text-center">
+                  <button
+                    onClick={() => handleExampleToggle(ep)}
+                    className={`w-10 h-5 rounded-full relative transition-colors ${
+                      ep.is_example ? 'bg-amber-500' : 'bg-gray-700'
+                    }`}
+                  >
+                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                      ep.is_example ? 'left-5' : 'left-0.5'
+                    }`} />
+                  </button>
+                  {ep.brief_public && <div className="text-[10px] mt-0.5 text-purple-400">브리프 공개</div>}
+                </td>
                 <td className="px-4 py-3">
                   <select
                     value={ep.showcase_category || 'short'}
@@ -262,7 +286,7 @@ function GalleryTab() {
             ))}
             {episodes.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-12 text-center text-gray-500">
+                <td colSpan={10} className="px-4 py-12 text-center text-gray-500">
                   에피소드가 없습니다
                 </td>
               </tr>

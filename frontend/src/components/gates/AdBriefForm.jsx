@@ -77,6 +77,7 @@ export default function AdBriefForm({ projectId, episodeId, gateStatus, onBriefD
   const [episodeTopic, setEpisodeTopic] = useState('');
   const prefilledFrom = gateStatus?.idea_brief?.prefilled_from;
   const prefilledEpisodeNo = /^episode (\d+)$/.exec(prefilledFrom || '')?.[1];
+  const prefilledExampleToken = /^example (.+)$/.exec(prefilledFrom || '')?.[1];
 
   // 컷 수 (instatoon_ad·brand_series)
   const cutRule = CUT_COUNT_RULES[purpose];
@@ -232,10 +233,27 @@ export default function AdBriefForm({ projectId, episodeId, gateStatus, onBriefD
           <Sparkles size={18} className="text-amber-500" /> 광고 브리프
         </h3>
 
+        {/* 예시 보기 → (모든 광고 브리프에 표시) */}
+        <a
+          href="/#gallery"
+          target="_blank"
+          rel="noreferrer"
+          className="text-xs font-bold text-cyan-500 hover:text-cyan-400 self-end"
+        >
+          예시 보기 →
+        </a>
+
         {/* brand_series 프리필 안내 */}
         {purpose === 'brand_series' && (prefilledEpisodeNo || prefilledFrom === 'project') && (
           <div className="px-3 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-xl text-xs font-bold text-blue-600 dark:text-blue-400">
             {prefilledEpisodeNo ? `${prefilledEpisodeNo}화 설정을 가져왔어요` : '시리즈 기본값에서 불러왔어요'} · 이번 화 소재를 적어주세요
+          </div>
+        )}
+
+        {/* 예시 프리필 안내 */}
+        {prefilledExampleToken && (
+          <div className="px-3 py-2 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-xl text-xs font-bold text-purple-600 dark:text-purple-400">
+            예시 설정을 가져왔어요 · 제품명과 특징만 내 것으로 바꿔주세요
           </div>
         )}
 

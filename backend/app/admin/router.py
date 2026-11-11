@@ -88,6 +88,8 @@ def list_all_episodes(
             "share_token": ep.share_token,
             "view_count": ep.view_count,
             "like_count": ep.like_count,
+            "is_example": bool(ep.is_example),
+            "brief_public": bool(ep.brief_public),
         }
         for ep, proj in episodes
     ]
@@ -183,6 +185,49 @@ def toggle_featured(
         "featured": bool(episode.featured),
         "is_public": bool(episode.is_public),
         "showcase_category": episode.showcase_category,
+        "share_token": episode.share_token,
+    }
+
+
+# ── 예시 작품 토글 ──────────────────────────────────────────
+
+class ExampleToggleRequest(BaseModel):
+    is_example: bool
+
+
+@router.post("/episodes/{episode_id}/example")
+def toggle_example(
+    episode_id: int,
+    req: ExampleToggleRequest,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """관리자 예시 작품 토글. is_example 켜면 brief_public 강제 ON + is_public + share_token 확보."""
+    episode = db.query(Episode).filter(
+        Episode.id == episode_id, Episode.deleted_at == None
+    ).first()
+    if not episode:
+        raise HTTPException(status_code=404, detail="Episode not found")
+
+    episode.is_example = req.is_example
+    if req.is_example:
+        episode.brief_public = True
+        episode.is_public = True
+        if not episode.published_at:
+            episode.published_at = datetime.utcnow()
+        if not episode.share_token:
+            episode.share_token = str(uuid.uuid4())
+        if not episode.showcase_category:
+            from app.social.service import default_category
+            episode.showcase_category = default_category(episode)
+
+    db.commit()
+    db.refresh(episode)
+    return {
+        "id": episode.id,
+        "is_example": bool(episode.is_example),
+        "brief_public": bool(episode.brief_public),
+        "is_public": bool(episode.is_public),
         "share_token": episode.share_token,
     }
 

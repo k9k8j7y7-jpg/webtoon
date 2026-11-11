@@ -13,7 +13,8 @@ import SITE_INFO from '../config/siteInfo';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
 const CATEGORY_MAP = { '단편': 'short', '연작': 'series', '광고·홍보': 'ad' };
-const GALLERY_TABS = ['전체', '단편', '연작', '광고·홍보'];
+const GALLERY_TABS = ['전체', '예시 먼저 보기', '한 컷', '인스타툰', '연재툰'];
+const PURPOSE_LABELS = { onecut_ad: '한 컷', instatoon_ad: '인스타툰', brand_series: '연재툰', story: '이야기' };
 
 function resolveUrl(path) {
   if (!path) return '';
@@ -81,9 +82,11 @@ export default function LandingPage() {
   const { packets, unreadCount } = useHeaderCounts(user);
   const [scrolled, setScrolled] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('단편');
+  const [activeTab, setActiveTab] = useState('전체');
   const [galleryData, setGalleryData] = useState({ short: [], series: [], ad: [] });
   const [allWorks, setAllWorks] = useState(null); // '전체' 탭 = 작가 공개작 전부(scope=all), 처음 열 때 로드
+  const [exampleWorks, setExampleWorks] = useState(null);
+  const [purposeWorks, setPurposeWorks] = useState({});
   const [products, setProducts] = useState([]);
   const [useTab, setUseTab] = useState(0);
   const [useCaseImages, setUseCaseImages] = useState({});
@@ -125,14 +128,33 @@ export default function LandingPage() {
   }, []);
 
   useEffect(() => {
-    if (activeTab !== '전체' || allWorks) return;
-    axios.get(`${API_BASE}/api/v1/showcase/episodes`, { params: { scope: 'all' } })
-      .then(res => setAllWorks(
-        Object.entries(res.data)
-          .flatMap(([cat, list]) => list.map(t => ({ ...t, category: cat })))
-      ))
-      .catch(() => setAllWorks([]));
-  }, [activeTab, allWorks]);
+    if (activeTab === '전체' && !allWorks) {
+      axios.get(`${API_BASE}/api/v1/showcase/episodes`, { params: { scope: 'all' } })
+        .then(res => setAllWorks(
+          Object.entries(res.data)
+            .flatMap(([cat, list]) => list.map(t => ({ ...t, category: cat })))
+        ))
+        .catch(() => setAllWorks([]));
+    }
+    if (activeTab === '예시 먼저 보기' && !exampleWorks) {
+      axios.get(`${API_BASE}/api/v1/showcase/episodes`, { params: { scope: 'all', example: 1 } })
+        .then(res => setExampleWorks(
+          Object.entries(res.data)
+            .flatMap(([cat, list]) => list.map(t => ({ ...t, category: cat })))
+        ))
+        .catch(() => setExampleWorks([]));
+    }
+    const purposeMap = { '한 컷': 'onecut_ad', '인스타툰': 'instatoon_ad', '연재툰': 'brand_series' };
+    const p = purposeMap[activeTab];
+    if (p && !purposeWorks[p]) {
+      axios.get(`${API_BASE}/api/v1/showcase/episodes`, { params: { scope: 'all', purpose: p } })
+        .then(res => setPurposeWorks(prev => ({
+          ...prev,
+          [p]: Object.entries(res.data).flatMap(([cat, list]) => list.map(t => ({ ...t, category: cat }))),
+        })))
+        .catch(() => setPurposeWorks(prev => ({ ...prev, [p]: [] })));
+    }
+  }, [activeTab]);
 
   // 전체 탭: 서버가 공개순으로 준 카테고리 그룹을 합친 것 (그룹 내 순서 유지)
   // ☰ "갤러리"(/#gallery)로 들어오면 갤러리로 스크롤
@@ -142,9 +164,14 @@ export default function LandingPage() {
     }
   }, [location.hash, location.key]);
 
-  const filteredWebtoons = activeTab === '전체'
-    ? (allWorks || [])
-    : (galleryData[CATEGORY_MAP[activeTab]] || []).map(t => ({ ...t, category: CATEGORY_MAP[activeTab] }));
+  const filteredWebtoons = (() => {
+    if (activeTab === '전체') return allWorks || [];
+    if (activeTab === '예시 먼저 보기') return exampleWorks || [];
+    const purposeMap = { '한 컷': 'onecut_ad', '인스타툰': 'instatoon_ad', '연재툰': 'brand_series' };
+    const p = purposeMap[activeTab];
+    if (p) return purposeWorks[p] || [];
+    return (galleryData[CATEGORY_MAP[activeTab]] || []).map(t => ({ ...t, category: CATEGORY_MAP[activeTab] }));
+  })();
 
   const scrollToSection = (id) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
@@ -390,9 +417,14 @@ export default function LandingPage() {
                   <div className="flex flex-col gap-2 px-1">
                     <div className="flex justify-between items-start gap-2 min-w-0">
                       <h3 className="flex-1 min-w-0 text-lg font-bold text-white truncate leading-tight">{toon.title}</h3>
-                      <span className="shrink-0 px-2 py-1 bg-white/10 rounded-md text-[10px] text-cyan-300 border border-white/10 font-semibold whitespace-nowrap">
-                        {CATEGORY_LABELS[toon.category] || activeTab}
-                      </span>
+                      <div className="flex gap-1 shrink-0">
+                        {toon.is_example && (
+                          <span className="px-2 py-1 bg-amber-500/20 rounded-md text-[10px] text-amber-300 border border-amber-500/30 font-semibold whitespace-nowrap">예시</span>
+                        )}
+                        <span className="px-2 py-1 bg-white/10 rounded-md text-[10px] text-cyan-300 border border-white/10 font-semibold whitespace-nowrap">
+                          {PURPOSE_LABELS[toon.purpose] || CATEGORY_LABELS[toon.category] || ''}
+                        </span>
+                      </div>
                     </div>
                     <div className="flex items-center gap-3 text-sm text-gray-400 font-medium min-w-0">
                       <AuthorLink author={toon.author} size={20} className="flex-1 text-gray-300" />

@@ -8,16 +8,17 @@ import NicknameModal from './NicknameModal';
 // 게이트5 상단: [공개하기] / [공개 중 · 비공개로]. 닉네임 없으면 모달 → 저장 → 공개 재시도
 export default function PublishBar({ projectId, episodeId }) {
   const { user } = useAuth();
-  const [state, setState] = useState(null); // { is_public, share_token }
+  const [state, setState] = useState(null); // { is_public, share_token, brief_public }
   const [busy, setBusy] = useState(false);
   const [showNickname, setShowNickname] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
+  const [briefPublic, setBriefPublic] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     api.get(`/projects/${projectId}/episodes/${episodeId}`)
-      .then(({ data }) => { if (!cancelled) setState({ is_public: data.is_public, share_token: data.share_token }); })
+      .then(({ data }) => { if (!cancelled) { setState({ is_public: data.is_public, share_token: data.share_token, brief_public: data.brief_public }); setBriefPublic(!!data.brief_public); } })
       .catch((err) => { if (!cancelled) setError(err.response?.data?.detail || '공개 상태를 불러오지 못했어요'); });
     return () => { cancelled = true; };
   }, [projectId, episodeId]);
@@ -26,8 +27,8 @@ export default function PublishBar({ projectId, episodeId }) {
     setBusy(true);
     setError('');
     try {
-      const { data } = await api.post(`/episodes/${episodeId}/publish`);
-      setState({ is_public: data.is_public, share_token: data.share_token });
+      const { data } = await api.post(`/episodes/${episodeId}/publish?brief_public=${briefPublic}`);
+      setState({ is_public: data.is_public, share_token: data.share_token, brief_public: data.brief_public });
     } catch (err) {
       const detail = err.response?.data?.detail;
       if (detail === 'NICKNAME_REQUIRED') setShowNickname(true);
@@ -43,7 +44,7 @@ export default function PublishBar({ projectId, episodeId }) {
     setError('');
     try {
       const { data } = await api.post(`/episodes/${episodeId}/unpublish`);
-      setState({ is_public: data.is_public, share_token: data.share_token });
+      setState({ is_public: data.is_public, share_token: data.share_token, brief_public: data.brief_public });
     } catch (err) {
       setError(err.response?.data?.detail || '변경하지 못했어요');
     } finally {
@@ -90,6 +91,23 @@ export default function PublishBar({ projectId, episodeId }) {
       <div className="flex gap-2">
         {state.is_public ? (
           <>
+            {/* 브리프 공개 토글 */}
+            <label className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={briefPublic}
+                onChange={async (e) => {
+                  const val = e.target.checked;
+                  setBriefPublic(val);
+                  try {
+                    await api.put(`/episodes/${episodeId}/brief-public?brief_public=${val}`);
+                    setState(s => ({ ...s, brief_public: val }));
+                  } catch { setBriefPublic(!val); }
+                }}
+                className="w-3.5 h-3.5 rounded accent-cyan-500"
+              />
+              <span>브리프 공개</span>
+            </label>
             <button
               onClick={copyLink}
               className="flex-1 sm:flex-none flex items-center justify-center gap-1 h-9 px-3 rounded-full text-xs font-bold bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-gray-300 border border-transparent dark:border-white/10"
@@ -113,13 +131,24 @@ export default function PublishBar({ projectId, episodeId }) {
             </button>
           </>
         ) : (
-          <button
-            onClick={publish}
-            disabled={busy}
-            className="neon-btn w-full sm:w-auto flex items-center justify-center gap-1 h-9 !px-5 !rounded-full text-xs disabled:opacity-50"
-          >
-            <Globe size={12} /> {busy ? '공개 중…' : '공개하기'}
-          </button>
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <label className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 cursor-pointer whitespace-nowrap">
+              <input
+                type="checkbox"
+                checked={briefPublic}
+                onChange={e => setBriefPublic(e.target.checked)}
+                className="w-3.5 h-3.5 rounded accent-cyan-500"
+              />
+              <span>브리프도 함께 공개</span>
+            </label>
+            <button
+              onClick={publish}
+              disabled={busy}
+              className="neon-btn flex-1 sm:flex-none flex items-center justify-center gap-1 h-9 !px-5 !rounded-full text-xs disabled:opacity-50"
+            >
+              <Globe size={12} /> {busy ? '공개 중…' : '공개하기'}
+            </button>
+          </div>
         )}
       </div>
       {error && <p className="text-xs font-bold text-red-500 sm:basis-full">{error}</p>}

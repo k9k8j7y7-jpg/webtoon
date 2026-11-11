@@ -86,6 +86,8 @@ class Episode(Base):
     showcase = Column(Boolean, nullable=False, default=False)
     showcase_category = Column(Enum("short", "series", "ad", name="showcase_category_enum"), nullable=True)
     share_token = Column(VARCHAR(36), nullable=True, unique=True, index=True)
+    brief_public = Column(Boolean, nullable=False, default=False, server_default="0")  # step38: 공개 뷰어 브리프 노출
+    is_example = Column(Boolean, nullable=False, default=False, server_default="0")    # step38: 관리자 예시 작품
     view_count = Column(Integer, nullable=False, default=0, server_default="0")
     like_count = Column(Integer, nullable=False, default=0, server_default="0")
     # step30: is_public = 작가 공개(뷰어·작가 페이지·갤러리 전체), featured = 관리자 랜딩 추천.
