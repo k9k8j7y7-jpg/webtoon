@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git *)",
+      "Bash(npm run build*)",
+      "Bash(ssh -i * bitnami@52.79.94.122 *)",
+      "Bash(scp -i * *)",
+      "Bash(python *)",
+      "Bash(node *)",
+      "Read",
+      "Edit",
+      "Write"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(git push --force*)",
+      "Bash(git reset --hard*)",
+      "Bash(* DROP *)",
+      "Bash(* DELETE FROM *)"
+    ]
+  }
+}
