@@ -272,15 +272,15 @@ def create_from_example(
     # 프리필: idea_brief (공개 필드만)
     src_ib = src_gs.get("idea_brief") or {}
     new_ib = gs.get("idea_brief") or {}
-    for k in ("ad_purpose", "message", "mood", "episode_topic",
+    for k in ("ad_purpose", "key_message", "mood", "episode_topic",
               "copy_design", "onecut_device", "visual_points_selected"):
         if src_ib.get(k):
             new_ib[k] = src_ib[k]
-    # 제품명(복사) — 사진·분석 결과 제외
-    if src_ib.get("product", {}).get("name"):
-        new_ib.setdefault("product", {})["name"] = src_ib["product"]["name"]
-        if src_ib["product"].get("features"):
-            new_ib["product"]["features"] = src_ib["product"]["features"]
+    # 제품명·제품 정보 — 최상위 키 (AdBriefForm이 읽는 위치)
+    if src_ib.get("product_name"):
+        new_ib["product_name"] = src_ib["product_name"]
+    if src_ib.get("product_info"):
+        new_ib["product_info"] = src_ib["product_info"]
     # ad_brief_result에서 visual_points만
     src_abr = src_ib.get("ad_brief_result") or {}
     if src_abr.get("visual_points"):
