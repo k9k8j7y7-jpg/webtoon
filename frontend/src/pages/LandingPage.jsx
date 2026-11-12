@@ -157,9 +157,11 @@ export default function LandingPage() {
   }, [activeTab]);
 
   // 전체 탭: 서버가 공개순으로 준 카테고리 그룹을 합친 것 (그룹 내 순서 유지)
-  // ☰ "갤러리"(/#gallery)로 들어오면 갤러리로 스크롤
+  // ☰ "갤러리"(/#gallery)로 들어오면 갤러리로 스크롤. ?filter=example → 예시 탭
   useEffect(() => {
     if (location.hash === '#gallery') {
+      const params = new URLSearchParams(location.search);
+      if (params.get('filter') === 'example') setActiveTab('예시 먼저 보기');
       setTimeout(() => document.getElementById('gallery')?.scrollIntoView({ behavior: 'smooth' }), 100);
     }
   }, [location.hash, location.key]);

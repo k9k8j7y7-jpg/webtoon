@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import api from '../api/client';
 import resolveUrl from '../utils/resolveUrl';
-import { Sparkles, Image, Smartphone, BookOpen, Clock, FolderOpen, X, ChevronRight } from 'lucide-react';
+import { Sparkles, Image, Smartphone, BookOpen, Clock, FolderOpen, X, ChevronRight, MoreVertical, Trash2 } from 'lucide-react';
 
 /* ── 상수 ── */
 const FILTER_CHIPS = [
@@ -84,6 +84,22 @@ export default function MyWorksPage() {
     }
   };
 
+  /* 작품 삭제 */
+  const handleDelete = async (item) => {
+    const label = item.kind === 'series' ? `"${item.title || '연재툰'}" 시리즈와 모든 화를` : `"${item.title || '작품'}"을(를)`;
+    if (!window.confirm(`${label} 지울까요?`)) return;
+    try {
+      if (item.kind === 'series') {
+        await api.delete(`/projects/${item.project_id}`);
+      } else {
+        await api.delete(`/projects/${item.project_id}/episodes/${item.id}`);
+      }
+      setWorks(prev => prev.filter(w => !(w.kind === item.kind && w.id === item.id)));
+    } catch (err) {
+      alert(err.response?.data?.detail || '삭제하지 못했어요');
+    }
+  };
+
   return (
     <div className="max-w-2xl mx-auto">
       {/* ── 1. 입구 카드 2×2 ── */}
@@ -160,7 +176,7 @@ export default function MyWorksPage() {
       ) : (
         <div className="space-y-3">
           {works.map((item) => (
-            <WorkCard key={`${item.kind}-${item.id}`} item={item} onClick={() => handleCardClick(item)} />
+            <WorkCard key={`${item.kind}-${item.id}`} item={item} onClick={() => handleCardClick(item)} onDelete={() => handleDelete(item)} />
           ))}
         </div>
       )}
@@ -181,9 +197,10 @@ export default function MyWorksPage() {
 }
 
 /* ── 작품 카드 ── */
-function WorkCard({ item, onClick }) {
+function WorkCard({ item, onClick, onDelete }) {
   const badge = PURPOSE_BADGE[item.purpose] || PURPOSE_BADGE.onecut_ad;
   const isSeries = item.kind === 'series';
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const statusText = isSeries
     ? (() => {
@@ -196,46 +213,69 @@ function WorkCard({ item, onClick }) {
     : item.step?.name || item.status || '';
 
   return (
-    <button
-      onClick={onClick}
-      className="w-full glass-card p-4 text-left flex gap-3 items-center hover:-translate-y-0.5 hover:border-comic-orange transition-all group"
-    >
-      {/* 썸네일 */}
-      <div className="w-14 h-14 rounded-xl bg-gray-100 dark:bg-zinc-800 shrink-0 overflow-hidden flex items-center justify-center">
-        {item.thumbnail_url ? (
-          <img src={resolveUrl(item.thumbnail_url)} alt="" className="w-full h-full object-cover" loading="lazy" />
-        ) : (
-          <Image size={20} className="text-gray-300 dark:text-zinc-600" />
-        )}
-      </div>
-
-      {/* 정보 */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5 mb-1">
-          <span className={`inline-block px-2 py-0.5 text-[10px] font-bold rounded-full ${badge.color}`}>
-            {badge.label}
-          </span>
-          {isSeries && item.episode_count > 0 && (
-            <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500">{item.episode_count}화</span>
+    <div className="relative">
+      <button
+        onClick={onClick}
+        className="w-full glass-card p-4 text-left flex gap-3 items-center hover:-translate-y-0.5 hover:border-comic-orange transition-all group"
+      >
+        {/* 썸네일 */}
+        <div className="w-14 h-14 rounded-xl bg-gray-100 dark:bg-zinc-800 shrink-0 overflow-hidden flex items-center justify-center">
+          {item.thumbnail_url ? (
+            <img src={resolveUrl(item.thumbnail_url)} alt="" className="w-full h-full object-cover" loading="lazy" />
+          ) : (
+            <Image size={20} className="text-gray-300 dark:text-zinc-600" />
           )}
         </div>
-        <p className="font-bold text-sm text-ink-black dark:text-white truncate group-hover:text-comic-orange transition-colors">
-          {item.title || '제목 없음'}
-        </p>
-        <div className="flex items-center gap-1.5 mt-1 text-[11px] text-gray-400 dark:text-gray-500">
-          {statusText && <span className="font-medium">{statusText}</span>}
-          {statusText && item.updated_at && <span>·</span>}
-          {item.updated_at && (
-            <span className="flex items-center gap-0.5">
-              <Clock size={10} />
-              {new Date(item.updated_at).toLocaleDateString('ko-KR')}
+
+        {/* 정보 */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className={`inline-block px-2 py-0.5 text-[10px] font-bold rounded-full ${badge.color}`}>
+              {badge.label}
             </span>
-          )}
+            {isSeries && item.episode_count > 0 && (
+              <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500">{item.episode_count}화</span>
+            )}
+          </div>
+          <p className="font-bold text-sm text-ink-black dark:text-white truncate group-hover:text-comic-orange transition-colors">
+            {item.title || '제목 없음'}
+          </p>
+          <div className="flex items-center gap-1.5 mt-1 text-[11px] text-gray-400 dark:text-gray-500">
+            {statusText && <span className="font-medium">{statusText}</span>}
+            {statusText && item.updated_at && <span>·</span>}
+            {item.updated_at && (
+              <span className="flex items-center gap-0.5">
+                <Clock size={10} />
+                {new Date(item.updated_at).toLocaleDateString('ko-KR')}
+              </span>
+            )}
+          </div>
         </div>
-      </div>
 
-      <ChevronRight size={16} className="text-gray-300 dark:text-zinc-600 shrink-0 group-hover:text-comic-orange transition-colors" />
-    </button>
+        <ChevronRight size={16} className="text-gray-300 dark:text-zinc-600 shrink-0 group-hover:text-comic-orange transition-colors" />
+      </button>
+
+      {/* ··· 메뉴 */}
+      <button
+        onClick={(e) => { e.stopPropagation(); setMenuOpen(!menuOpen); }}
+        className="absolute top-2 right-2 p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-white/10 transition-colors z-10"
+      >
+        <MoreVertical size={14} className="text-gray-400" />
+      </button>
+      {menuOpen && (
+        <>
+          <div className="fixed inset-0 z-20" onClick={() => setMenuOpen(false)} />
+          <div className="absolute top-9 right-2 z-30 bg-white dark:bg-night-card border border-gray-200 dark:border-white/10 rounded-xl shadow-lg py-1 min-w-[120px]">
+            <button
+              onClick={() => { setMenuOpen(false); onDelete(); }}
+              className="w-full px-3 py-2 text-left text-xs font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 flex items-center gap-2"
+            >
+              <Trash2 size={12} /> 삭제
+            </button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

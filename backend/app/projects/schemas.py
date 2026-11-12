@@ -61,5 +61,6 @@ class EpisodeResponse(BaseModel):
     is_public: bool = False
     published_at: datetime | None = None
     share_token: str | None = None
+    brief_public: bool = False
 
     model_config = {"from_attributes": True}

@@ -218,7 +218,7 @@ export default function AdBriefForm({ projectId, episodeId, gateStatus, onBriefD
 
         {/* 예시 보기 → (모든 광고 브리프에 표시) */}
         <a
-          href="/#gallery"
+          href="/WEBTOON/?filter=example#gallery"
           target="_blank"
           rel="noreferrer"
           className="text-xs font-bold text-cyan-500 hover:text-cyan-400 self-end"
