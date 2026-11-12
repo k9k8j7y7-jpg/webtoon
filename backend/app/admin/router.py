@@ -64,15 +64,16 @@ def list_all_episodes(
     db: Session = Depends(get_db),
 ):
     """관리자용 전체 에피소드 목록 (프로젝트 필터 가능)."""
-    q = (
-        db.query(Episode, Project)
+    # owner 조회를 위해 User 조인
+    eps_with_user = (
+        db.query(Episode, Project, User)
         .join(Project, Episode.project_id == Project.id)
+        .join(User, Project.user_id == User.id)
         .filter(Episode.deleted_at == None)
     )
     if project_id is not None:
-        q = q.filter(Episode.project_id == project_id)
-
-    episodes = q.order_by(Episode.id.desc()).all()
+        eps_with_user = eps_with_user.filter(Episode.project_id == project_id)
+    eps_with_user = eps_with_user.order_by(Episode.id.desc()).all()
 
     return [
         {
@@ -80,7 +81,9 @@ def list_all_episodes(
             "title": ep.title or proj.title,
             "project_id": proj.id,
             "project_title": proj.title,
+            "project_kind": proj.kind,
             "gate_status": ep.gate_status,
+            "purpose": (ep.gate_status or {}).get("purpose", "story"),
             "is_ad": bool((ep.gate_status or {}).get("is_ad")),
             "featured": bool(ep.featured),
             "is_public": bool(ep.is_public),
@@ -90,8 +93,9 @@ def list_all_episodes(
             "like_count": ep.like_count,
             "is_example": bool(ep.is_example),
             "brief_public": bool(ep.brief_public),
+            "owner_nickname": user.nickname or user.display_name or f"u{user.id}",
         }
-        for ep, proj in episodes
+        for ep, proj, user in eps_with_user
     ]
 
 

@@ -1098,10 +1098,13 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                     { key: 'zoom_inset', label: '확대 단면', count: 1, ph: ['특징'] },
                     { key: 'icon_badges', label: '아이콘 배지', count: 3, ph: ['특징1', '특징2', '특징3'] },
                     { key: 'before_after', label: '전·후', count: 2, ph: ['사용 전', '사용 후'] },
-                    { key: 'steps', label: '단계', count: [3,4], ph: ['① 1단계', '② 2단계', '③ 3단계'] },
+                    { key: 'steps', label: '단계', count: [3,4], ph: ['1단계', '2단계', '3단계'] },
                     { key: 'size_compare', label: '크기 비교', count: 1, ph: ['대용량'] },
-                    { key: 'process', label: '작용 과정', count: [3,4], ph: ['① 과정1', '② 과정2', '③ 과정3'] },
+                    { key: 'process', label: '작용 과정', count: [3,4], ph: ['과정1', '과정2', '과정3'] },
                   ];
+                  const CIRCLED = ['①', '②', '③', '④'];
+                  const needsPrefix = (dev) => ['steps', 'process'].includes(dev);
+                  const hasLeadingNum = (s) => /^[\d①②③④⑤.\-)\s]/.test(s);
                   const curDev = DEVICES.find(d => d.key === onecutDevice) || DEVICES[5];
                   const labelCount = Array.isArray(curDev.count) ? (onecutLabels.length >= curDev.count[1] ? curDev.count[1] : Math.max(curDev.count[0], onecutLabels.length)) : curDev.count;
                   // AI 제안 (visual_points[0])에서 프리필
@@ -1129,7 +1132,9 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                     const d = DEVICES.find(x => x.key === key);
                     setOnecutDevice(key);
                     const cnt = Array.isArray(d.count) ? d.count[0] : d.count;
-                    const newLabels = d.ph.slice(0, cnt);
+                    // 기존 값 개수만큼 유지, 부족하면 placeholder로 채움
+                    const kept = onecutLabels.slice(0, cnt);
+                    const newLabels = kept.length >= cnt ? kept : [...kept, ...d.ph.slice(kept.length, cnt)];
                     setOnecutLabels(newLabels);
                     setOnecutCompare('');
                     saveDevice(true, key, newLabels, '');
@@ -1177,10 +1182,17 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                         {/* 라벨 입력 */}
                         <div className="space-y-1.5">
                           {onecutLabels.slice(0, labelCount).map((lbl, li) => (
-                            <input key={li} value={lbl}
-                              onChange={e => handleLabelChange(li, e.target.value)}
-                              className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-purple-300 dark:border-purple-700 bg-white dark:bg-zinc-800 text-ink-black dark:text-white placeholder-zinc-400 focus:outline-none focus:border-purple-500"
-                              placeholder={curDev.ph[li] || `라벨 ${li + 1}`} maxLength={8} />
+                            <div key={li} className="flex items-center gap-1.5">
+                              {needsPrefix(onecutDevice) && (
+                                <span className="text-xs font-bold text-purple-400 w-4 text-center shrink-0">
+                                  {hasLeadingNum(lbl) ? '' : CIRCLED[li] || ''}
+                                </span>
+                              )}
+                              <input value={lbl}
+                                onChange={e => handleLabelChange(li, e.target.value)}
+                                className="flex-1 px-2.5 py-1.5 text-xs rounded-lg border border-purple-300 dark:border-purple-700 bg-white dark:bg-zinc-800 text-ink-black dark:text-white placeholder-zinc-400 focus:outline-none focus:border-purple-500"
+                                placeholder={curDev.ph[li] || `라벨 ${li + 1}`} maxLength={8} />
+                            </div>
                           ))}
                           {Array.isArray(curDev.count) && (
                             <div className="flex gap-2">

@@ -77,6 +77,7 @@ SYSTEM_INSTRUCTION = """너는 SNS 광고 크리에이티브 디렉터야.
 - visual_points: 제품 특징·활용법·차별점에서 최대 5개 추출. 장치 중복 허용.
   - device 6종: zoom_inset(확대 단면), icon_badges(아이콘 배지 3), before_after(전·후 반반), steps(단계 미니 패널 3~4), size_compare(크기 비교), process(작용 과정 3~4패널)
   - labels: 한글, 8자 이내, 장치당 1~4개. before_after는 ["사용 전", "사용 후"] 고정. steps·process는 3~4개(①②③④ 포함). icon_badges는 3개.
+  - **중요**: 제품 특징에 ①②③④, 1.2.3.4., Step 1~4 등 단계가 명시되어 있으면 device=steps 또는 process로 하되 그 순서·개수(최대 4)·문구를 labels에 그대로 사용. 요약·병합 금지.
   - compare: size_compare일 때만, 비교 대상 (예 "300g"). 나머지는 생략.
   - feature: 이 장치로 보여줄 제품 특징 한 줄 설명.
   - mechanism: 이 특징의 물리적 작용 원리 한 줄 (영문, 예 "green tea catechins dissolve sebum buildup on the scalp"). 그림의 세부 묘사에 쓰인다.

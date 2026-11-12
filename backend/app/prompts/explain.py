@@ -84,7 +84,7 @@ def _build_before_after(labels: list[str]) -> str:
 
 
 def _build_steps(labels: list[str]) -> str:
-    steps = labels[:4] if labels else ["① 1단계", "② 2단계", "③ 3단계"]
+    steps = _auto_prefix_labels(labels[:4]) if labels else ["① 1단계", "② 2단계", "③ 3단계"]
     step_lines = []
     for i, lbl in enumerate(steps):
         step_lines.append(f"Panel {i+1}: {lbl}")
@@ -113,7 +113,7 @@ def _build_size_compare(labels: list[str], compare: str = "") -> str:
 
 def _build_process(labels: list[str]) -> str:
     """작용 과정 — steps 변형, 제품이 어떻게 작용하는지 물리적 과정 3~4패널."""
-    panels = labels[:4] if labels else ["① 과정1", "② 과정2", "③ 과정3"]
+    panels = _auto_prefix_labels(labels[:4]) if labels else ["① 과정1", "② 과정2", "③ 과정3"]
     panel_lines = []
     for i, lbl in enumerate(panels):
         panel_lines.append(f"Panel {i+1}: {lbl}")
@@ -125,6 +125,23 @@ def _build_process(labels: list[str]) -> str:
         f"Draw each panel as a simple diagram/cross-section in webtoon style. "
         f"Each panel has its Korean label."
     )
+
+
+_CIRCLED = ["①", "②", "③", "④"]
+_LEADING_NUM_RE = __import__("re").compile(r"^[\d①②③④⑤.\-)\s]+")
+
+
+def _auto_prefix_labels(labels: list[str]) -> list[str]:
+    """렌더용: 번호 접두 자동 부여. 이미 숫자·기호로 시작하면 생략."""
+    result = []
+    for i, lbl in enumerate(labels):
+        if _LEADING_NUM_RE.match(lbl):
+            result.append(lbl)  # 기존 번호 있음 → 그대로
+        elif i < len(_CIRCLED):
+            result.append(f"{_CIRCLED[i]} {lbl}")
+        else:
+            result.append(lbl)
+    return result
 
 
 _DEVICE_BUILDERS = {

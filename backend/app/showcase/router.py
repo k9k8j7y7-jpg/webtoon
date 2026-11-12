@@ -186,6 +186,14 @@ def _record_view(episode_id: int, fp: str, db: Session) -> None:
     db.commit()
 
 
+def default_category_by_purpose(purpose: str) -> str:
+    if purpose == "brand_series":
+        return "series"
+    if purpose in ("onecut_ad", "instatoon_ad"):
+        return "ad"
+    return "short"
+
+
 # ── 갤러리 목록 ──────────────────────────────────────────────
 
 @router.get("/episodes")
@@ -195,46 +203,77 @@ def list_showcase_episodes(
     purpose: str | None = Query(None),
     db: Session = Depends(get_db),
 ):
-    """공개 갤러리 목록 (카테고리별 그룹).
-    scope=featured(기본, 랜딩) → 관리자 추천작 / scope=all(갤러리 전체) → 작가 공개작 전부.
-    example=1 → 예시 작품만 / purpose → 용도 필터(onecut_ad, instatoon_ad, brand_series)."""
+    """공개 갤러리 목록 — 광고 3종(onecut_ad·instatoon_ad·brand_series) + 완성 컷 있는 것만.
+    scope=featured → 관리자 추천작 / scope=all → 작가 공개작.
+    example=1 → 예시만 / purpose → 용도 필터. 연재는 시리즈 1카드."""
+    from sqlalchemy import func as sa_func
+
+    AD_PURPOSES = ("onecut_ad", "instatoon_ad", "brand_series")
+
     q = (
         db.query(Episode, Project, User)
         .join(Project, Episode.project_id == Project.id)
         .join(User, Project.user_id == User.id)
-        .filter(Episode.is_public == True, Episode.deleted_at == None, Project.deleted_at == None)
+        .filter(
+            Episode.is_public == True,
+            Episode.deleted_at == None,
+            Project.deleted_at == None,
+            # 광고 3종만
+            sa_func.json_unquote(sa_func.json_extract(Episode.gate_status, "$.purpose")).in_(AD_PURPOSES),
+        )
     )
     if scope == "featured":
         q = q.filter(Episode.featured == True)
         q = q.order_by(Episode.id.desc())
     else:
-        # example=1 → 예시 먼저 (is_example DESC), 이후 최신순
         if example:
             q = q.filter(Episode.is_example == True)
         q = q.order_by(Episode.is_example.desc(), Episode.published_at.desc(), Episode.id.desc())
 
     if purpose:
-        from sqlalchemy import func as sa_func
         q = q.filter(
             sa_func.json_unquote(sa_func.json_extract(Episode.gate_status, "$.purpose")) == purpose
         )
 
-    result = {"short": [], "series": [], "ad": []}
+    # 완성 컷 있는 에피소드만 + 시리즈 중복 제거(프로젝트당 최근 1화)
+    seen_series: set[int] = set()
+    items: list[dict] = []
     for ep, proj, author in q.all():
-        cat = ep.showcase_category or default_category(ep)
+        thumb = first_cut_image(db, ep.id)
+        if not thumb:
+            continue  # 완성 컷 없음 → 제외
         gs = ep.gate_status or {}
+        ep_purpose = gs.get("purpose", "story")
         _title = ep.title or ("" if proj.is_default else proj.title)
-        item = {
+
+        # 연재툰: 시리즈 프로젝트당 1카드
+        if proj.kind == "series":
+            if proj.id in seen_series:
+                continue
+            seen_series.add(proj.id)
+            # 시리즈 카드: 시리즈명 + 화 수
+            from sqlalchemy import func as sa_f2
+            ep_count = db.query(sa_f2.count(Episode.id)).filter(
+                Episode.project_id == proj.id, Episode.deleted_at == None,
+            ).scalar()
+            _title = f"{proj.title} · {ep_count}화"
+
+        items.append({
             "share_token": ep.share_token,
             "title": _title,
             "genre": proj.genre,
-            "purpose": gs.get("purpose", "story"),
+            "purpose": ep_purpose,
             "is_example": bool(ep.is_example),
-            "thumbnail_url": first_cut_image(db, ep.id),
+            "thumbnail_url": thumb,
             "view_count": ep.view_count,
             "like_count": ep.like_count,
             "author": author_payload(author),
-        }
+        })
+
+    # 카테고리 그룹 (기존 호환)
+    result: dict[str, list] = {"short": [], "series": [], "ad": []}
+    for item in items:
+        cat = default_category_by_purpose(item["purpose"])
         result.setdefault(cat, []).append(item)
 
     return result

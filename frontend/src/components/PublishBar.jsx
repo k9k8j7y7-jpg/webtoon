@@ -106,7 +106,7 @@ export default function PublishBar({ projectId, episodeId }) {
                 }}
                 className="w-3.5 h-3.5 rounded accent-cyan-500"
               />
-              <span>브리프 공개</span>
+              <span>브리프도 함께 공개</span>
             </label>
             <button
               onClick={copyLink}

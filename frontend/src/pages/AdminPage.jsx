@@ -52,6 +52,23 @@ const CATEGORY_OPTIONS = [
   { value: 'ad', label: '광고' },
 ];
 
+const PURPOSE_BADGES = {
+  story:        { label: '이야기', color: 'bg-blue-500/20 text-blue-400' },
+  onecut_ad:    { label: '한 컷',  color: 'bg-comic-orange/20 text-orange-400' },
+  instatoon_ad: { label: '인스타툰', color: 'bg-purple-500/20 text-purple-400' },
+  brand_series: { label: '연재',   color: 'bg-cyan-500/20 text-cyan-400' },
+};
+
+const PURPOSE_FILTER_CHIPS = [
+  { key: 'all', label: '전체' },
+  { key: 'onecut_ad', label: '한 컷' },
+  { key: 'instatoon_ad', label: '인스타툰' },
+  { key: 'brand_series', label: '연재' },
+  { key: 'story', label: '이야기' },
+  { key: 'example', label: '예시만' },
+  { key: 'public', label: '공개만' },
+];
+
 const GATE_LABELS = { gate1: 'G1', gate2: 'G2', gate3: 'G3', gate4: 'G4', gate5: 'G5' };
 
 function GateStatusBadges({ gateStatus }) {
@@ -77,6 +94,7 @@ function GalleryTab() {
   const [episodes, setEpisodes] = useState([]);
   const [projects, setProjects] = useState([]);
   const [filterProjectId, setFilterProjectId] = useState('');
+  const [purposeFilter, setPurposeFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [copiedId, setCopiedId] = useState(null);
   const [editingTitleId, setEditingTitleId] = useState(null);
@@ -166,6 +184,13 @@ function GalleryTab() {
 
   const cancelEditTitle = () => setEditingTitleId(null);
 
+  const filtered = episodes.filter(ep => {
+    if (purposeFilter === 'example') return ep.is_example;
+    if (purposeFilter === 'public') return ep.is_public;
+    if (purposeFilter !== 'all') return ep.purpose === purposeFilter;
+    return true;
+  });
+
   if (loading) return <div className="text-gray-400 py-12 text-center">로딩 중...</div>;
 
   return (
@@ -183,6 +208,15 @@ function GalleryTab() {
           ))}
         </select>
       </div>
+      {/* 종류 필터 칩 */}
+      <div className="flex gap-1.5 mb-4 flex-wrap">
+        {PURPOSE_FILTER_CHIPS.map(c => (
+          <button key={c.key} onClick={() => setPurposeFilter(c.key)}
+            className={`px-2.5 py-1 rounded-full text-[11px] font-bold transition-colors ${
+              purposeFilter === c.key ? 'bg-cyan-500 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10'
+            }`}>{c.label}</button>
+        ))}
+      </div>
 
       <div className="bg-[#1a1a2e] border border-white/10 rounded-xl overflow-hidden">
         <table className="w-full text-sm">
@@ -190,7 +224,8 @@ function GalleryTab() {
             <tr className="border-b border-white/10 text-gray-400">
               <th className="text-left px-4 py-3 font-medium">ID</th>
               <th className="text-left px-4 py-3 font-medium">제목</th>
-              <th className="text-left px-4 py-3 font-medium">프로젝트</th>
+              <th className="text-left px-4 py-3 font-medium">종류</th>
+              <th className="text-left px-4 py-3 font-medium">소유자</th>
               <th className="text-left px-4 py-3 font-medium">게이트</th>
               <th className="text-center px-4 py-3 font-medium">랜딩 추천</th>
               <th className="text-center px-4 py-3 font-medium">예시</th>
@@ -201,7 +236,10 @@ function GalleryTab() {
             </tr>
           </thead>
           <tbody>
-            {episodes.map(ep => (
+            {filtered.map(ep => {
+              const pb = PURPOSE_BADGES[ep.purpose] || PURPOSE_BADGES.story;
+              const seriesLabel = ep.project_kind === 'series' ? `${ep.project_title} · ` : '';
+              return (
               <tr key={ep.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
                 <td className="px-4 py-3 text-gray-500 font-mono text-xs">{ep.id}</td>
                 <td className="px-4 py-3 max-w-[200px]">
@@ -217,12 +255,15 @@ function GalleryTab() {
                     />
                   ) : (
                     <span onClick={() => startEditTitle(ep)} className="text-white truncate block cursor-pointer hover:text-cyan-300 transition-colors" title="클릭하여 편집">
-                      {ep.title}
-                      {ep.is_ad && <span className="ml-1.5 px-1.5 py-0.5 text-[10px] rounded bg-amber-500/20 text-amber-400 font-medium">AD</span>}
+                      {seriesLabel}{ep.title}
                     </span>
                   )}
                 </td>
-                <td className="px-4 py-3 text-gray-400 max-w-[150px] truncate">{ep.project_title}</td>
+                <td className="px-4 py-3">
+                  <span className={`px-1.5 py-0.5 text-[10px] rounded font-bold ${pb.color}`}>{pb.label}</span>
+                  {ep.is_example && <span className="ml-1 px-1.5 py-0.5 text-[10px] rounded bg-amber-500/20 text-amber-400 font-bold">예시</span>}
+                </td>
+                <td className="px-4 py-3 text-gray-400 text-xs truncate max-w-[100px]">{ep.owner_nickname}</td>
                 <td className="px-4 py-3"><GateStatusBadges gateStatus={ep.gate_status} /></td>
                 <td className="px-4 py-3 text-center">
                   <button
@@ -287,10 +328,11 @@ function GalleryTab() {
                   )}
                 </td>
               </tr>
-            ))}
-            {episodes.length === 0 && (
+              );
+            })}
+            {filtered.length === 0 && (
               <tr>
-                <td colSpan={10} className="px-4 py-12 text-center text-gray-500">
+                <td colSpan={11} className="px-4 py-12 text-center text-gray-500">
                   에피소드가 없습니다
                 </td>
               </tr>
