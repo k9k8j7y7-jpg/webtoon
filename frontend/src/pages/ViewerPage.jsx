@@ -161,7 +161,7 @@ export default function ViewerPage() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       const { project_id, episode_id } = res.data;
-      navigate(`/workflow/${project_id}/${episode_id}`);
+      navigate(`/projects/${project_id}/episodes/${episode_id}/workflow`);
     } catch (err) {
       alert(err.response?.data?.detail || '만들지 못했어요');
     } finally {

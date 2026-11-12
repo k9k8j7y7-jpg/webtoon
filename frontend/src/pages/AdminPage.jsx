@@ -242,14 +242,18 @@ function GalleryTab() {
                 <td className="px-4 py-3 text-center">
                   <button
                     onClick={() => handleExampleToggle(ep)}
+                    disabled={!ep.is_public && !ep.is_example}
                     className={`w-10 h-5 rounded-full relative transition-colors ${
-                      ep.is_example ? 'bg-amber-500' : 'bg-gray-700'
+                      ep.is_example ? 'bg-amber-500'
+                        : !ep.is_public ? 'bg-gray-800 opacity-40 cursor-not-allowed'
+                        : 'bg-gray-700'
                     }`}
                   >
                     <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
                       ep.is_example ? 'left-5' : 'left-0.5'
                     }`} />
                   </button>
+                  {!ep.is_public && !ep.is_example && <div className="text-[10px] mt-0.5 text-gray-500">공개 후 가능</div>}
                   {ep.brief_public && <div className="text-[10px] mt-0.5 text-purple-400">브리프 공개</div>}
                 </td>
                 <td className="px-4 py-3">

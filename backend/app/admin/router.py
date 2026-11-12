@@ -202,24 +202,24 @@ def toggle_example(
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    """관리자 예시 작품 토글. is_example 켜면 brief_public 강제 ON + is_public + share_token 확보."""
+    """관리자 예시 작품 토글. is_example만 변경 — 공개 상태·share_token은 건드리지 않음."""
     episode = db.query(Episode).filter(
         Episode.id == episode_id, Episode.deleted_at == None
     ).first()
     if not episode:
         raise HTTPException(status_code=404, detail="Episode not found")
 
+    if req.is_example and not episode.is_public:
+        raise HTTPException(
+            status_code=409,
+            detail="먼저 공개된 작품만 예시로 지정할 수 있어요",
+        )
+
     episode.is_example = req.is_example
     if req.is_example:
+        # 예시 ON → 브리프 강제 공개 (공개 상태·share_token·published_at 불변)
         episode.brief_public = True
-        episode.is_public = True
-        if not episode.published_at:
-            episode.published_at = datetime.utcnow()
-        if not episode.share_token:
-            episode.share_token = str(uuid.uuid4())
-        if not episode.showcase_category:
-            from app.social.service import default_category
-            episode.showcase_category = default_category(episode)
+    # 예시 OFF → brief_public 원래 값 유지 (작가가 직접 설정한 값 존중)
 
     db.commit()
     db.refresh(episode)
