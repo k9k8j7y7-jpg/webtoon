@@ -4,7 +4,7 @@ import os
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -12,7 +12,7 @@ from app.database import get_db
 from app.auth.deps import get_current_user
 from app.users.models import User
 from app.projects.models import Project, Episode
-from app.products.models import Product
+from app.products.models import Product, ProductPhoto, PRODUCT_PHOTO_KINDS
 from app.storage import upload_image, LOCAL_STORAGE_DIR
 from app.adapters.gemini_image import get_image_adapter
 from app.styles.models import Style, STYLE_PRESETS
@@ -67,6 +67,7 @@ async def list_products(
             "sheet_url": p.sheet_url,
             "status": p.status,
             "photo_newer_than_sheet": _is_photo_newer(p),
+            "photos": _photos_payload(db, p.id),
         }
         for p in products
     ]
@@ -173,6 +174,7 @@ async def upload_product_photo(
         mime_type=mime,
     )
     product.photo_url = url
+    _upsert_photo_row(db, product.id, "front", url)
     db.commit()
 
     return {"id": product.id, "photo_url": url}
@@ -207,6 +209,7 @@ async def upload_holding_photo(
         mime_type=mime,
     )
     product.holding_photo_url = url
+    _upsert_photo_row(db, product.id, "holding", url)
     db.commit()
     return {"id": product.id, "holding_photo_url": url}
 
@@ -460,6 +463,124 @@ async def generate_product_sheet(
     db.commit()
 
     return {"id": product.id, "sheet_url": url, "status": "approved"}
+
+
+# ── step39: 제품 다중 사진 ──────────────────────────────────
+
+_KIND_ORDER = {k: i for i, k in enumerate(PRODUCT_PHOTO_KINDS)}
+
+
+def _photos_payload(db: Session, product_id: int) -> list[dict]:
+    rows = db.query(ProductPhoto).filter(ProductPhoto.product_id == product_id).all()
+    rows.sort(key=lambda r: (_KIND_ORDER.get(r.kind, 99), r.sort, r.id))
+    return [{"id": r.id, "kind": r.kind, "image_url": r.image_url, "sort": r.sort} for r in rows]
+
+
+def _upsert_photo_row(db: Session, product_id: int, kind: str, url: str) -> ProductPhoto:
+    """kind당 1장 — 있으면 교체, 없으면 추가."""
+    row = db.query(ProductPhoto).filter(
+        ProductPhoto.product_id == product_id, ProductPhoto.kind == kind
+    ).first()
+    if row:
+        row.image_url = url
+    else:
+        row = ProductPhoto(product_id=product_id, kind=kind, image_url=url, sort=_KIND_ORDER.get(kind, 0))
+        db.add(row)
+    db.flush()
+    return row
+
+
+def _get_owned_product(db: Session, product_id: int, user_id: int) -> Product:
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    owned = (
+        db.query(Episode)
+        .join(Project, Episode.project_id == Project.id)
+        .filter(Episode.id == product.episode_id, Project.user_id == user_id, Project.deleted_at.is_(None))
+        .first()
+    )
+    if not owned:
+        raise HTTPException(status_code=404, detail="Product not found")
+    return product
+
+
+@router.get("/products/{product_id}/photos")
+async def list_product_photos(
+    product_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_owned_product(db, product_id, current_user.id)
+    return {"product_id": product_id, "photos": _photos_payload(db, product_id)}
+
+
+@router.post("/products/{product_id}/photos")
+async def upload_product_photo_kind(
+    product_id: int,
+    kind: str = Form(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """제품 사진 kind별 업로드 (front 필수 + side/back/top/holding 선택, kind당 1장 교체).
+
+    front → products.photo_url 동기화 (기존 1장 경로 호환), holding → holding_photo_url 동기화 (크기 비율).
+    """
+    if kind not in PRODUCT_PHOTO_KINDS:
+        raise HTTPException(status_code=400, detail=f"kind must be one of {PRODUCT_PHOTO_KINDS}")
+    product = _get_owned_product(db, product_id, current_user.id)
+
+    from app.image_util import validate_and_process
+    raw = await file.read()
+    try:
+        processed, mime = validate_and_process(
+            raw, original_content_type=file.content_type or "",
+            original_filename=file.filename or "",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    ext = "jpg" if "jpeg" in mime else "png"
+    filename = f"photo.{ext}" if kind == "front" else ("holding.jpg" if kind == "holding" else f"photo_{kind}.{ext}")
+    url = upload_image(
+        image_bytes=processed,
+        path_prefix=f"episodes/{product.episode_id}/products/{product.id}",
+        filename=filename,
+        mime_type=mime,
+    )
+    row = _upsert_photo_row(db, product.id, kind, url)
+    if kind == "front":
+        product.photo_url = url
+    elif kind == "holding":
+        product.holding_photo_url = url
+    db.commit()
+    return {"id": row.id, "product_id": product.id, "kind": kind, "image_url": url,
+            "photos": _photos_payload(db, product.id)}
+
+
+@router.delete("/products/{product_id}/photos/{photo_id}")
+async def delete_product_photo(
+    product_id: int,
+    photo_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """선택 사진 삭제. front는 필수라 삭제 대신 교체(POST kind=front)."""
+    product = _get_owned_product(db, product_id, current_user.id)
+    row = db.query(ProductPhoto).filter(
+        ProductPhoto.id == photo_id, ProductPhoto.product_id == product_id
+    ).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Photo not found")
+    if row.kind == "front":
+        raise HTTPException(status_code=400, detail="정면 사진은 꼭 필요해요 — 다른 사진으로 바꿔 주세요")
+    if row.kind == "holding":
+        product.holding_photo_url = None
+    from sqlalchemy import text
+    db.execute(text("DELETE FROM product_photos WHERE id = :id"), {"id": row.id})
+    db.commit()
+    return {"deleted": True, "photos": _photos_payload(db, product_id)}
 
 
 def _is_photo_newer(product: Product) -> bool:

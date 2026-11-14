@@ -6,6 +6,8 @@ PURPOSE_PRESETS = {
     "instatoon_ad": {"is_ad": True,  "aspect_ratio": "1:1",  "page_format": "grid_2x2",    "target_cuts": 4},
     "brand_series": {"is_ad": True,  "aspect_ratio": "9:16", "page_format": "vertical",     "target_cuts": None},
     "story":        {"is_ad": False, "aspect_ratio": "9:16", "page_format": "vertical",     "target_cuts": None},
+    # 상세페이지: 섹션 = 컷 1장, 2:3 고정(세로 스택 전제), target_cuts = 섹션 수(기본 8, 섹션 저장 시 갱신)
+    "detail_page":  {"is_ad": True,  "aspect_ratio": "2:3",  "page_format": "vertical",     "target_cuts": 8},
 }
 VALID_PURPOSES = set(PURPOSE_PRESETS.keys())
 
@@ -52,6 +54,10 @@ def create_initial_gate_status(
     }
     if preset["target_cuts"]:
         gs["target_cuts"] = preset["target_cuts"]
+    if purpose == "detail_page":
+        # 비율 2:3 고정 — 프론트 비율 변경 UI 숨김, 생성 시 잠금
+        gs["aspect_ratio_locked"] = True
+        gs["page_format_locked"] = True
     # idea_brief: 아이디어 정리 데이터 (Gate1 진입 시 LLM이 채움)
     if idea:
         brief: dict = {"raw": idea}
@@ -90,6 +96,12 @@ AD_STEP_NAMES = {
     "brand_series": {
         "total": 4,
         "steps": {1: "브리프", 2: "대본", 3: "준비", 4: "완성", 5: "완성"},
+        "step_number": {1: 1, 2: 2, 3: 3, 4: 4, 5: 4},
+    },
+    # detail_page: 4단계 — 브리프·섹션·준비·완성 (gate 4 콘티는 자동 통과)
+    "detail_page": {
+        "total": 4,
+        "steps": {1: "브리프", 2: "섹션", 3: "준비", 4: "완성", 5: "완성"},
         "step_number": {1: 1, 2: 2, 3: 3, 4: 4, 5: 4},
     },
 }

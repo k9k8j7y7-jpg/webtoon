@@ -57,6 +57,7 @@ const PURPOSE_BADGES = {
   onecut_ad:    { label: '한 컷',  color: 'bg-comic-orange/20 text-orange-400' },
   instatoon_ad: { label: '인스타툰', color: 'bg-purple-500/20 text-purple-400' },
   brand_series: { label: '연재',   color: 'bg-cyan-500/20 text-cyan-400' },
+  detail_page:  { label: '상세페이지', color: 'bg-emerald-500/20 text-emerald-400' },
 };
 
 const PURPOSE_FILTER_CHIPS = [
@@ -64,6 +65,7 @@ const PURPOSE_FILTER_CHIPS = [
   { key: 'onecut_ad', label: '한 컷' },
   { key: 'instatoon_ad', label: '인스타툰' },
   { key: 'brand_series', label: '연재' },
+  { key: 'detail_page', label: '상세페이지' },
   { key: 'story', label: '이야기' },
   { key: 'example', label: '예시만' },
   { key: 'public', label: '공개만' },

@@ -142,6 +142,46 @@ def export_vertical_single(episode_id: int, db: Session) -> dict:
     return {"download_url": url, "format": "vertical_single", "total_cuts": len(images)}
 
 
+STACK_WIDTHS = (1024, 860)
+
+
+def export_vertical_stack(episode_id: int, db: Session, width: int = 1024) -> dict:
+    """상세페이지 세로 스택 — 섹션(컷) 순서대로 이어붙인 1장, 섹션 간 여백 0. 폭 1024(기본) 또는 860(쇼핑몰)."""
+    if width not in STACK_WIDTHS:
+        width = 1024
+    cuts = (
+        db.query(Cut)
+        .filter(Cut.episode_id == episode_id, Cut.image_url.isnot(None))
+        .order_by(Cut.cut_number)
+        .all()
+    )
+    if not cuts:
+        return {"error": "No images to export"}
+    images = []
+    for cut in cuts:
+        img = _load_cut_image(_ensure_composed(cut, db))
+        if img:
+            images.append(img.resize((width, round(img.height * width / img.width)), Image.LANCZOS))
+    if not images:
+        return {"error": "Could not load any images"}
+    total_height = sum(i.height for i in images)
+    canvas = Image.new("RGB", (width, total_height), (255, 255, 255))
+    y = 0
+    for img in images:
+        canvas.paste(img, (0, y))
+        y += img.height
+    buf = BytesIO()
+    canvas.save(buf, format="PNG", optimize=True)
+    url = upload_image(
+        image_bytes=buf.getvalue(),
+        path_prefix=f"episodes/{episode_id}/exports",
+        filename=f"ep{episode_id}_detail_{width}.png",
+        mime_type="image/png",
+    )
+    return {"download_url": url, "format": "vertical_stack", "width": width, "height": total_height,
+            "total_cuts": len(images), "bytes": len(buf.getvalue())}
+
+
 def export_instagram_carousel(episode_id: int, db: Session) -> dict:
     """인스타그램 캐러셀 규격(1080x1080)으로 내보낸다."""
     cuts = (
@@ -187,8 +227,10 @@ def export_instagram_carousel(episode_id: int, db: Session) -> dict:
     return {"download_url": url, "format": "instagram_carousel", "total_slides": count}
 
 
-async def run_export(episode_id: int, format: str, db: Session) -> dict:
+async def run_export(episode_id: int, format: str, db: Session, width: int | None = None) -> dict:
     """포맷에 따라 적절한 Export를 실행한다."""
+    if format == "vertical_stack":
+        return export_vertical_stack(episode_id, db, width=width or 1024)
     exporters = {
         "png_cuts": export_png_cuts,
         "vertical_single": export_vertical_single,

@@ -305,8 +305,8 @@ async def copy_report(
     # onecut_ad 전용
     from app.workflow.gate import get_purpose, get_idea_brief
     purpose = get_purpose(episode.gate_status)
-    if purpose != "onecut_ad":
-        raise HTTPException(status_code=400, detail="카피 신고는 한 컷 광고만 가능합니다")
+    if purpose not in ("onecut_ad", "detail_page"):
+        raise HTTPException(status_code=400, detail="카피 신고는 한 컷 광고·상세페이지만 가능합니다")
 
     # 같은 버전에 신고 1회만 (중복 환불 방지)
     spec = cut.spec or {}
@@ -316,7 +316,7 @@ async def copy_report(
     if version in reported_versions:
         raise HTTPException(status_code=409, detail="이 버전은 이미 신고했습니다")
 
-    # 기대 카피 텍스트 추출
+    # 기대 카피 텍스트 추출 (상세페이지는 섹션 원문 문장 검사로 판정 — 아래 check 분기)
     ib = get_idea_brief(episode.gate_status) or {}
     copy_sel = ib.get("copy_selected", 0)
     copies = ib.get("copy_candidates", [])
@@ -324,7 +324,9 @@ async def copy_report(
     head = chosen.get("head", "")
     sub = chosen.get("sub", "")
 
-    if not head and not sub:
+    if purpose == "detail_page":
+        head = sub = None  # 섹션 원문 사용
+    elif not head and not sub:
         raise HTTPException(status_code=400, detail="카피가 없습니다")
 
     # 비전 검사
@@ -336,7 +338,12 @@ async def copy_report(
     if not img_bytes:
         raise HTTPException(status_code=400, detail="이미지를 찾을 수 없습니다")
 
-    check = check_copy_text(img_bytes, head, sub)
+    if purpose == "detail_page":
+        from app.detail.service import ocr_text, check_sentences
+        _dc = check_sentences(ocr_text(img_bytes), spec.get("section") or {})
+        check = {"head_ok": _dc["title_ok"], "sub_ok": _dc["body_ok"], **_dc}
+    else:
+        check = check_copy_text(img_bytes, head, sub)
 
     # 신고 버전 기록 (검사 결과와 무관하게)
     updated_spec = dict(spec)

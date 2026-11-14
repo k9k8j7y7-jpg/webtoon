@@ -8,6 +8,10 @@ import Gate2Script from '../components/gates/Gate2Script';
 import Gate3Assets from '../components/gates/Gate3Assets';
 import Gate4Storyboard from '../components/gates/Gate4Storyboard';
 import Gate5Review from '../components/gates/Gate5Review';
+import DetailBriefForm from '../components/gates/detail/DetailBriefForm';
+import DetailSections from '../components/gates/detail/DetailSections';
+import DetailPrepare from '../components/gates/detail/DetailPrepare';
+import DetailComplete from '../components/gates/detail/DetailComplete';
 import { ArrowLeft, Eye, RotateCcw, AlertTriangle, X } from 'lucide-react';
 
 export default function WorkflowPage() {
@@ -107,7 +111,14 @@ export default function WorkflowPage() {
 
   const purpose = gateStatus?.purpose || 'story';
   const _adSkipGate4 = ['onecut_ad', 'instatoon_ad', 'brand_series'].includes(purpose);
-  const gateComponents = {
+  // 상세페이지: 전용 화면 4종 (브리프·섹션·준비·완성) — 기존 게이트 컴포넌트 미사용
+  const gateComponents = purpose === 'detail_page' ? {
+    1: DetailBriefForm,
+    2: DetailSections,
+    3: DetailPrepare,
+    4: DetailComplete,
+    5: DetailComplete,
+  } : {
     1: Gate1Planning,
     2: purpose === 'onecut_ad' ? Gate1Planning : Gate2Script,
     3: Gate3Assets,
@@ -132,7 +143,7 @@ export default function WorkflowPage() {
             {seriesInfo.title} · {seriesInfo.episode_no || '?'}/{seriesInfo.outline_count}화
           </span>
         </div>
-      ) : ['onecut_ad', 'instatoon_ad', 'brand_series'].includes(purpose) ? (
+      ) : ['onecut_ad', 'instatoon_ad', 'brand_series', 'detail_page'].includes(purpose) ? (
         <button
           onClick={() => navigate('/my')}
           className="flex items-center gap-1 text-sm font-bold text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 mb-4 transition-colors"

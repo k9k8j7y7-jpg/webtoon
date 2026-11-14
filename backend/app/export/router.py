@@ -16,7 +16,8 @@ router = APIRouter(tags=["export"])
 
 
 class ExportRequest(BaseModel):
-    format: str = "png_cuts"  # png_cuts | vertical_single | instagram_carousel
+    format: str = "png_cuts"  # png_cuts | vertical_single | instagram_carousel | vertical_stack(상세페이지)
+    width: int | None = None  # vertical_stack 폭: 1024(기본) | 860
 
 
 @router.post("/projects/{project_id}/episodes/{episode_id}/export", status_code=202)
@@ -54,7 +55,7 @@ async def export_episode(
     if not has_images:
         raise HTTPException(status_code=400, detail="No generated images to export")
 
-    valid_formats = ["png_cuts", "vertical_single", "instagram_carousel"]
+    valid_formats = ["png_cuts", "vertical_single", "instagram_carousel", "vertical_stack"]
     if body.format not in valid_formats:
         raise HTTPException(status_code=400, detail=f"Invalid format. Use: {valid_formats}")
 
@@ -63,7 +64,7 @@ async def export_episode(
     async def _export():
         bg_db = SessionLocal()
         try:
-            result = await run_export(episode_id, body.format, bg_db)
+            result = await run_export(episode_id, body.format, bg_db, width=body.width)
             return result
         finally:
             bg_db.close()

@@ -29,7 +29,15 @@ const STEPS_INSTA_BRAND = [
   { n: 4, key: '5_review',    name: '완성',   desc: '컷을 생성하고 공유해요', gates: [4, 5] },
 ];
 
+const STEPS_DETAIL = [
+  { n: 1, key: '1_planning',  name: '브리프', desc: '제품 사진과 정보를 넣어요', gates: [1] },
+  { n: 2, key: '2_script',    name: '섹션',   desc: '섹션별 제목·본문을 다듬어요', gates: [2] },
+  { n: 3, key: '3_assets',    name: '준비',   desc: '스타일·캐릭터·제품을 확인해요', gates: [3] },
+  { n: 4, key: '5_review',    name: '완성',   desc: '섹션을 그리고 세로로 내보내요', gates: [4, 5] },
+];
+
 function getSteps(purpose) {
+  if (purpose === 'detail_page') return STEPS_DETAIL;
   if (purpose === 'onecut_ad') return STEPS_ONECUT;
   if (purpose === 'instatoon_ad' || purpose === 'brand_series') return STEPS_INSTA_BRAND;
   return STEPS_DEFAULT;

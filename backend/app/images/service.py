@@ -292,6 +292,13 @@ async def generate_cut_image(
     _ep_for_purpose = db.query(Episode).filter(Episode.id == episode_id).first()
     _ep_purpose = get_purpose(_ep_for_purpose.gate_status) if _ep_for_purpose else "story"
 
+    # 상세페이지: 섹션 = 컷 → 전용 경로 (템플릿 없는 원문 통째 프롬프트·GPT 고정·문장/효능 문구 검사)
+    if _ep_purpose == "detail_page" and (cut.spec or {}).get("kind") == "detail_section":
+        from app.detail.service import generate_detail_section
+        return await generate_detail_section(
+            cut, _ep_for_purpose, project_id, user_id, db, source=source, user_note=user_note,
+        )
+
     # 실사 캐릭터 포함 에피소드 → GPT 어댑터
     # 제품 컷(has_product)도 GPT 기본 — Gemini는 라벨 뭉개짐 (scratch photoreal 10-28)
     # 광고 3종(onecut_ad·instatoon_ad·brand_series)은 모든 컷 GPT 기본 (story는 Gemini 유지)

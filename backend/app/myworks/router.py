@@ -69,6 +69,8 @@ def _auto_title(purpose: str) -> str:
         return f"한 컷 광고 {date_str}"
     if purpose == "instatoon_ad":
         return f"인스타툰 {date_str}"
+    if purpose == "detail_page":
+        return f"상세페이지 {date_str}"
     return f"광고 {date_str}"
 
 
@@ -159,7 +161,7 @@ def _series_card(proj: Project, db: Session) -> dict:
 
 @router.post("")
 def create_work(
-    type: str = Query(..., pattern="^(onecut_ad|instatoon_ad|brand_series)$"),
+    type: str = Query(..., pattern="^(onecut_ad|instatoon_ad|brand_series|detail_page)$"),
     title: str = Query(""),
     cut_count: int = Query(6, ge=4, le=20),
     ratio: str = Query("9:16", pattern="^(9:16|1:1)$"),
@@ -350,7 +352,7 @@ def create_from_example(
 
 @router.get("")
 def list_works(
-    filter: str = Query("all", pattern="^(all|onecut_ad|instatoon_ad|brand_series)$"),
+    filter: str = Query("all", pattern="^(all|onecut_ad|instatoon_ad|brand_series|detail_page)$"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
@@ -365,12 +367,14 @@ def list_works(
     items = []
 
     # ── ① 광고 에피소드 (onecut_ad, instatoon_ad) ──
-    if filter in ("all", "onecut_ad", "instatoon_ad"):
+    if filter in ("all", "onecut_ad", "instatoon_ad", "detail_page"):
         purpose_filter = []
         if filter in ("all", "onecut_ad"):
             purpose_filter.append("onecut_ad")
         if filter in ("all", "instatoon_ad"):
             purpose_filter.append("instatoon_ad")
+        if filter in ("all", "detail_page"):
+            purpose_filter.append("detail_page")
 
         q = (
             db.query(Episode)

@@ -238,6 +238,10 @@ async def list_cuts(
             "pngbubble_items": (c.spec or {}).get("pngbubble_items", []),
             "has_product": (c.spec or {}).get("has_product", False),
             "emphasis": (c.spec or {}).get("emphasis"),
+            # 상세페이지 섹션 (kind=detail_section일 때만 값 있음)
+            "kind": (c.spec or {}).get("kind"),
+            "section": (c.spec or {}).get("section"),
+            "detail_check": ((c.spec or {}).get("generation") or {}).get("detail_check"),
             "prompt_override": bool((c.spec or {}).get("prompt_override")),
             "drama_level": (c.spec or {}).get("drama_level"),
             "motion": (c.spec or {}).get("motion"),

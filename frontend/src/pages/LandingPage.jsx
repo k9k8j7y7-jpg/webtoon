@@ -13,8 +13,8 @@ import SITE_INFO from '../config/siteInfo';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
 const CATEGORY_MAP = { '단편': 'short', '연작': 'series', '광고·홍보': 'ad' };
-const GALLERY_TABS = ['전체', '예시 먼저 보기', '한 컷', '인스타툰', '연재툰'];
-const PURPOSE_LABELS = { onecut_ad: '한 컷', instatoon_ad: '인스타툰', brand_series: '연재툰', story: '이야기' };
+const GALLERY_TABS = ['전체', '예시 먼저 보기', '한 컷', '인스타툰', '연재툰', '상세페이지'];
+const PURPOSE_LABELS = { onecut_ad: '한 컷', instatoon_ad: '인스타툰', brand_series: '연재툰', detail_page: '상세페이지', story: '이야기' };
 
 function resolveUrl(path) {
   if (!path) return '';
@@ -144,7 +144,7 @@ export default function LandingPage() {
         ))
         .catch(() => setExampleWorks([]));
     }
-    const purposeMap = { '한 컷': 'onecut_ad', '인스타툰': 'instatoon_ad', '연재툰': 'brand_series' };
+    const purposeMap = { '한 컷': 'onecut_ad', '인스타툰': 'instatoon_ad', '연재툰': 'brand_series', '상세페이지': 'detail_page' };
     const p = purposeMap[activeTab];
     if (p && !purposeWorks[p]) {
       axios.get(`${API_BASE}/api/v1/showcase/episodes`, { params: { scope: 'all', purpose: p } })
@@ -169,7 +169,7 @@ export default function LandingPage() {
   const filteredWebtoons = (() => {
     if (activeTab === '전체') return allWorks || [];
     if (activeTab === '예시 먼저 보기') return exampleWorks || [];
-    const purposeMap = { '한 컷': 'onecut_ad', '인스타툰': 'instatoon_ad', '연재툰': 'brand_series' };
+    const purposeMap = { '한 컷': 'onecut_ad', '인스타툰': 'instatoon_ad', '연재툰': 'brand_series', '상세페이지': 'detail_page' };
     const p = purposeMap[activeTab];
     if (p) return purposeWorks[p] || [];
     return (galleryData[CATEGORY_MAP[activeTab]] || []).map(t => ({ ...t, category: CATEGORY_MAP[activeTab] }));

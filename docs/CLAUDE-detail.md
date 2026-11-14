@@ -368,3 +368,18 @@ Web Share API(`navigator.share({files})`) — `share()`는 **`onClick`에서 동
 - 라벨 6→**8자**: Gate1 입력·Gate5 장치 편집 maxLength 8, `PUT selection`·`PUT /cuts/{id}/device` `[:8]`, ad_brief "8자 이내"
 - 장치 설명 문구 steps "단계 미니 패널 3~4", process "작용 과정 3~4패널" (ad_brief·대본 `_DEVICE_KR`)
 - 캡처: `frontend/scripts/mobile-check-7377.mjs` (TOKEN 환경변수, 375 다크 @2x → `scratch/captures/`)
+
+### 상세페이지 트랙 (2026-11-15, step39)
+- **흐름:** 내 작품 🖼️ 상세페이지 → 제목 모달 → STEP 1 브리프(`DetailBriefForm`) → 2 섹션(`DetailSections`) → 3 준비(`DetailPrepare`) → 4 완성(`DetailComplete`). WorkflowPage가 `purpose==='detail_page'`일 때만 `components/gates/detail/` 4화면으로 분기 — 기존 Gate1~5 컴포넌트 불변
+- **purpose 프리셋:** `detail_page` is_ad·2:3·vertical·target_cuts 8(섹션 저장 시 섹션 수)·비율/형식 잠금. AD_STEP_NAMES 브리프·섹션·준비·완성. 캐릭터 1명(`_PURPOSE_MODEL_LIMIT`)
+- **step39 `product_photos`**(id, product_id FK CASCADE, kind front/side/back/top/holding, image_url, sort). 기존 `products.photo_url`→front 22행 복사(운영 적용 2026-11-14, 백업 `~/backups/project_t_before_step39_20261114_144717.sql`). front↔`photo_url`, holding↔`holding_photo_url` 동기화(기존 1장 경로 호환). API `GET/POST /products/{id}/photos`(kind당 1장 교체)·`DELETE …/photos/{pid}`(front 삭제 불가). 이미지 참조 = front + side + back 최대 3장
+- **기획안:** `POST …/detail/plan`(0패킷, gate 1→2 자동) → `prompts/detail_brief.py` 섹션 JSON `[{key,title,body,character,visual_hint}]` 8개. few-shot = 도도 기획안(`docs/기획안-자연바람허브팩.md`, 코드 내장). 규칙: 입력 사실만·본문 60~180자·이모지 금지. 입력에 없는 수치·인증은 `unverified`(단계 번호 STEP n 제외) → 섹션 카드 노란 경고. `GET/PUT …/detail/sections`, `POST …/detail/sections/approve`(gate 2→3). 대본 저장 위치 `episode.script.detail_sections`, 브리프 `idea_brief.detail_brief`
+- **준비 승인**(`POST assets/approve` detail 분기): 섹션 → 컷(`spec.kind="detail_section"`, `spec.section`) + gate 4 자동 승인 → gate 5. 섹션 없으면 게이트 전진 전 400
+- **이미지:** `images/service.generate_cut_image` 진입부 7줄 분기 → `app/detail/service.generate_detail_section`. GPT 1024×1536(크롭 없음). 프롬프트 = `Style` + 3차 요청문(+라벨 포함·다른 포장 금지) + `LABEL_ONLY`("제품 라벨에는 첨부 사진 글자만, 설명 문단 추가 금지") + 등장/제품만 한 줄 + 강조색 + 섹션 원문. **장치·레이아웃·템플릿 문구 금지, `prompts/explain.py` 불변**
+- **검사(0패킷):** OCR(Gemini 2.5 Flash 전사) → ① 제목·본문 문장 포함(`·•` 동치) ② 원문·라벨·제품명 외 한글 줄 `extra_lines` → 효능 패턴(효과·%·pH·테스트·인증·특허·1위·임상·약산성·저자극 + 영양·건강·진정·케어·개선·완화·보호·탈모 등)이면 `extra_claims` → **재시도 1회**(STRICT 문구) → 남으면 `warning_claims` = 빨간 "확인 필요한 문구", 나머지 원문 외 줄 = 회색 접힌 "원문에 없는 글자". 원문 단어만으로 된 12자 이하 칩("두피 열감 진정")은 효능 판정 제외 ③ 손 검사(등장 섹션). 성공 후 1패킷(재시도 포함 1패킷). 검증용 `DETAIL_OCR_STUB` env(기본 없음)
+- **완성 화면:** 섹션 카드 [이 섹션 생성·1패킷]=`POST /cuts/{id}/regenerate` / [전부 생성·N패킷]=`POST /generate`(인라인 확인), [다시 그리기] 시트(메모 user_note·캐릭터 칩 → `PUT /cuts/{id}/detail-section` 0패킷), "글자가 틀렸나요?"=copy-report detail 분기(문장 검사), 섹션/세로 스택 미리보기, 내보내기 `vertical_stack`(1024·860, 여백 0)·`png_cuts` zip, PublishBar. 컷 목록 API에 `kind`·`section`·`detail_check`
+- **갤러리·내 작품:** 갤러리 광고 4종(+detail_page, 카테고리 ad, 탭 "상세페이지"), 내 작품 필터·배지, 관리자 배지·필터. 뷰어는 page_format vertical 기존 세로 스크롤
+- **검증(2026-11-14~15, 테스트 계정):** 첫 실생성 ep171 Point 1 → 제목 OK·본문 2/3·claims 0·원문 외 8줄(병 라벨 설명 문단) → `LABEL_ONLY` 후 재생성 v3 원문 외 **4줄**·claims 1(재시도)·본문 3/3(제목 OCR "당자마자"로 미스) / ⑤ 스텁 "pH 5.5" ep171 Hero → 재시도 로그 → 빨간 배지 2줄 / ⑥ export 1024×3072 4.2MB · 860×2580 3.2MB(2섹션) / ⑦ 갤러리 탭 배지·뷰어 세로 2장(공개 후 비공개 복귀) / ⑧ onecut ep159 v4 copy OK 1패킷 · 인스타툰 4컷 대본 4컷(ep174) / mobile-check 375 가로 넘침 0(내 작품·브리프·섹션·준비·완성·뷰어). 캡처 `scratch/captures/detail/`(스크립트 `scratch/captures/detail_page_cap.mjs`·`detail_verify_cap.mjs`)
+- **남은 것:** 캐릭터 "새로 만들기"(현재 저장된 캐릭터 선택만), 섹션 순서 드래그(현재 ↑↓), 병 라벨 잔글자(LABEL_ONLY로 절반 감소, 미해결)
+- 테스트 리소스: ep171(완성, 2장)·ep172(준비)·ep173(섹션)·ep174(인스타툰 회귀) — project 24
+

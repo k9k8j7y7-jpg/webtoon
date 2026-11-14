@@ -25,7 +25,7 @@ from app.story.service import _is_animal_character
 router = APIRouter(tags=["gate3-characters"])
 
 # --- 광고 에피소드 모델 수 제한 ---
-_PURPOSE_MODEL_LIMIT = {"brand_series": 2, "instatoon_ad": 1, "onecut_ad": 1}
+_PURPOSE_MODEL_LIMIT = {"brand_series": 2, "instatoon_ad": 1, "onecut_ad": 1, "detail_page": 1}
 
 
 def _check_model_limit(db: Session, episode: "Episode") -> None:

@@ -1,6 +1,6 @@
 """제품 자산 모델."""
 
-from sqlalchemy import Column, BigInteger, String, DateTime, ForeignKey, Text, Float
+from sqlalchemy import Column, BigInteger, Integer, String, DateTime, ForeignKey, Text, Float, Enum
 from sqlalchemy.sql import func
 
 from app.database import Base
@@ -25,3 +25,18 @@ class Product(Base):
     status = Column(String(20), nullable=False, default="draft")
     created_at = Column(DateTime, nullable=False, server_default=func.now())
     updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
+
+
+# step39 — 제품 다중 사진 (front 필수 + side/back/top/holding 선택). front = products.photo_url 동기화
+PRODUCT_PHOTO_KINDS = ("front", "side", "back", "top", "holding")
+
+
+class ProductPhoto(Base):
+    __tablename__ = "product_photos"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    product_id = Column(BigInteger, ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
+    kind = Column(Enum(*PRODUCT_PHOTO_KINDS, name="product_photo_kind_enum"), nullable=False)
+    image_url = Column(String(500), nullable=False)
+    sort = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, nullable=False, server_default=func.now())

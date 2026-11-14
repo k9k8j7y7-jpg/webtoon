@@ -11,12 +11,14 @@ const FILTER_CHIPS = [
   { key: 'onecut_ad', label: '한 컷' },
   { key: 'instatoon_ad', label: '인스타툰' },
   { key: 'brand_series', label: '연재툰' },
+  { key: 'detail_page', label: '상세페이지' },
 ];
 
 const PURPOSE_BADGE = {
   onecut_ad:     { label: '한 컷',    color: 'bg-comic-orange/15 text-comic-orange' },
   instatoon_ad:  { label: '인스타툰', color: 'bg-purple-500/15 text-purple-400' },
   brand_series:  { label: '연재',     color: 'bg-comic-blue/15 text-blue-400' },
+  detail_page:   { label: '상세페이지', color: 'bg-emerald-500/15 text-emerald-500 dark:text-emerald-400' },
 };
 
 const ENTRY_CARDS = [
@@ -44,7 +46,7 @@ export default function MyWorksPage() {
   /* URL ?new= 파라미터로 모달 자동 열기 */
   useEffect(() => {
     const newParam = searchParams.get('new');
-    if (newParam === 'onecut' || newParam === 'instatoon' || newParam === 'series') {
+    if (newParam === 'onecut' || newParam === 'instatoon' || newParam === 'series' || newParam === 'detail') {
       setModal(newParam);
       setSearchParams({}, { replace: true });
     }
@@ -115,12 +117,11 @@ export default function MyWorksPage() {
             <p className="text-[11px] leading-snug text-gray-500 dark:text-gray-400 mt-0.5 break-keep">{c.desc}</p>
           </button>
         ))}
-        {/* 4번째: 상세페이지 (준비 중) */}
+        {/* 4번째: 상세페이지 */}
         <button
-          onClick={() => { setToast('상세페이지 만들기는 곧 열려요'); setTimeout(() => setToast(''), 2500); }}
-          className="glass-card p-4 text-left hover:-translate-y-0.5 transition-all group relative"
+          onClick={() => setModal('detail')}
+          className="glass-card p-4 text-left hover:-translate-y-0.5 hover:border-comic-orange transition-all group relative"
         >
-          <span className="absolute top-2.5 right-2.5 px-1.5 py-0.5 text-[9px] font-bold bg-gray-200 dark:bg-zinc-700 text-gray-500 dark:text-gray-400 rounded-full">준비 중</span>
           <span className="text-2xl">🖼️</span>
           <p className="mt-2 font-bold text-sm text-ink-black dark:text-white group-hover:text-comic-orange transition-colors">상세페이지</p>
           <p className="text-[11px] leading-snug text-gray-500 dark:text-gray-400 mt-0.5 break-keep">제품 상세 이미지 한 번에</p>
@@ -192,6 +193,7 @@ export default function MyWorksPage() {
       {modal === 'onecut' && <OnecutModal onClose={() => setModal(null)} onCreated={onCreated} />}
       {modal === 'instatoon' && <InstatoonModal onClose={() => setModal(null)} onCreated={onCreated} />}
       {modal === 'series' && <SeriesModal onClose={() => setModal(null)} onCreated={onCreated} />}
+      {modal === 'detail' && <DetailModal onClose={() => setModal(null)} onCreated={onCreated} />}
     </div>
   );
 }
@@ -361,6 +363,47 @@ function OnecutModal({ onClose, onCreated }) {
         disabled={submitting}
         className="neon-btn w-full mt-4 disabled:opacity-50"
       >
+        {submitting ? '만드는 중...' : '만들기'}
+      </button>
+    </ModalShell>
+  );
+}
+
+/* ── 상세페이지 모달 (제목만) ── */
+function DetailModal({ onClose, onCreated }) {
+  const [title, setTitle] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const placeholder = `상세페이지 ${todayLabel()}`;
+
+  const handleSubmit = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      const params = new URLSearchParams({ type: 'detail_page' });
+      params.set('title', title.trim() || placeholder);
+      const { data } = await api.post(`/my/works?${params.toString()}`);
+      onCreated(data);
+    } catch (err) {
+      alert(err.response?.data?.detail || '만들지 못했어요. 다시 시도해주세요.');
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <ModalShell title="상세페이지 만들기" onClose={onClose}>
+      <p className="text-xs text-gray-500 dark:text-gray-400 mb-3 break-keep">
+        제품 사진을 올리면 기획안부터 섹션별 웹툰 이미지까지 한 번에 만들어요.
+      </p>
+      <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5">작품 이름 (선택)</label>
+      <input
+        type="text"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder={placeholder}
+        className="w-full px-4 py-2.5 border-2 border-border dark:border-zinc-700 bg-transparent rounded-xl text-sm font-bold text-ink-black dark:text-white focus:outline-none focus:border-comic-orange focus:ring-4 focus:ring-comic-orange/20 transition-all"
+        autoFocus
+      />
+      <button onClick={handleSubmit} disabled={submitting} className="neon-btn w-full mt-4 disabled:opacity-50">
         {submitting ? '만드는 중...' : '만들기'}
       </button>
     </ModalShell>

@@ -189,7 +189,7 @@ def _record_view(episode_id: int, fp: str, db: Session) -> None:
 def default_category_by_purpose(purpose: str) -> str:
     if purpose == "brand_series":
         return "series"
-    if purpose in ("onecut_ad", "instatoon_ad"):
+    if purpose in ("onecut_ad", "instatoon_ad", "detail_page"):
         return "ad"
     return "short"
 
@@ -208,7 +208,7 @@ def list_showcase_episodes(
     example=1 → 예시만 / purpose → 용도 필터. 연재는 시리즈 1카드."""
     from sqlalchemy import func as sa_func
 
-    AD_PURPOSES = ("onecut_ad", "instatoon_ad", "brand_series")
+    AD_PURPOSES = ("onecut_ad", "instatoon_ad", "brand_series", "detail_page")
 
     q = (
         db.query(Episode, Project, User)

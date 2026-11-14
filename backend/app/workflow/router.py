@@ -45,6 +45,12 @@ async def approve_assets(
     if gate != 3:
         raise HTTPException(status_code=400, detail=f"Current gate is {gate}, not gate 3")
 
+    # 상세페이지: 섹션 대본 없으면 게이트 전진 전에 거절
+    if (episode.gate_status or {}).get("purpose") == "detail_page":
+        from app.detail.service import get_sections as _detail_sections
+        if not _detail_sections(episode):
+            raise HTTPException(status_code=400, detail="섹션 대본이 없어요 — 섹션 단계부터 진행해 주세요")
+
     # 캐릭터·장소 전부 approved로 (episode_characters JOIN)
     characters = (
         db.query(Character)
@@ -70,6 +76,16 @@ async def approve_assets(
     # 광고 3종: 콘티 자동 생성 + gate 4 자동 승인 → gate 5 직행
     # (이미지 생성 자동 시작은 onecut_ad만 — instatoon/brand_series는 수동)
     purpose = new_status.get("purpose", "story")
+
+    # 상세페이지: 섹션 대본 → 컷(섹션당 1장) + gate 4 자동 승인 → gate 5 (생성은 수동)
+    if purpose == "detail_page":
+        from app.detail.service import create_detail_cuts
+        cuts = create_detail_cuts(episode, db)
+        db.flush()
+        new_status = approve_gate(episode.gate_status, 4)
+        episode.gate_status = new_status
+        db.commit()
+        logger.info("detail_page cuts from sections: ep=%d, cuts=%d → gate 5", episode_id, len(cuts))
     if purpose in ("onecut_ad", "instatoon_ad", "brand_series"):
         from app.storyboard.service import create_cuts_from_script
         script_data = (episode.script or {}).get("script", {})
