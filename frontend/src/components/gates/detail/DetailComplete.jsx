@@ -111,16 +111,28 @@ export default function DetailComplete({ projectId, episodeId, readOnly }) {
         </div>
         {!readOnly && pending.length > 0 && (
           confirm === 'all' ? (
-            <div className="flex items-center gap-2 flex-wrap text-xs font-bold text-gray-600 dark:text-gray-300">
-              <span>남은 {pending.length}개 섹션을 그려요 · {pending.length}패킷 (실패한 섹션은 차감 안 돼요)</span>
-              <button onClick={generateAll} className="px-3 py-1.5 rounded-full bg-comic-orange text-white">그리기</button>
-              <button onClick={() => setConfirm(null)} className="px-3 py-1.5 rounded-full bg-gray-100 dark:bg-zinc-800">취소</button>
+            <div className="neon-btn w-full !cursor-default flex items-center justify-center gap-2 text-xs font-bold">
+              <span>{pending.length}패킷을 써서 그릴까요?</span>
+              <button onClick={generateAll} className="px-3 py-1 rounded-full bg-white text-comic-orange">그리기</button>
+              <button onClick={() => setConfirm(null)} className="px-3 py-1 rounded-full bg-white/20 text-white">취소</button>
             </div>
           ) : (
             <button onClick={() => setConfirm('all')} disabled={busyAny} className="neon-btn w-full disabled:opacity-50 flex items-center justify-center gap-2">
-              {allJob ? <><Loader2 size={15} className="animate-spin" /> 그리는 중 {allJob.done}/{allJob.total} (섹션당 40초쯤)</> : `전부 생성 · ${pending.length}패킷`}
+              {`전부 생성 · ${pending.length}패킷`}
             </button>
           )
+        )}
+        {allJob && (
+          <div className="bg-comic-orange/5 dark:bg-comic-orange/10 border-2 border-comic-orange/30 rounded-2xl p-4 flex items-center gap-3">
+            <Loader2 size={22} className="animate-spin text-comic-orange shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-ink-black dark:text-white">그리는 중 {allJob.done}/{allJob.total}</p>
+              <div className="mt-1.5 h-2 rounded-full bg-comic-orange/20 overflow-hidden">
+                <div className="h-full bg-comic-orange rounded-full transition-all" style={{ width: `${allJob.total > 0 ? Math.round((allJob.done / allJob.total) * 100) : 0}%` }} />
+              </div>
+              <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">섹션당 40초쯤 · 실패한 섹션은 차감 안 돼요</p>
+            </div>
+          </div>
         )}
       </div>
 
@@ -184,6 +196,7 @@ function SectionCard({ cut, index, readOnly, working, confirming, onAskGenerate,
   const s = cut.section || {};
   const chk = cut.detail_check || null;
   const warn = chk?.warning_claims || [];
+  const labelWarn = chk?.label_claims || [];
   const miss = chk?.body_miss || [];
   const others = (chk?.extra_lines || []).filter((l) => !warn.includes(l));
   return (
@@ -192,7 +205,7 @@ function SectionCard({ cut, index, readOnly, working, confirming, onAskGenerate,
         <span className="w-6 h-6 rounded-full bg-comic-orange text-white text-xs font-bold flex items-center justify-center shrink-0">{index + 1}</span>
         <p className="font-bold text-sm text-ink-black dark:text-white truncate flex-1">{s.title || '제목 없음'}</p>
         <span className={`shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${s.character ? 'bg-purple-500/15 text-purple-500 dark:text-purple-300' : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'}`}>
-          {s.character ? <><User size={10} /> 등장</> : <><Package size={10} /> 제품만</>}
+          {s.character ? <><User size={10} /> 캐릭터 등장</> : <><Package size={10} /> 제품만</>}
         </span>
       </div>
       <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 whitespace-pre-line mb-3">{s.body}</p>
@@ -219,6 +232,12 @@ function SectionCard({ cut, index, readOnly, working, confirming, onAskGenerate,
             <div className="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-3 py-2 text-[11px] font-bold text-red-600 dark:text-red-300 break-keep">
               <p className="flex items-center gap-1"><AlertTriangle size={12} /> 확인 필요한 문구 — 원문에 없는 효능·수치 표현이에요 (광고 심의 주의, 다시 그리기 권장)</p>
               <ul className="mt-1 list-disc pl-4 font-normal">{warn.map((w, i) => <li key={i}>{w}</li>)}</ul>
+            </div>
+          )}
+          {labelWarn.length > 0 && (
+            <div className="rounded-xl bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 px-3 py-2 text-[11px] font-bold text-orange-600 dark:text-orange-300 break-keep">
+              <p className="flex items-center gap-1"><AlertTriangle size={12} /> 라벨에 작은 글씨가 있어요 — 확대 시 보일 수 있어요</p>
+              <ul className="mt-1 list-disc pl-4 font-normal">{labelWarn.map((w, i) => <li key={i}>{w}</li>)}</ul>
             </div>
           )}
           {others.length > 0 && (

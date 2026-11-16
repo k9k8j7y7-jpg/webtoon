@@ -96,10 +96,27 @@ def check_sentences(found: str, section: dict) -> dict:
     }
 
 
-def find_extra_claims(found: str, allowed_texts: list[str]) -> dict:
-    """원문·라벨·제품명에 없는 한글 문장 → extra_lines, 그중 효능·수치·인증 패턴 → extra_claims."""
+def _is_label_claim(line: str, label_text: str | None) -> bool:
+    """짧고 라벨·스펙 성격인 잔글씨 판별 — 제품 라벨 bbox 안 텍스트."""
+    n = _norm(line)
+    if len(n) > 20:
+        return False
+    # 라벨 텍스트와 단어 겹침 — 라벨에 있는 내용의 변형
+    if label_text:
+        ln = _norm(label_text)
+        tokens = [_norm(t) for t in line.split() if _norm(t)]
+        if tokens and sum(1 for t in tokens if t in ln) >= max(1, len(tokens) // 2):
+            return True
+    # 순수 수치·스펙 패턴 (짧은 인증/수치 문구)
+    if re.search(r"[pP][hH]\s*\d|%|\d+\s*(?:mg|ml|mL|g|도|배)", line):
+        return True
+    return False
+
+
+def find_extra_claims(found: str, allowed_texts: list[str], label_text: str | None = None) -> dict:
+    """원문·라벨·제품명에 없는 한글 문장 → extra_lines, 그중 효능·수치·인증 패턴 → extra_claims / label_claims."""
     allowed = _norm("\n".join(t for t in allowed_texts if t))
-    extra_lines, claims = [], []
+    extra_lines, body_claims, label_claims = [], [], []
     for line in (found or "").splitlines():
         ln = line.strip()
         n = _norm(ln)
@@ -109,8 +126,11 @@ def find_extra_claims(found: str, allowed_texts: list[str]) -> dict:
             continue
         extra_lines.append(ln)
         if _CLAIM_RE.search(ln) and not _is_derived_chip(ln, allowed):
-            claims.append(ln)
-    return {"extra_lines": extra_lines, "extra_claims": claims}
+            if _is_label_claim(ln, label_text):
+                label_claims.append(ln)
+            else:
+                body_claims.append(ln)
+    return {"extra_lines": extra_lines, "extra_claims": body_claims, "label_claims": label_claims}
 
 
 def _is_derived_chip(line: str, allowed_norm: str) -> bool:
@@ -180,9 +200,11 @@ def inspect_detail_image(image_bytes: bytes, section: dict, product: Product | N
     found = ocr_text(image_bytes)
     res = {**check_sentences(found, section)}
     allowed = [section_text(section)]
+    label_text = None
     if product:
         allowed += [product.label_text or "", product.name or "", product.name_ko or ""]
-    res.update(find_extra_claims(found, allowed))
+        label_text = product.label_text
+    res.update(find_extra_claims(found, allowed, label_text=label_text))
     if character:
         from app.prompts.copy_render import check_anatomy
         res["anatomy"] = check_anatomy(image_bytes)
@@ -275,7 +297,8 @@ async def generate_detail_section(
     detail_check = {k: v for k, v in chk.items() if k != "found_text"}
     detail_check["retried"] = retried
     detail_check["first_claims"] = first_claims
-    detail_check["warning_claims"] = chk.get("extra_claims", [])  # 프론트 경고 배지 "확인 필요한 문구"
+    detail_check["warning_claims"] = chk.get("extra_claims", [])  # 본문 영역 효능 문구 → 빨간 배지
+    detail_check["label_claims"] = chk.get("label_claims", [])    # 라벨 잔글씨 → 주황 배지
     spec["generation"] = {
         "image_url": url,
         "previous_image_url": cut.prev_image_url,

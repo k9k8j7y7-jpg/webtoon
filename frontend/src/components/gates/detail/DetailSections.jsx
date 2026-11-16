@@ -188,9 +188,12 @@ export default function DetailSections({ projectId, episodeId, onRefresh, readOn
               className="mt-2 w-full min-h-[110px] px-3 py-2 border-2 border-border dark:border-zinc-700 bg-white dark:bg-zinc-900 rounded-xl text-sm text-ink-black dark:text-white leading-relaxed focus:outline-none focus:border-comic-orange"
             />
             <div className="mt-2 flex items-center justify-between gap-2 flex-wrap">
-              <div className="flex gap-1.5">
-                <button onClick={() => !readOnly && update(i, { character: true })} className={`flex items-center gap-1 ${chipCls(s.character)}`}><User size={12} /> 등장</button>
-                <button onClick={() => !readOnly && update(i, { character: false })} className={`flex items-center gap-1 ${chipCls(!s.character)}`}><Package size={12} /> 제품만</button>
+              <div>
+                <div className="flex gap-1.5">
+                  <button onClick={() => !readOnly && update(i, { character: true })} className={`flex items-center gap-1 ${chipCls(s.character)}`}><User size={12} /> 캐릭터 등장</button>
+                  <button onClick={() => !readOnly && update(i, { character: false })} className={`flex items-center gap-1 ${chipCls(!s.character)}`}><Package size={12} /> 제품만</button>
+                </div>
+                <p className="text-[10px] text-gray-400 dark:text-zinc-500 mt-1">제품은 항상 들어가요</p>
               </div>
               <span className={`text-[11px] font-bold ${lenCls}`}>{len}자 · 권장 {BODY_MIN}~{BODY_MAX}자</span>
             </div>

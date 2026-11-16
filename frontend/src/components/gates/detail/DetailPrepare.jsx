@@ -3,12 +3,12 @@
  * 스타일(korean_webtoon 기본) · 캐릭터(등장 섹션 있을 때만, 저장된 캐릭터 1명) · 제품 확인 · 비율 2:3 고정 표시
  * 형식·장소·연출 강도 숨김. 승인 → 완성 (섹션 = 컷 자동 생성)
  */
-import { useState, useCallback } from 'react';
-import api from '../../../api/client';
+import { useState, useCallback, useRef } from 'react';
+import api, { pollJob } from '../../../api/client';
 import resolveUrl from '../../../utils/resolveUrl';
 import useGateLoad from '../../../hooks/useGateLoad';
 import DetailLoad from './DetailLoad';
-import { Check, Loader2, Lock, User, Package, AlertTriangle } from 'lucide-react';
+import { Check, Loader2, Lock, User, Package, AlertTriangle, Plus, Camera } from 'lucide-react';
 
 const chipCls = (on) =>
   `px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${on ? 'bg-comic-orange text-white' : 'bg-gray-100 dark:bg-zinc-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-zinc-700'}`;
@@ -23,6 +23,7 @@ export default function DetailPrepare({ projectId, episodeId, onRefresh, readOnl
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [confirmNoChar, setConfirmNoChar] = useState(false);
+  const photoInputRef = useRef(null);
 
   const load = useCallback(async () => {
     const [pr, st, sec, ln, lib, proj, prods] = await Promise.all([
@@ -79,6 +80,36 @@ export default function DetailPrepare({ projectId, episodeId, onRefresh, readOnl
     } finally { setBusy(''); }
   };
 
+  const createNewChar = async () => {
+    setBusy('create'); setError('');
+    try {
+      const stub = await api.post(`/projects/${projectId}/episodes/${episodeId}/characters/stub`, { ref_key: 'model' });
+      const charId = stub.data.id;
+      const { data } = await api.post(`/characters/${charId}/regenerate`);
+      await pollJob(data.job_id);
+      await load();
+    } catch (err) {
+      setError(err.response?.data?.detail || '캐릭터를 만들지 못했어요');
+    } finally { setBusy(''); }
+  };
+
+  const handlePhotoReal = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    setBusy('photo'); setError('');
+    try {
+      const stub = await api.post(`/projects/${projectId}/episodes/${episodeId}/characters/stub`, { ref_key: 'model', is_photo_real: true });
+      const charId = stub.data.id;
+      const formData = new FormData();
+      formData.append('files', file);
+      await api.post(`/characters/${charId}/photos?is_photo_real=true&consent_given=true`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      await load();
+    } catch (err) {
+      setError(err.response?.data?.detail || '사진을 올리지 못했어요');
+    } finally { setBusy(''); }
+  };
+
   const approve = async () => {
     if (needsChar && !linkedChar && !confirmNoChar) { setConfirmNoChar(true); return; }
     setBusy('approve'); setError('');
@@ -128,12 +159,8 @@ export default function DetailPrepare({ projectId, episodeId, onRefresh, readOnl
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-3 break-keep">
               &lsquo;등장&rsquo; 섹션 {sections.filter((s) => s.character).length}개에 나올 캐릭터 1명을 골라 주세요.
             </p>
-            {library.length === 0 ? (
-              <p className="text-xs font-bold text-amber-600 dark:text-amber-400 break-keep">
-                저장된 캐릭터가 없어요. 한 컷·인스타툰 준비 단계에서 만든 캐릭터를 저장하면 여기서 불러올 수 있어요.
-              </p>
-            ) : (
-              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5">
+            {library.length > 0 && (
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5 mb-3">
                 {library.map((c) => {
                   const on = linkedChar?.id === c.id;
                   return (
@@ -147,6 +174,24 @@ export default function DetailPrepare({ projectId, episodeId, onRefresh, readOnl
                   );
                 })}
               </div>
+            )}
+            {!readOnly && (
+              <div className="flex flex-wrap gap-2">
+                <button onClick={createNewChar} disabled={!!busy}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-bold bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 transition-colors">
+                  {busy === 'create' ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />} 새로 만들기 · 2패킷
+                </button>
+                <button onClick={() => photoInputRef.current?.click()} disabled={!!busy}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/40 disabled:opacity-50 transition-colors">
+                  {busy === 'photo' ? <Loader2 size={12} className="animate-spin" /> : <Camera size={12} />} 실사 사진으로
+                </button>
+                <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoReal} />
+              </div>
+            )}
+            {library.length === 0 && !busy && (
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 break-keep">
+                저장된 캐릭터가 없어요. 위 버튼으로 새로 만들거나 한 컷·인스타툰에서 저장한 캐릭터가 여기에 나와요.
+              </p>
             )}
           </>
         )}
