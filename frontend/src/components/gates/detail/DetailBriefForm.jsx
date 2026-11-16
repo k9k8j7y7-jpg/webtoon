@@ -11,11 +11,11 @@ import DetailLoad from './DetailLoad';
 import { Camera, X, Sparkles, Globe, Loader2, Check } from 'lucide-react';
 
 const PHOTO_SLOTS = [
-  { kind: 'front', label: '정면', required: true },
+  { kind: 'front', label: '정면', required: true, hint: '라벨이 보이게' },
   { kind: 'side', label: '측면' },
   { kind: 'back', label: '후면' },
   { kind: 'top', label: '탑뷰' },
-  { kind: 'holding', label: '손에 든 사진' },
+  { kind: 'holding', label: '손에 든 사진', hint: '크기를 재요 (권장)' },
 ];
 export const DETAIL_TONES = [
   { key: 'hook', label: '후킹', desc: '공감·문제 제기로 시작' },
@@ -39,6 +39,7 @@ export default function DetailBriefForm({ projectId, episodeId, onRefresh, readO
   const [busy, setBusy] = useState(''); // 'upload:front' | 'analyze' | 'enrich' | 'plan'
   const [enrich, setEnrich] = useState(null);
   const [error, setError] = useState('');
+  const [holdingConfirm, setHoldingConfirm] = useState(false);
 
   const load = useCallback(async () => {
     const [{ data: prods }, secRes] = await Promise.all([
@@ -85,11 +86,11 @@ export default function DetailBriefForm({ projectId, episodeId, onRefresh, readO
       if (data.palette?.length) {
         await api.put(`/projects/${projectId}/episodes/${episodeId}/idea-brief/selection`, { product_palette: data.palette });
       }
-      // 분석값 프리필 — 비어 있는 칸만
+      // 분석값 프리필 — 비어 있는 칸만 (label_text 넣지 않음, 종류·색만)
       setForm((f) => ({
         ...f,
         product_name: f.product_name || data.name_ko || data.name || '',
-        features: f.features || (data.label_text || '').split('\n').map((s) => s.trim()).filter(Boolean).slice(0, 6).join(', '),
+        features: f.features || [SHAPE_KR[data.shape], data.colors].filter(Boolean).join(' · '),
       }));
     } catch (err) {
       setError(err.response?.data?.detail || '사진 분석에 실패했어요 — 직접 적어도 괜찮아요');
@@ -153,9 +154,14 @@ export default function DetailBriefForm({ projectId, episodeId, onRefresh, readO
     setEnrich(null);
   };
 
-  const makePlan = async () => {
+  const makePlan = async (skipHoldingCheck) => {
     if (!photoOf('front')) { setError('정면 사진을 먼저 올려 주세요'); return; }
     if (!form.product_name.trim()) { setError('제품명을 적어 주세요'); return; }
+    if (!skipHoldingCheck && !photoOf('holding') && !holdingConfirm) {
+      setHoldingConfirm(true);
+      return;
+    }
+    setHoldingConfirm(false);
     setBusy('plan');
     setError('');
     try {
@@ -211,6 +217,7 @@ export default function DetailBriefForm({ projectId, episodeId, onRefresh, readO
                 <p className="text-center text-[11px] font-bold text-gray-500 dark:text-gray-400 mt-1">
                   {s.label}{s.required && <span className="text-comic-orange"> *</span>}
                 </p>
+                {s.hint && <p className="text-center text-[10px] text-gray-400 dark:text-zinc-500 leading-tight">{s.hint}</p>}
               </div>
             );
           })}
@@ -289,8 +296,18 @@ export default function DetailBriefForm({ projectId, episodeId, onRefresh, readO
 
       {error && <p className="text-sm font-bold text-red-500 dark:text-red-400">{error}</p>}
 
+      {holdingConfirm && (
+        <div className="rounded-xl border-2 border-amber-400/40 bg-amber-50 dark:bg-amber-900/20 p-3.5 text-sm text-gray-700 dark:text-gray-300 space-y-2">
+          <p className="font-bold">손에 든 사진이 없으면 크기 비율이 대충 잡혀요. 그래도 진행할까요?</p>
+          <div className="flex gap-2">
+            <button onClick={() => makePlan(true)} className="px-4 py-1.5 rounded-full bg-comic-orange text-white text-xs font-bold">네, 진행</button>
+            <button onClick={() => setHoldingConfirm(false)} className="px-4 py-1.5 rounded-full bg-gray-100 dark:bg-zinc-800 text-xs font-bold text-gray-500 dark:text-gray-400">돌아가기</button>
+          </div>
+        </div>
+      )}
+
       {!readOnly && (
-        <button onClick={makePlan} disabled={!!busy} className="neon-btn w-full flex items-center justify-center gap-2 disabled:opacity-50">
+        <button onClick={() => makePlan(false)} disabled={!!busy} className="neon-btn w-full flex items-center justify-center gap-2 disabled:opacity-50">
           {busy === 'plan' ? <><Loader2 size={16} className="animate-spin" /> 기획안 만드는 중… (20초쯤)</> : <><Sparkles size={16} /> 상세페이지 기획안 만들기 · 무료</>}
         </button>
       )}
