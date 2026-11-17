@@ -122,6 +122,87 @@ async def create_characters(
     return {"job_id": job.job_id, "characters": ref_keys}
 
 
+# ── P3: 프리셋 캐릭터 목록 (파라미터 라우트보다 먼저 등록) ────
+
+@router.get("/characters/presets")
+async def list_preset_characters(
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+):
+    """is_preset=True 캐릭터 목록 (빠른 한 컷 프리셋 6종)."""
+    characters = (
+        db.query(Character)
+        .filter(Character.is_preset.is_(True))
+        .all()
+    )
+    result = []
+    for c in characters:
+        front_img = next((img for img in c.images if img.type == "front"), None)
+        front_url = front_img.image_url if front_img else (c.images[0].image_url if c.images else None)
+        result.append({
+            "id": c.id,
+            "ref_key": c.ref_key,
+            "name": c.name,
+            "style": c.style,
+            "is_photo_real": c.is_photo_real,
+            "is_preset": True,
+            "front_image_url": front_url,
+        })
+    return result
+
+
+# ── 사용자의 모든 프로젝트 캐릭터 (상세페이지 피커용) ──────────
+
+@router.get("/characters/mine")
+async def list_all_my_characters(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """사용자의 모든 프로젝트 캐릭터 + user_id 승격 캐릭터 (중복 제거, front_image 있는 것만)."""
+    from app.projects.models import SYSTEM_PROJECT_IDS
+    project_ids = [
+        p.id for p in
+        db.query(Project)
+        .filter(Project.user_id == current_user.id, Project.deleted_at.is_(None))
+        .all()
+        if p.id not in SYSTEM_PROJECT_IDS
+    ]
+    chars = (
+        db.query(Character)
+        .filter(
+            (Character.project_id.in_(project_ids) if project_ids else sa_func.false())
+            | (Character.user_id == current_user.id)
+        )
+        .all()
+    )
+    seen = set()
+    result = []
+    for c in chars:
+        if c.id in seen or c.is_preset:
+            continue
+        seen.add(c.id)
+        front_img = next((img for img in c.images if img.type == "front"), None)
+        front_url = front_img.image_url if front_img else (c.images[0].image_url if c.images else None)
+        if not front_url:
+            continue
+        ep_count = (
+            db.query(sa_func.count(EpisodeCharacter.episode_id))
+            .filter(EpisodeCharacter.character_id == c.id)
+            .scalar()
+        )
+        result.append({
+            "id": c.id,
+            "ref_key": c.ref_key,
+            "name": c.name,
+            "style": c.style,
+            "project_id": c.project_id,
+            "is_photo_real": c.is_photo_real,
+            "front_image_url": front_url,
+            "episode_count": ep_count,
+        })
+    return result
+
+
 @router.get("/characters/{character_id}")
 async def get_character(
     character_id: int,

@@ -1,6 +1,6 @@
 /**
  * 상세페이지 STEP 3 — 준비
- * 스타일(korean_webtoon 기본) · 캐릭터(등장 섹션 있을 때만, 저장된 캐릭터 1명) · 제품 확인 · 비율 2:3 고정 표시
+ * 스타일(korean_webtoon 기본) · 캐릭터(등장 섹션 있을 때만, 저장된 캐릭터에서 고르기 피커) · 제품 확인 · 비율 2:3 고정 표시
  * 형식·장소·연출 강도 숨김. 승인 → 완성 (섹션 = 컷 자동 생성)
  */
 import { useState, useCallback, useRef } from 'react';
@@ -8,7 +8,7 @@ import api, { pollJob } from '../../../api/client';
 import resolveUrl from '../../../utils/resolveUrl';
 import useGateLoad from '../../../hooks/useGateLoad';
 import DetailLoad from './DetailLoad';
-import { Check, Loader2, Lock, User, Package, AlertTriangle, Plus, Camera } from 'lucide-react';
+import { Check, Loader2, Lock, User, Package, AlertTriangle, Plus, Camera, Library, X, Star } from 'lucide-react';
 
 const chipCls = (on) =>
   `px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${on ? 'bg-comic-orange text-white' : 'bg-gray-100 dark:bg-zinc-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-zinc-700'}`;
@@ -18,35 +18,37 @@ export default function DetailPrepare({ projectId, episodeId, onRefresh, readOnl
   const [style, setStyle] = useState(null);
   const [sections, setSections] = useState([]);
   const [linked, setLinked] = useState([]);
-  const [library, setLibrary] = useState([]);
   const [product, setProduct] = useState(null);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [confirmNoChar, setConfirmNoChar] = useState(false);
   const photoInputRef = useRef(null);
 
+  /* 캐릭터 피커 모달 */
+  const [showPicker, setShowPicker] = useState(false);
+  const [pickerTab, setPickerTab] = useState('library');   // 'library' | 'preset'
+  const [pickerMyChars, setPickerMyChars] = useState([]);
+  const [pickerPresets, setPickerPresets] = useState([]);
+  const [pickerLoading, setPickerLoading] = useState(false);
+  const [pickerError, setPickerError] = useState('');
+
   const load = useCallback(async () => {
-    const [pr, st, sec, ln, lib, proj, prods] = await Promise.all([
+    const [pr, st, sec, ln, prods] = await Promise.all([
       api.get('/styles/presets'),
       api.get(`/projects/${projectId}/episodes/${episodeId}/style`),
       api.get(`/projects/${projectId}/episodes/${episodeId}/detail/sections`),
       api.get(`/projects/${projectId}/episodes/${episodeId}/characters`),
-      api.get('/users/me/characters').catch(() => ({ data: [] })),
-      api.get(`/projects/${projectId}/characters`).catch(() => ({ data: [] })),
       api.get(`/projects/${projectId}/episodes/${episodeId}/products`),
     ]);
     setPresets([...(pr.data.core || []), ...(pr.data.beta || [])]);
     let key = st.data?.preset_key;
     if (!key && !readOnly) {
-      // 기본 korean_webtoon
       await api.put(`/projects/${projectId}/episodes/${episodeId}/style`, { preset_key: 'korean_webtoon' }).catch(() => {});
       key = 'korean_webtoon';
     }
     setStyle(key);
     setSections(sec.data.sections || []);
     setLinked(ln.data || []);
-    const seen = new Set();
-    setLibrary([...(lib.data || []), ...(proj.data || [])].filter((c) => c.front_image_url && !seen.has(c.id) && seen.add(c.id)));
     setProduct(prods.data[0] || null);
   }, [projectId, episodeId, readOnly]);
   const { loading, error: loadError, retry } = useGateLoad(load, [load]);
@@ -65,9 +67,30 @@ export default function DetailPrepare({ projectId, episodeId, onRefresh, readOnl
     } finally { setBusy(''); }
   };
 
+  /* 피커 열기 — 사용자 전체 캐릭터 + 프리셋 로드 */
+  const openPicker = async () => {
+    setShowPicker(true);
+    setPickerLoading(true);
+    setPickerTab('library');
+    setPickerError('');
+    try {
+      const [libRes, presetRes] = await Promise.all([
+        api.get('/characters/mine').catch(() => ({ data: [] })),
+        api.get('/characters/presets').catch(() => ({ data: [] })),
+      ]);
+      const linkedIds = new Set(linked.map(c => c.id));
+      setPickerMyChars((libRes.data || []).filter(c => !linkedIds.has(c.id) && c.front_image_url));
+      setPickerPresets((presetRes.data || []).filter(c => !linkedIds.has(c.id) && c.front_image_url));
+    } catch (err) {
+      setPickerError(err.response?.data?.detail || err.message);
+    } finally { setPickerLoading(false); }
+  };
+
+  /* 피커에서 캐릭터 선택 → link */
   const pickChar = async (c) => {
     if (readOnly) return;
-    setBusy(`char:${c.id}`); setError('');
+    setPickerError('');
+    setBusy(`char:${c.id}`);
     try {
       for (const l of linked) {
         if (l.id !== c.id) await api.delete(`/projects/${projectId}/episodes/${episodeId}/characters/${l.id}/link`);
@@ -75,8 +98,9 @@ export default function DetailPrepare({ projectId, episodeId, onRefresh, readOnl
       await api.post(`/projects/${projectId}/episodes/${episodeId}/characters/link`, { character_id: c.id });
       const { data } = await api.get(`/projects/${projectId}/episodes/${episodeId}/characters`);
       setLinked(data || []);
+      setShowPicker(false);
     } catch (err) {
-      setError(err.response?.data?.detail || '캐릭터를 불러오지 못했어요');
+      setPickerError(err.response?.data?.detail || '캐릭터를 불러오지 못했어요');
     } finally { setBusy(''); }
   };
 
@@ -159,24 +183,27 @@ export default function DetailPrepare({ projectId, episodeId, onRefresh, readOnl
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-3 break-keep">
               &lsquo;등장&rsquo; 섹션 {sections.filter((s) => s.character).length}개에 나올 캐릭터 1명을 골라 주세요.
             </p>
-            {library.length > 0 && (
-              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5 mb-3">
-                {library.map((c) => {
-                  const on = linkedChar?.id === c.id;
-                  return (
-                    <button key={c.id} onClick={() => pickChar(c)} disabled={!!busy || readOnly}
-                      className={`relative rounded-xl overflow-hidden border-2 transition-all ${on ? 'border-comic-orange ring-4 ring-comic-orange/20' : 'border-border dark:border-zinc-700 hover:border-comic-orange/60'}`}>
-                      <img src={resolveUrl(c.front_image_url)} alt={c.name || '캐릭터'} className="w-full aspect-[3/4] object-cover bg-gray-50 dark:bg-zinc-900" />
-                      <p className="text-[11px] font-bold py-1 text-ink-black dark:text-white truncate px-1">{c.name || '이름 없음'}</p>
-                      {on && <span className="absolute top-1 right-1 w-5 h-5 rounded-full bg-comic-orange text-white flex items-center justify-center"><Check size={12} /></span>}
-                      {busy === `char:${c.id}` && <span className="absolute inset-0 bg-black/30 flex items-center justify-center"><Loader2 size={18} className="animate-spin text-white" /></span>}
-                    </button>
-                  );
-                })}
+            {/* 현재 연결된 캐릭터 표시 */}
+            {linkedChar && (
+              <div className="flex items-center gap-3 mb-3 p-3 rounded-xl border-2 border-comic-orange bg-comic-orange/5">
+                {linkedChar.front_image_url ? (
+                  <img src={resolveUrl(linkedChar.front_image_url)} alt={linkedChar.name || '캐릭터'} className="w-14 h-14 object-cover rounded-lg bg-gray-50 dark:bg-zinc-900" />
+                ) : (
+                  <div className="w-14 h-14 rounded-lg bg-gray-100 dark:bg-zinc-800 flex items-center justify-center"><User size={20} className="text-gray-400" /></div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold text-ink-black dark:text-white truncate">{linkedChar.name || '이름 없음'}</p>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400">선택됨</p>
+                </div>
+                <Check size={18} className="text-comic-orange shrink-0" />
               </div>
             )}
             {!readOnly && (
               <div className="flex flex-wrap gap-2">
+                <button onClick={openPicker} disabled={!!busy}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 hover:bg-purple-100 dark:hover:bg-purple-900/40 disabled:opacity-50 transition-colors">
+                  <Library size={12} /> 저장된 캐릭터에서 고르기
+                </button>
                 <button onClick={createNewChar} disabled={!!busy}
                   className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-bold bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 transition-colors">
                   {busy === 'create' ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />} 새로 만들기 · 2패킷
@@ -187,11 +214,6 @@ export default function DetailPrepare({ projectId, episodeId, onRefresh, readOnl
                 </button>
                 <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoReal} />
               </div>
-            )}
-            {library.length === 0 && !busy && (
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 break-keep">
-                저장된 캐릭터가 없어요. 위 버튼으로 새로 만들거나 한 컷·인스타툰에서 저장한 캐릭터가 여기에 나와요.
-              </p>
             )}
           </>
         )}
@@ -224,6 +246,99 @@ export default function DetailPrepare({ projectId, episodeId, onRefresh, readOnl
         <button onClick={approve} disabled={!!busy} className="neon-btn w-full flex items-center justify-center gap-2 disabled:opacity-50">
           {busy === 'approve' ? <Loader2 size={16} className="animate-spin" /> : null} 준비 완료 → 완성
         </button>
+      )}
+
+      {/* 캐릭터 피커 모달 */}
+      {showPicker && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowPicker(false)}>
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl border-2 border-border dark:border-zinc-700 shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            {/* 헤더 */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border dark:border-zinc-700">
+              <h3 className="font-bold text-ink-black dark:text-white flex items-center gap-2">
+                <Library size={18} className="text-purple-500" /> 캐릭터 불러오기
+              </h3>
+              <button onClick={() => setShowPicker(false)} className="p-1 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg">
+                <X size={18} className="text-gray-500" />
+              </button>
+            </div>
+
+            {/* 탭 */}
+            <div className="flex border-b border-border dark:border-zinc-700">
+              <button
+                onClick={() => setPickerTab('library')}
+                className={`flex-1 py-2.5 text-xs font-bold transition-colors ${pickerTab === 'library' ? 'text-purple-600 dark:text-purple-400 border-b-2 border-purple-600 dark:border-purple-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'}`}
+              >
+                <span className="inline-flex items-center gap-1"><Star size={12} /> 내 캐릭터 ({pickerMyChars.length})</span>
+              </button>
+              <button
+                onClick={() => setPickerTab('preset')}
+                className={`flex-1 py-2.5 text-xs font-bold transition-colors ${pickerTab === 'preset' ? 'text-yellow-600 dark:text-yellow-400 border-b-2 border-yellow-600 dark:border-yellow-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'}`}
+              >
+                프리셋 ({pickerPresets.length})
+              </button>
+            </div>
+
+            {/* 에러 */}
+            {pickerError && (
+              <div className="mx-4 mt-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-xs font-bold">
+                {pickerError}
+              </div>
+            )}
+
+            {/* 목록 */}
+            <div className="flex-1 overflow-y-auto p-4">
+              {pickerLoading ? (
+                <p className="text-center text-sm text-gray-400 dark:text-gray-500 py-8">불러오는 중...</p>
+              ) : (
+                <>
+                  {pickerTab === 'library' && pickerMyChars.length === 0 && (
+                    <div className="text-center py-8">
+                      <p className="text-sm text-gray-400 dark:text-gray-500">저장된 캐릭터가 없어요.</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">한 컷·인스타툰에서 ⭐ 버튼으로 등록할 수 있어요.</p>
+                    </div>
+                  )}
+                  {pickerTab === 'preset' && pickerPresets.length === 0 && (
+                    <div className="text-center py-8">
+                      <p className="text-sm text-gray-400 dark:text-gray-500">프리셋 캐릭터가 없어요.</p>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-3">
+                    {(pickerTab === 'library' ? pickerMyChars : pickerPresets).map(c => (
+                      <div
+                        key={c.id}
+                        className="relative flex flex-col items-center gap-2 p-3 border-2 rounded-xl bg-white/50 dark:bg-zinc-800/50 hover:-translate-y-0.5 transition-all cursor-pointer border-border dark:border-zinc-700 hover:border-purple-400 dark:hover:border-purple-500"
+                        onClick={() => pickChar(c)}
+                      >
+                        {c.front_image_url ? (
+                          <img src={resolveUrl(c.front_image_url)} alt={c.name} className="w-16 h-16 object-cover rounded-lg border border-border dark:border-zinc-600" />
+                        ) : (
+                          <div className="w-16 h-16 rounded-lg bg-gray-100 dark:bg-zinc-700 flex items-center justify-center">
+                            <User size={20} className="text-gray-300 dark:text-gray-600" />
+                          </div>
+                        )}
+                        <div className="text-center w-full">
+                          <div className="font-bold text-sm text-ink-black dark:text-white truncate">
+                            {c.name || c.ref_key}
+                            {c.is_photo_real && (
+                              <span className="ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">실사</span>
+                            )}
+                            {c.is_preset && (
+                              <span className="ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">프리셋</span>
+                            )}
+                          </div>
+                          {c.episode_count != null && (
+                            <div className="text-[10px] text-gray-400 dark:text-gray-500">{c.episode_count}개 에피소드에서 사용 중</div>
+                          )}
+                        </div>
+                        {busy === `char:${c.id}` && <span className="absolute inset-0 bg-black/30 rounded-xl flex items-center justify-center"><Loader2 size={18} className="animate-spin text-white" /></span>}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
