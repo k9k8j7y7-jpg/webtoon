@@ -1204,6 +1204,22 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                       </div>
                     );
                   }
+                  if (ms === 'failed') {
+                    const motionErr = getMotion(cut).error || '영상 생성에 실패했어요';
+                    return (
+                      <div className="mt-1 space-y-0.5">
+                        <p className="text-[10px] text-red-500 dark:text-red-400 font-bold px-1 line-clamp-1" title={motionErr}>
+                          ⚠ {motionErr}
+                        </p>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setMotionModalCut(cut); }}
+                          className="flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                        >
+                          <Film size={10} /> 다시 시도
+                        </button>
+                      </div>
+                    );
+                  }
                   if (isDone) {
                     return (
                       <button
