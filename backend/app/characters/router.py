@@ -160,13 +160,13 @@ async def list_all_my_characters(
 ):
     """사용자의 모든 프로젝트 캐릭터 + user_id 승격 캐릭터 (중복 제거, front_image 있는 것만)."""
     from app.projects.models import SYSTEM_PROJECT_IDS
-    project_ids = [
-        p.id for p in
+    projects = (
         db.query(Project)
         .filter(Project.user_id == current_user.id, Project.deleted_at.is_(None))
         .all()
-        if p.id not in SYSTEM_PROJECT_IDS
-    ]
+    )
+    project_ids = [p.id for p in projects if p.id not in SYSTEM_PROJECT_IDS]
+    proj_title_map = {p.id: p.title for p in projects}
     chars = (
         db.query(Character)
         .filter(
@@ -196,6 +196,7 @@ async def list_all_my_characters(
             "name": c.name,
             "style": c.style,
             "project_id": c.project_id,
+            "project_title": proj_title_map.get(c.project_id, ""),
             "is_photo_real": c.is_photo_real,
             "front_image_url": front_url,
             "episode_count": ep_count,
@@ -857,16 +858,20 @@ async def link_character(
         if not owner_project:
             raise HTTPException(status_code=403, detail="이 캐릭터에 접근할 수 없습니다")
 
-    # 스타일 불일치 차단 (실사 캐릭터·상세페이지는 스타일 무관 — 스킵)
+    # 스타일 불일치: 실사·상세페이지 스킵, 광고 트랙은 경고만, story는 차단
     purpose = (episode.gate_status or {}).get("purpose", "")
+    style_warning = None
     if not character.is_photo_real and purpose != "detail_page":
         from app.styles.models import Style
         ep_style = db.query(Style).filter(Style.episode_id == episode_id).first()
         if ep_style and character.style and character.style != ep_style.preset_key:
-            raise HTTPException(
-                status_code=400,
-                detail=f"스타일이 다릅니다 (에피소드: {ep_style.preset_key}, 캐릭터: {character.style}). 같은 스타일의 캐릭터만 불러올 수 있습니다.",
-            )
+            if purpose in ("onecut_ad", "instatoon_ad", "brand_series"):
+                style_warning = "그림체가 조금 달라질 수 있어요"
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"스타일이 다릅니다 (에피소드: {ep_style.preset_key}, 캐릭터: {character.style}). 같은 스타일의 캐릭터만 불러올 수 있습니다.",
+                )
 
     # 중복 연결 검사 (멱등)
     existing = (
@@ -913,8 +918,27 @@ async def link_character(
                 status_code=409,
                 detail=f"이 에피소드에 이미 ref_key '{effective_ref_key}'를 가진 캐릭터가 있습니다",
             )
-        # 복제본 생성 (ref_key만 변경, 이미지는 원본 공유)
+        # 고아 캐릭터 정리: 같은 (episode_id, ref_key)이지만 미연결 → 삭제 (uq_char_ref 충돌 방지)
         from app.characters.models import CharacterImage
+        orphans = (
+            db.query(Character)
+            .filter(
+                Character.episode_id == episode_id,
+                Character.ref_key == effective_ref_key,
+                Character.id != body.character_id,
+                ~db.query(EpisodeCharacter).filter(
+                    EpisodeCharacter.character_id == Character.id,
+                    EpisodeCharacter.episode_id == episode_id,
+                ).exists(),
+            )
+            .all()
+        )
+        for orphan in orphans:
+            db.query(CharacterImage).filter(CharacterImage.character_id == orphan.id).delete()
+            db.delete(orphan)
+        if orphans:
+            db.flush()
+        # 복제본 생성 (ref_key만 변경, 이미지는 원본 공유)
         clone = Character(
             episode_id=episode_id,
             project_id=character.project_id,
@@ -951,7 +975,7 @@ async def link_character(
 
         actual_char_id = clone.id
     else:
-        # 원본 ref_key 중복 검사
+        # 원본 ref_key 중복 검사 (연결된 캐릭터만)
         conflicting = (
             db.query(Character.ref_key)
             .join(EpisodeCharacter, EpisodeCharacter.character_id == Character.id)
@@ -968,12 +992,15 @@ async def link_character(
     db.add(ec)
     db.commit()
 
-    return {
+    resp = {
         "linked": True,
         "character_id": actual_char_id,
         "already_linked": False,
         "ref_key_mapped": effective_ref_key or character.ref_key,
     }
+    if style_warning:
+        resp["style_warning"] = style_warning
+    return resp
 
 
 # ── P3: 연결 해제 ──────────────────────────────────────────────

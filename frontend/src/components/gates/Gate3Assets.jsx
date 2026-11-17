@@ -24,11 +24,15 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
   const [cacheBuster, setCacheBuster] = useState(Date.now());
   // P3: 캐릭터 피커
   const [showPicker, setShowPicker] = useState(false);
-  const [pickerTab, setPickerTab] = useState('project'); // 'project' | 'library'
+  const [pickerTab, setPickerTab] = useState('project'); // 'project' | 'library' | 'preset'
   const [projectChars, setProjectChars] = useState([]);
   const [libraryChars, setLibraryChars] = useState([]);
+  const [presetChars, setPresetChars] = useState([]);
   const [pickerLoading, setPickerLoading] = useState(false);
   const [pickerError, setPickerError] = useState('');
+  const [toast, setToast] = useState('');
+  // 교체 모드: 상한 도달 시 기존 캐릭터 중 누구를 교체할지
+  const [replaceState, setReplaceState] = useState(null); // { newCharId, newCharName, existing: [{id,name}] }
 
   // 컷 비율
   const aspectRatio = gateStatus?.aspect_ratio || '9:16';
@@ -844,7 +848,6 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
   const openPicker = async () => {
     if (!hasStyle) {
       setError('스타일을 먼저 선택해주세요');
-      // 스타일 섹션으로 스크롤
       const el = document.getElementById('style-section');
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
@@ -854,20 +857,36 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
     setPickerTab('project');
     setPickerError('');
     setMappingState(null);
+    setReplaceState(null);
     try {
-      const [projRes, libRes] = await Promise.all([
+      const fetches = [
         api.get(`/projects/${projectId}/characters`),
-        api.get(`/users/me/characters`).catch(() => ({ data: [] })),
-      ]);
-      const currentStyle = styles?.preset_key;
+        isAdPurpose
+          ? api.get('/characters/mine').catch(() => ({ data: [] }))
+          : api.get('/users/me/characters').catch(() => ({ data: [] })),
+      ];
+      if (isAdPurpose) fetches.push(api.get('/characters/presets').catch(() => ({ data: [] })));
+      const results = await Promise.all(fetches);
+      const projRes = results[0];
+      const libRes = results[1];
+      const presetRes = results[2];
+
       const linkedIds = new Set(characters.map(c => c.id));
-      // 같은 스타일만 필터 (스타일 미기록은 포함, 실사 캐릭터는 항상 포함)
+      const currentStyle = styles?.preset_key;
       const styleFilter = (c) => c.is_photo_real || !c.style || !currentStyle || c.style === currentStyle;
       setProjectChars(projRes.data.filter(c => !linkedIds.has(c.id) && styleFilter(c)));
-      setLibraryChars(libRes.data.filter(c => !linkedIds.has(c.id) && c.project_id !== projectId && styleFilter(c)));
-      // 다른 스타일 캐릭터 수 (빈 상태 안내용)
-      const otherStyleCount = projRes.data.filter(c => !linkedIds.has(c.id) && c.style && currentStyle && c.style !== currentStyle).length
-        + libRes.data.filter(c => !linkedIds.has(c.id) && c.project_id !== projectId && c.style && currentStyle && c.style !== currentStyle).length;
+
+      if (isAdPurpose) {
+        // 내 캐릭터: 프로젝트 소속 제외(이미 "이 프로젝트" 탭에 있음) + 중복 제거
+        const projIds = new Set(projRes.data.map(c => c.id));
+        setLibraryChars((libRes.data || []).filter(c => !linkedIds.has(c.id) && !projIds.has(c.id)));
+        setPresetChars((presetRes?.data || []).filter(c => !linkedIds.has(c.id) && c.front_image_url));
+      } else {
+        setLibraryChars((libRes.data || []).filter(c => !linkedIds.has(c.id) && c.project_id !== projectId && styleFilter(c)));
+      }
+
+      // 다른 스타일 캐릭터 수
+      const otherStyleCount = projRes.data.filter(c => !linkedIds.has(c.id) && c.style && currentStyle && c.style !== currentStyle).length;
       setPickerError(otherStyleCount > 0 ? `__other_style_count__${otherStyleCount}` : '');
     } catch (err) {
       setError(err.response?.data?.detail || err.message);
@@ -883,7 +902,6 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
       if (overrideRefKey) payload.override_ref_key = overrideRefKey;
       const { data } = await api.post(`/projects/${projectId}/episodes/${episodeId}/characters/link`, payload);
       if (data.needs_mapping) {
-        // 후보 2개 이상 → 매핑 드롭다운 표시
         setMappingState({
           characterId: data.character_id,
           candidates: data.candidates,
@@ -892,14 +910,41 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
         setMappingChoice(data.candidates[0] || '');
         return;
       }
+      const charName = (pickerTab === 'library' ? libraryChars : pickerTab === 'preset' ? presetChars : projectChars).find(c => c.id === characterId)?.name || '';
       setShowPicker(false);
       setMappingState(null);
+      setReplaceState(null);
       setCacheBuster(Date.now());
       await loadAssets();
+      if (data.style_warning) {
+        setToast(`${charName || '캐릭터'} 연결됨 — ${data.style_warning}`);
+        setTimeout(() => setToast(''), 3000);
+      } else if (charName) {
+        setToast(`${charName}(으)로 바꿨어요`);
+        setTimeout(() => setToast(''), 3000);
+      }
     } catch (err) {
-      const detail = err.response?.data?.detail;
-      const msg = typeof detail === 'string' ? detail : detail?.message || err.message;
-      setPickerError(msg);
+      if (err.response?.status === 409 && isAdPurpose) {
+        // 상한 도달 → 교체 모드
+        const existing = characters.map(c => ({ id: c.id, name: c.name || c.ref_key }));
+        const newChar = [...projectChars, ...libraryChars, ...presetChars].find(c => c.id === characterId);
+        if (existing.length === 1) {
+          // 1명 상한: 자동 교체
+          try {
+            await api.delete(`/projects/${projectId}/episodes/${episodeId}/characters/${existing[0].id}/link?force=true`);
+            await linkCharacter(characterId, overrideRefKey);
+          } catch (err2) {
+            setPickerError(err2.response?.data?.detail || err2.message);
+          }
+        } else {
+          // 2명 상한: 선택 UI
+          setReplaceState({ newCharId: characterId, newCharName: newChar?.name || '', existing });
+        }
+      } else {
+        const detail = err.response?.data?.detail;
+        const msg = typeof detail === 'string' ? detail : detail?.message || err.message;
+        setPickerError(msg);
+      }
     }
   };
 
@@ -2108,16 +2153,23 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
         </div>
       )}
 
+      {/* 토스트 */}
+      {toast && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[70] px-5 py-2.5 bg-green-600 text-white text-sm font-bold rounded-full shadow-lg animate-pulse">
+          {toast}
+        </div>
+      )}
+
       {/* P3: 캐릭터 피커 모달 */}
       {showPicker && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => { setShowPicker(false); setMappingState(null); }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => { setShowPicker(false); setMappingState(null); setReplaceState(null); }}>
           <div className="bg-white dark:bg-zinc-900 rounded-2xl border-2 border-border dark:border-zinc-700 shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
             {/* 헤더 */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-border dark:border-zinc-700">
               <h3 className="font-bold font-serif text-ink-black dark:text-white flex items-center gap-2">
                 <Library size={18} className="text-purple-500" /> 캐릭터 불러오기
               </h3>
-              <button onClick={() => { setShowPicker(false); setMappingState(null); }} className="p-1 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg">
+              <button onClick={() => { setShowPicker(false); setMappingState(null); setReplaceState(null); }} className="p-1 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg">
                 <X size={18} className="text-gray-500" />
               </button>
             </div>
@@ -2126,7 +2178,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
             {mappingState && (
               <div className="mx-4 mt-3 p-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl">
                 <p className="text-sm font-bold text-purple-700 dark:text-purple-300 mb-2">
-                  "{mappingState.characterName}"을 대본의 어느 인물로 쓸까요?
+                  &ldquo;{mappingState.characterName}&rdquo;을 대본의 어느 인물로 쓸까요?
                 </p>
                 <select
                   value={mappingChoice}
@@ -2144,8 +2196,34 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
               </div>
             )}
 
+            {/* 교체 선택 (brand_series 2명 상한) */}
+            {replaceState && (
+              <div className="mx-4 mt-3 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
+                <p className="text-sm font-bold text-amber-700 dark:text-amber-300 mb-2">
+                  누구와 바꿀까요? &ldquo;{replaceState.newCharName}&rdquo;(으)로 교체합니다.
+                </p>
+                <div className="flex flex-col gap-2">
+                  {replaceState.existing.map(ex => (
+                    <button key={ex.id}
+                      onClick={async () => {
+                        try {
+                          await api.delete(`/projects/${projectId}/episodes/${episodeId}/characters/${ex.id}/link?force=true`);
+                          setReplaceState(null);
+                          await linkCharacter(replaceState.newCharId);
+                        } catch (err2) { setPickerError(err2.response?.data?.detail || err2.message); }
+                      }}
+                      className="px-3 py-2 text-xs font-bold text-amber-800 dark:text-amber-200 bg-amber-100 dark:bg-amber-900/40 rounded-lg hover:bg-amber-200 dark:hover:bg-amber-900/60 transition-colors"
+                    >
+                      {ex.name} 교체
+                    </button>
+                  ))}
+                  <button onClick={() => setReplaceState(null)} className="px-3 py-1.5 text-xs font-bold text-gray-500 dark:text-gray-400">취소</button>
+                </div>
+              </div>
+            )}
+
             {/* 탭 */}
-            {!mappingState && (() => {
+            {!mappingState && !replaceState && (() => {
               const styleName = styles?.preset_key
                 ? [...(presets.core || []), ...(presets.beta || [])].find(p => p.key === styles.preset_key)?.label || styles.preset_key
                 : '';
@@ -2163,6 +2241,14 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
                 >
                   <span className="inline-flex items-center gap-1"><Star size={12} /> 내 캐릭터 ({libraryChars.length})</span>
                 </button>
+                {isAdPurpose && (
+                  <button
+                    onClick={() => setPickerTab('preset')}
+                    className={`flex-1 py-2.5 text-xs font-bold transition-colors ${pickerTab === 'preset' ? 'text-orange-600 dark:text-orange-400 border-b-2 border-orange-600 dark:border-orange-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'}`}
+                  >
+                    프리셋 ({presetChars.length})
+                  </button>
+                )}
               </div>
               );
             })()}
@@ -2175,7 +2261,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
             )}
 
             {/* 목록 */}
-            {!mappingState && (
+            {!mappingState && !replaceState && (
             <div className="flex-1 overflow-y-auto p-4">
               {pickerLoading ? (
                 <p className="text-center text-sm text-gray-400 dark:text-gray-500 py-8">불러오는 중...</p>
@@ -2196,12 +2282,17 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
                   )}
                   {pickerTab === 'library' && libraryChars.length === 0 && (
                     <div className="text-center py-8">
-                      <p className="text-sm text-gray-400 dark:text-gray-500">내 라이브러리에 캐릭터가 없습니다.</p>
-                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">캐릭터 카드의 ⭐ 버튼으로 등록할 수 있어요.</p>
+                      <p className="text-sm text-gray-400 dark:text-gray-500">{isAdPurpose ? '다른 작품에서 만든 캐릭터가 없어요.' : '내 라이브러리에 캐릭터가 없습니다.'}</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{isAdPurpose ? '다른 작품에서 캐릭터를 먼저 만들어 보세요.' : '캐릭터 카드의 ⭐ 버튼으로 등록할 수 있어요.'}</p>
+                    </div>
+                  )}
+                  {pickerTab === 'preset' && presetChars.length === 0 && (
+                    <div className="text-center py-8">
+                      <p className="text-sm text-gray-400 dark:text-gray-500">프리셋 캐릭터가 없어요.</p>
                     </div>
                   )}
                   <div className="grid grid-cols-2 gap-3">
-                    {(pickerTab === 'project' ? projectChars : libraryChars).map(c => (
+                    {(pickerTab === 'project' ? projectChars : pickerTab === 'library' ? libraryChars : presetChars).map(c => (
                       <div
                         key={c.id}
                         className="relative flex flex-col items-center gap-2 p-3 border-2 rounded-xl bg-white/50 dark:bg-zinc-800/50 hover:-translate-y-0.5 transition-all cursor-pointer border-border dark:border-zinc-700 hover:border-purple-400 dark:hover:border-purple-500"
@@ -2224,20 +2315,33 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
                           </button>
                         )}
                         {c.front_image_url ? (
-                          <img src={imageUrl(c.front_image_url)} alt={c.name} className="w-16 h-16 object-cover rounded-lg border border-border dark:border-zinc-600" />
-                        ) : (
-                          <div className="w-16 h-16 rounded-lg bg-gray-100 dark:bg-zinc-700 flex items-center justify-center">
-                            <Users size={20} className="text-gray-300 dark:text-gray-600" />
-                          </div>
-                        )}
+                          <img src={imageUrl(c.front_image_url)} alt={c.name} className="w-16 h-16 object-cover rounded-lg border border-border dark:border-zinc-600"
+                            onError={e => { e.target.style.display = 'none'; e.target.nextElementSibling && (e.target.nextElementSibling.style.display = 'flex'); }} />
+                        ) : null}
+                        <div className={`w-16 h-16 rounded-lg bg-gray-100 dark:bg-zinc-700 items-center justify-center ${c.front_image_url ? 'hidden' : 'flex'}`}>
+                          <Users size={20} className="text-gray-300 dark:text-gray-600" />
+                        </div>
                         <div className="text-center w-full">
                           <div className="font-bold text-sm text-ink-black dark:text-white truncate">
                             {c.name || c.ref_key}
+                          </div>
+                          <div className="flex items-center justify-center gap-1 flex-wrap mt-0.5">
                             {c.is_photo_real && (
-                              <span className="ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">실사</span>
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">실사</span>
+                            )}
+                            {c.is_preset && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">프리셋</span>
+                            )}
+                            {c.style && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-500 dark:bg-purple-900/20 dark:text-purple-400">{c.style.replace(/_/g, ' ')}</span>
                             )}
                           </div>
-                          <div className="text-[10px] text-gray-400 dark:text-gray-500">{c.episode_count}개 에피소드에서 사용 중</div>
+                          {pickerTab === 'library' && c.project_title && (
+                            <div className="text-[9px] text-gray-400 dark:text-gray-500 truncate mt-0.5">{c.project_title}</div>
+                          )}
+                          {c.episode_count != null && (
+                            <div className="text-[10px] text-gray-400 dark:text-gray-500">{c.episode_count}개 에피소드에서 사용 중</div>
+                          )}
                         </div>
                       </div>
                     ))}
