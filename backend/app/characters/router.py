@@ -304,17 +304,20 @@ async def list_characters(
         .filter(EpisodeCharacter.episode_id == episode_id)
         .all()
     )
-    return [
-        {
+    result = []
+    for c in characters:
+        front_img = next((img for img in c.images if img.type == "front"), None)
+        front_url = front_img.image_url if front_img else (c.images[0].image_url if c.images else None)
+        result.append({
             "id": c.id,
             "ref_key": c.ref_key,
             "name": c.name,
             "status": c.status,
             "is_photo_real": c.is_photo_real,
             "image_count": len(c.images),
-        }
-        for c in characters
-    ]
+            "front_image_url": front_url,
+        })
+    return result
 
 
 class CharacterStubRequest(BaseModel):
@@ -844,12 +847,19 @@ async def link_character(
     if not character:
         raise HTTPException(status_code=404, detail="Character not found")
 
-    # 같은 프로젝트 또는 user_id 승격 캐릭터만 허용 (프리셋은 누구나 접근 가능)
+    # 같은 프로젝트 / user_id 승격 / 프리셋 / 사용자 소유 프로젝트 소속 캐릭터 허용
     if character.project_id != project_id and character.user_id != current_user.id and not character.is_preset:
-        raise HTTPException(status_code=403, detail="이 캐릭터에 접근할 수 없습니다")
+        owner_project = (
+            db.query(Project)
+            .filter(Project.id == character.project_id, Project.user_id == current_user.id, Project.deleted_at.is_(None))
+            .first()
+        ) if character.project_id else None
+        if not owner_project:
+            raise HTTPException(status_code=403, detail="이 캐릭터에 접근할 수 없습니다")
 
-    # 스타일 불일치 차단 (실사 캐릭터는 스타일 무관 — 스킵)
-    if not character.is_photo_real:
+    # 스타일 불일치 차단 (실사 캐릭터·상세페이지는 스타일 무관 — 스킵)
+    purpose = (episode.gate_status or {}).get("purpose", "")
+    if not character.is_photo_real and purpose != "detail_page":
         from app.styles.models import Style
         ep_style = db.query(Style).filter(Style.episode_id == episode_id).first()
         if ep_style and character.style and character.style != ep_style.preset_key:

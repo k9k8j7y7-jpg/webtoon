@@ -21,6 +21,7 @@ export default function DetailPrepare({ projectId, episodeId, onRefresh, readOnl
   const [product, setProduct] = useState(null);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  const [toast, setToast] = useState('');
   const [confirmNoChar, setConfirmNoChar] = useState(false);
   const photoInputRef = useRef(null);
 
@@ -86,19 +87,23 @@ export default function DetailPrepare({ projectId, episodeId, onRefresh, readOnl
     } finally { setPickerLoading(false); }
   };
 
-  /* 피커에서 캐릭터 선택 → link */
+  /* 피커에서 캐릭터 선택 → 기존 unlink + link (교체) */
   const pickChar = async (c) => {
     if (readOnly) return;
     setPickerError('');
     setBusy(`char:${c.id}`);
     try {
+      // 기존 연결 해제
       for (const l of linked) {
         if (l.id !== c.id) await api.delete(`/projects/${projectId}/episodes/${episodeId}/characters/${l.id}/link`);
       }
+      // 새 캐릭터 연결
       await api.post(`/projects/${projectId}/episodes/${episodeId}/characters/link`, { character_id: c.id });
       const { data } = await api.get(`/projects/${projectId}/episodes/${episodeId}/characters`);
       setLinked(data || []);
       setShowPicker(false);
+      setToast(`${c.name || c.ref_key}(으)로 바꿨어요`);
+      setTimeout(() => setToast(''), 2500);
     } catch (err) {
       setPickerError(err.response?.data?.detail || '캐릭터를 불러오지 못했어요');
     } finally { setBusy(''); }
@@ -235,6 +240,7 @@ export default function DetailPrepare({ projectId, episodeId, onRefresh, readOnl
         )}
       </section>
 
+      {toast && <p className="text-sm font-bold text-green-600 dark:text-green-400 animate-pulse">{toast}</p>}
       {error && <p className="text-sm font-bold text-red-500 dark:text-red-400">{error}</p>}
       {confirmNoChar && (
         <p className="text-sm font-bold text-amber-600 dark:text-amber-400 flex items-start gap-1.5 break-keep">
@@ -310,12 +316,12 @@ export default function DetailPrepare({ projectId, episodeId, onRefresh, readOnl
                         onClick={() => pickChar(c)}
                       >
                         {c.front_image_url ? (
-                          <img src={resolveUrl(c.front_image_url)} alt={c.name} className="w-16 h-16 object-cover rounded-lg border border-border dark:border-zinc-600" />
-                        ) : (
-                          <div className="w-16 h-16 rounded-lg bg-gray-100 dark:bg-zinc-700 flex items-center justify-center">
-                            <User size={20} className="text-gray-300 dark:text-gray-600" />
-                          </div>
-                        )}
+                          <img src={resolveUrl(c.front_image_url)} alt={c.name} className="w-16 h-16 object-cover rounded-lg border border-border dark:border-zinc-600"
+                            onError={e => { e.target.style.display = 'none'; e.target.nextElementSibling && (e.target.nextElementSibling.style.display = 'flex'); }} />
+                        ) : null}
+                        <div className={`w-16 h-16 rounded-lg bg-gray-100 dark:bg-zinc-700 items-center justify-center ${c.front_image_url ? 'hidden' : 'flex'}`}>
+                          <User size={20} className="text-gray-300 dark:text-gray-600" />
+                        </div>
                         <div className="text-center w-full">
                           <div className="font-bold text-sm text-ink-black dark:text-white truncate">
                             {c.name || c.ref_key}
