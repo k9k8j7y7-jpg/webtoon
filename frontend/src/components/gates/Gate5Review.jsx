@@ -231,6 +231,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
   const [reelJob, setReelJob] = useState(null); // job_id
   const [reelDropdown, setReelDropdown] = useState(false);
   const [reelPreview, setReelPreview] = useState(false); // 미리보기 모달
+  const [motionToast, setMotionToast] = useState(''); // 모션 조건 미충족 토스트
 
   const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
 
@@ -1249,12 +1250,25 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                     );
                   }
                   // none — 움직이게 버튼
+                  const motionBlocked = hasPhotoReal ? '실사 캐릭터 컷은 아직 지원하지 않아요'
+                    : job ? '이미지를 생성하고 있어요. 완료 후 시도해 주세요' : '';
                   return (
                     <button
-                      onClick={(e) => { e.stopPropagation(); setMotionModalCut(cut); }}
-                      disabled={!!job || hasPhotoReal}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (motionBlocked) {
+                          setMotionToast(motionBlocked);
+                          setTimeout(() => setMotionToast(''), 2500);
+                          return;
+                        }
+                        setMotionModalCut(cut);
+                      }}
                       title={hasPhotoReal ? '실사 캐릭터 컷은 아직 지원하지 않아요' : '컷을 움직이게 만들기'}
-                      className="mt-1 flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full bg-gray-50 dark:bg-zinc-800/50 text-gray-400 dark:text-zinc-500 hover:bg-violet-50 dark:hover:bg-violet-900/20 hover:text-violet-500 dark:hover:text-violet-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      className={`mt-1 flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full transition-colors ${
+                        motionBlocked
+                          ? 'bg-gray-50 dark:bg-zinc-800/50 text-gray-300 dark:text-zinc-600 cursor-not-allowed'
+                          : 'bg-gray-50 dark:bg-zinc-800/50 text-gray-400 dark:text-zinc-500 hover:bg-violet-50 dark:hover:bg-violet-900/20 hover:text-violet-500 dark:hover:text-violet-400'
+                      }`}
                     >
                       <Film size={10} /> 움직이게
                     </button>
@@ -1828,6 +1842,14 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
           onClose={() => setMotionModalCut(null)}
           onStarted={(jobId) => handleMotionStarted(motionModalCut.cut_id, jobId)}
         />
+      )}
+
+      {/* 모션 토스트 */}
+      {motionToast && createPortal(
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[70] bg-ink-black dark:bg-white text-white dark:text-ink-black px-5 py-2.5 rounded-full text-sm font-bold shadow-lg animate-slide-up">
+          {motionToast}
+        </div>,
+        document.body
       )}
 
       {/* 모션 피커 */}
