@@ -20,3 +20,7 @@ frontend/scripts/mobile-check/
 frontend/scripts/product-check/
 frontend/scripts/verify-*/
 scratch/
+node_modules/
+package.json
+package-lock.json
+frontend/test-results/
