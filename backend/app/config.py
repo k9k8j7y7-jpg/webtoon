@@ -63,8 +63,8 @@ class Settings(BaseSettings):
     TOSS_CLIENT_KEY: str = ""
     TOSS_SECRET_KEY: str = ""
 
-    # Motion (Veo video generation)
-    VIDEO_MODEL: str = "veo-3.1-lite-generate-preview"
+    # Motion (Gemini Omni Flash — Veo preview 2026-10-22 폐기 후 대체)
+    VIDEO_MODEL: str = "gemini-omni-1.2-flash"
     MOTION_PACKETS: int = 4
     MOTION_CANDIDATES: int = 2
     MOTION_CLIP_SEC: float = 3.0

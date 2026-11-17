@@ -121,81 +121,68 @@ def _pad_to_aspect(image_bytes: bytes, target_aspect: str) -> tuple[bytes, dict]
 # ── Veo API 호출 ─────────────────────────────────────────────
 
 async def _call_veo(image_bytes: bytes, prompt: str, veo_aspect: str) -> bytes | None:
-    """Veo lite predictLongRunning → 폴링 → mp4 바이트 반환."""
+    """Gemini Omni Flash /interactions → 동기 mp4 바이트 반환.
+
+    Veo preview 모델은 2026-10-22 폐기됨.
+    대체: gemini-omni-1.2-flash (동기식, base64 or URI).
+    """
     b64 = base64.b64encode(image_bytes).decode()
     api_key = settings.GEMINI_API_KEY
     model = settings.VIDEO_MODEL
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:predictLongRunning?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/interactions?key={api_key}"
     body = {
-        "instances": [{
-            "image": {"bytesBase64Encoded": b64, "mimeType": "image/png"},
-            "prompt": prompt,
-        }],
-        "parameters": {
-            "sampleCount": 1,
-            "durationSeconds": 4,
-            "aspectRatio": veo_aspect,
-            "personGeneration": "allow_all",
-        },
+        "model": model,
+        "input": [
+            {"type": "image", "data": b64, "mime_type": "image/png"},
+            {"type": "text", "text": prompt},
+        ],
+        "response_format": {"type": "video", "delivery": "uri"},
     }
 
-    async with httpx.AsyncClient(timeout=60) as client:
-        resp = await client.post(url, json=body)
-        if resp.status_code != 200:
-            logger.error("Veo start failed: %d %s", resp.status_code, resp.text[:300])
-            return None
-        op_name = resp.json().get("name")
-        if not op_name:
-            logger.error("Veo: no operation name")
-            return None
-        logger.info("Veo op started: %s", op_name)
-
-    poll_url = f"https://generativelanguage.googleapis.com/v1beta/{op_name}?key={api_key}"
     t0 = time.time()
-    async with httpx.AsyncClient(timeout=30) as client:
-        while time.time() - t0 < 300:
-            await asyncio.sleep(5)
-            try:
-                pr = await client.get(poll_url)
-            except Exception:
-                continue
-            if pr.status_code != 200:
-                continue
-            st = pr.json()
-            if st.get("done"):
-                # 에러 응답 체크 (안전 필터 등)
-                if st.get("error"):
-                    err = st["error"]
-                    logger.error("Veo op error: code=%s msg=%s", err.get("code"), err.get("message", "")[:200])
-                    return None
-                resp_data = st.get("response", {})
-                # 안전 필터 거부 사유 로깅
-                rai = resp_data.get("raiMediaFilteredCount")
-                if rai:
-                    logger.warning("Veo: %d samples filtered by safety", rai)
-                samples = (
-                    resp_data.get("generateVideoResponse", {}).get("generatedSamples", [])
-                    or resp_data.get("predictions", [])
-                )
-                if not samples:
-                    logger.error("Veo: no samples in response (full: %s)", json.dumps(resp_data)[:500])
-                    return None
-                uri = samples[0].get("video", {}).get("uri") or samples[0].get("uri")
-                if not uri:
-                    logger.error("Veo: no video URI")
-                    return None
-                # 영상 다운로드
-                dl = await client.get(uri, headers={"x-goog-api-key": api_key}, timeout=120)
-                if dl.status_code == 200 and len(dl.content) > 1000:
-                    elapsed = time.time() - t0
-                    logger.info("Veo done: %.1fs, %d KB", elapsed, len(dl.content) // 1024)
-                    return dl.content
-                logger.error("Veo download failed: %d, %d bytes", dl.status_code, len(dl.content))
-                return None
+    async with httpx.AsyncClient(timeout=300) as client:
+        try:
+            resp = await client.post(url, json=body)
+        except Exception as e:
+            logger.error("Video API request failed: %s", str(e)[:200])
+            return None
 
-    logger.error("Veo timeout (300s)")
-    return None
+        if resp.status_code != 200:
+            logger.error("Video API failed: %d %s", resp.status_code, resp.text[:300])
+            return None
+
+        data = resp.json()
+
+        # 에러 체크
+        if data.get("status") == "failed" or data.get("error"):
+            err = data.get("error", {})
+            logger.error("Video API error: %s", json.dumps(err)[:300] if err else data.get("status"))
+            return None
+
+        # steps → model_output → video 추출
+        for step in data.get("steps", []):
+            for content in step.get("content", []):
+                if content.get("type") == "video":
+                    # base64 직접 반환
+                    if content.get("data"):
+                        video_bytes = base64.b64decode(content["data"])
+                        elapsed = time.time() - t0
+                        logger.info("Video done (base64): %.1fs, %d KB", elapsed, len(video_bytes) // 1024)
+                        return video_bytes
+                    # URI 반환
+                    if content.get("uri"):
+                        uri = content["uri"]
+                        dl = await client.get(uri, headers={"x-goog-api-key": api_key}, timeout=120)
+                        if dl.status_code == 200 and len(dl.content) > 1000:
+                            elapsed = time.time() - t0
+                            logger.info("Video done (URI): %.1fs, %d KB", elapsed, len(dl.content) // 1024)
+                            return dl.content
+                        logger.error("Video download failed: %d, %d bytes", dl.status_code, len(dl.content))
+                        return None
+
+        logger.error("Video API: no video in response (keys: %s)", list(data.keys()))
+        return None
 
 
 # ── 트림·크롭 (ffmpeg subprocess) ────────────────────────────
