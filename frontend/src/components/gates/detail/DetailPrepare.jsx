@@ -87,22 +87,31 @@ export default function DetailPrepare({ projectId, episodeId, onRefresh, readOnl
     } finally { setPickerLoading(false); }
   };
 
+  // (98) 그림체 불일치 확인
+  const [styleConfirm, setStyleConfirm] = useState(null);
+
   /* 피커에서 캐릭터 선택 → 기존 unlink + link (교체) */
   const pickChar = async (c) => {
     if (readOnly) return;
+    // (98) 그림체 불일치 사전 확인
+    if (c.style && style && c.style !== style && !c.is_photo_real && !styleConfirm) {
+      setStyleConfirm(c);
+      return;
+    }
+    setStyleConfirm(null);
     setPickerError('');
     setBusy(`char:${c.id}`);
+    const prevName = linkedChar?.name || linkedChar?.ref_key || '';
     try {
-      // 기존 연결 해제
       for (const l of linked) {
         if (l.id !== c.id) await api.delete(`/projects/${projectId}/episodes/${episodeId}/characters/${l.id}/link`);
       }
-      // 새 캐릭터 연결
       await api.post(`/projects/${projectId}/episodes/${episodeId}/characters/link`, { character_id: c.id });
       const { data } = await api.get(`/projects/${projectId}/episodes/${episodeId}/characters`);
       setLinked(data || []);
       setShowPicker(false);
-      setToast(`${c.name || c.ref_key}(으)로 바꿨어요`);
+      // (99) "A → B로 바꿨어요"
+      setToast(prevName ? `${prevName} → ${c.name || c.ref_key}(으)로 바꿨어요` : `${c.name || c.ref_key}(으)로 바꿨어요`);
       setTimeout(() => setToast(''), 2500);
     } catch (err) {
       setPickerError(err.response?.data?.detail || '캐릭터를 불러오지 못했어요');
@@ -260,13 +269,28 @@ export default function DetailPrepare({ projectId, episodeId, onRefresh, readOnl
           <div className="bg-white dark:bg-zinc-900 rounded-2xl border-2 border-border dark:border-zinc-700 shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
             {/* 헤더 */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-border dark:border-zinc-700">
-              <h3 className="font-bold text-ink-black dark:text-white flex items-center gap-2">
-                <Library size={18} className="text-purple-500" /> 캐릭터 불러오기
-              </h3>
+              <div>
+                <h3 className="font-bold text-ink-black dark:text-white flex items-center gap-2">
+                  <Library size={18} className="text-purple-500" /> 캐릭터 불러오기
+                </h3>
+                {style && <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5 ml-7">그림체: {presets.find(p => p.key === style)?.label || style}</p>}
+              </div>
               <button onClick={() => setShowPicker(false)} className="p-1 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg">
                 <X size={18} className="text-gray-500" />
               </button>
             </div>
+
+            {/* (98) 그림체 불일치 확인 */}
+            {styleConfirm && (
+              <div className="mx-4 mt-3 p-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl">
+                <p className="text-sm font-bold text-orange-700 dark:text-orange-300 mb-2">그림체가 조금 달라질 수 있어요</p>
+                <p className="text-xs text-orange-600 dark:text-orange-400 mb-3">현재 스타일과 다른 그림체({styleConfirm.style})로 만든 캐릭터입니다.</p>
+                <div className="flex gap-2">
+                  <button onClick={() => setStyleConfirm(null)} className="px-3 py-1.5 text-xs font-bold text-gray-500 dark:text-gray-400 border border-border dark:border-zinc-700 rounded-lg">취소</button>
+                  <button onClick={() => pickChar(styleConfirm)} className="px-3 py-1.5 text-xs font-bold text-white bg-orange-500 rounded-lg hover:bg-orange-600">그래도 바꾸기</button>
+                </div>
+              </div>
+            )}
 
             {/* 탭 */}
             <div className="flex border-b border-border dark:border-zinc-700">
@@ -333,7 +357,7 @@ export default function DetailPrepare({ projectId, episodeId, onRefresh, readOnl
                             )}
                           </div>
                           {c.episode_count != null && (
-                            <div className="text-[10px] text-gray-400 dark:text-gray-500">{c.episode_count}개 에피소드에서 사용 중</div>
+                            <div className="text-[10px] text-gray-400 dark:text-gray-500">{c.episode_count}개 작품에서 사용 중</div>
                           )}
                         </div>
                         {busy === `char:${c.id}` && <span className="absolute inset-0 bg-black/30 rounded-xl flex items-center justify-center"><Loader2 size={18} className="animate-spin text-white" /></span>}

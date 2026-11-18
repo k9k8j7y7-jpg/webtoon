@@ -170,7 +170,7 @@ export default function InquiryNewPage() {
           {/* 관련 에피소드 */}
           <div>
             <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">
-              관련 에피소드 <span className="font-normal text-gray-400">(선택)</span>
+              관련 작품 <span className="font-normal text-gray-400">(선택)</span>
             </label>
             <select
               value={episodeId}

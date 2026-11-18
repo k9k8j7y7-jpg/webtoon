@@ -33,6 +33,8 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
   const [toast, setToast] = useState('');
   // 교체 모드: 상한 도달 시 기존 캐릭터 중 누구를 교체할지
   const [replaceState, setReplaceState] = useState(null); // { newCharId, newCharName, existing: [{id,name}] }
+  // (98) 그림체 불일치 확인
+  const [styleConfirm, setStyleConfirm] = useState(null); // { charId, charName, charStyle, overrideRefKey }
 
   // 컷 비율
   const aspectRatio = gateStatus?.aspect_ratio || '9:16';
@@ -606,7 +608,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
     try {
       const { data: linkInfo } = await api.get(`/characters/${characterId}/link-info`);
       if (linkInfo.episode_count >= 2) {
-        if (!window.confirm(`${linkInfo.episode_count}개 에피소드에서 사용 중입니다. 새 이미지는 이후 생성부터 적용되며, 이미 만든 컷 이미지는 바뀌지 않습니다. 재생성하시겠습니까?`)) return;
+        if (!window.confirm(`${linkInfo.episode_count}개 작품에서 사용 중입니다. 새 이미지는 이후 생성부터 적용되며, 이미 만든 컷 이미지는 바뀌지 않습니다. 재생성하시겠습니까?`)) return;
       }
     } catch {}
     setPhase('characters');
@@ -897,6 +899,20 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
 
   const linkCharacter = async (characterId, overrideRefKey) => {
     setPickerError('');
+
+    // (98) 그림체 불일치 사전 확인
+    const currentStyle = styles?.preset_key;
+    const allChars = [...projectChars, ...libraryChars, ...presetChars];
+    const picked = allChars.find(c => c.id === characterId);
+    if (picked && currentStyle && picked.style && picked.style !== currentStyle && !picked.is_photo_real && !styleConfirm) {
+      setStyleConfirm({ charId: characterId, charName: picked.name || '', charStyle: picked.style, overrideRefKey });
+      return;
+    }
+    setStyleConfirm(null);
+
+    // (99) 교체 토스트용 — 기존 캐릭터 이름 기억
+    const prevCharNames = characters.map(c => c.name || c.ref_key);
+
     try {
       const payload = { character_id: characterId };
       if (overrideRefKey) payload.override_ref_key = overrideRefKey;
@@ -916,11 +932,13 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
       setReplaceState(null);
       setCacheBuster(Date.now());
       await loadAssets();
+      // (99) "A → B로 바꿨어요" 토스트
       if (data.style_warning) {
         setToast(`${charName || '캐릭터'} 연결됨 — ${data.style_warning}`);
         setTimeout(() => setToast(''), 3000);
       } else if (charName) {
-        setToast(`${charName}(으)로 바꿨어요`);
+        const prev = prevCharNames.length === 1 ? prevCharNames[0] : '';
+        setToast(prev ? `${prev} → ${charName}(으)로 바꿨어요` : `${charName}(으)로 바꿨어요`);
         setTimeout(() => setToast(''), 3000);
       }
     } catch (err) {
@@ -1563,7 +1581,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <button
                       onClick={() => togglePromote(c)}
-                      title={c.user_id ? '내 라이브러리에서 해제' : '내 라이브러리에 등록하면 모든 프로젝트에서 사용할 수 있어요'}
+                      title={c.user_id ? '내 라이브러리에서 해제' : '내 라이브러리에 등록하면 다른 작품에서도 쓸 수 있어요'}
                       className={`p-1 rounded-lg transition-colors ${c.user_id ? 'text-yellow-500 hover:text-yellow-600' : 'text-gray-300 dark:text-gray-600 hover:text-yellow-400'}`}
                     >
                       <Star size={14} fill={c.user_id ? 'currentColor' : 'none'} />
@@ -1576,10 +1594,10 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
                     </button>
                     <button
                       onClick={() => unlinkCharacter(c.id)}
-                      title="이 에피소드에서 제외 (캐릭터는 프로젝트에 유지됩니다)"
+                      title="이 작품에서 빼기"
                       className="flex items-center gap-1 px-2 py-1 text-xs font-bold text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 rounded-lg transition-colors"
                     >
-                      <Unlink size={12} />
+                      <Unlink size={12} /> 연결 해제
                     </button>
                     {c.is_photo_real && (
                       <div className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
@@ -1830,7 +1848,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
                       />
                       <p className="text-[9px] text-gray-400 dark:text-gray-500 mt-0.5">이미지 생성에 반영됩니다</p>
                     </div>
-                    <p className="text-[9px] text-purple-500 dark:text-purple-400">이름은 이 캐릭터가 연결된 모든 에피소드에 반영됩니다</p>
+                    <p className="text-[9px] text-purple-500 dark:text-purple-400">이름은 이 캐릭터가 연결된 모든 작품에 반영됩니다</p>
                     <div className="flex gap-2">
                       <button onClick={saveCharConditions} disabled={savingChar || (editingChar.is_photo_real && !editingChar.consent_given)}
                         className="flex-1 px-3 py-1.5 text-xs font-bold bg-purple-600 text-white rounded-full hover:bg-purple-700 transition-colors disabled:opacity-50">
@@ -2166,9 +2184,14 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
           <div className="bg-white dark:bg-zinc-900 rounded-2xl border-2 border-border dark:border-zinc-700 shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
             {/* 헤더 */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-border dark:border-zinc-700">
-              <h3 className="font-bold font-serif text-ink-black dark:text-white flex items-center gap-2">
-                <Library size={18} className="text-purple-500" /> 캐릭터 불러오기
-              </h3>
+              <div>
+                <h3 className="font-bold font-serif text-ink-black dark:text-white flex items-center gap-2">
+                  <Library size={18} className="text-purple-500" /> 캐릭터 불러오기
+                </h3>
+                {styles?.preset_key && (
+                  <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5 ml-7">그림체: {[...(presets.core || []), ...(presets.beta || [])].find(p => p.key === styles.preset_key)?.label || styles.preset_key}</p>
+                )}
+              </div>
               <button onClick={() => { setShowPicker(false); setMappingState(null); setReplaceState(null); }} className="p-1 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg">
                 <X size={18} className="text-gray-500" />
               </button>
@@ -2192,6 +2215,22 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
                 <div className="flex gap-2">
                   <button onClick={() => setMappingState(null)} className="px-3 py-1.5 text-xs font-bold text-gray-500 dark:text-gray-400 border border-border dark:border-zinc-700 rounded-lg">취소</button>
                   <button onClick={confirmMapping} className="px-3 py-1.5 text-xs font-bold text-white bg-purple-600 rounded-lg hover:bg-purple-700">확인</button>
+                </div>
+              </div>
+            )}
+
+            {/* (98) 그림체 불일치 확인 */}
+            {styleConfirm && (
+              <div className="mx-4 mt-3 p-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl">
+                <p className="text-sm font-bold text-orange-700 dark:text-orange-300 mb-2">
+                  그림체가 조금 달라질 수 있어요
+                </p>
+                <p className="text-xs text-orange-600 dark:text-orange-400 mb-3">
+                  현재 스타일과 다른 그림체({styleConfirm.charStyle})로 만든 캐릭터입니다.
+                </p>
+                <div className="flex gap-2">
+                  <button onClick={() => setStyleConfirm(null)} className="px-3 py-1.5 text-xs font-bold text-gray-500 dark:text-gray-400 border border-border dark:border-zinc-700 rounded-lg">취소</button>
+                  <button onClick={() => linkCharacter(styleConfirm.charId, styleConfirm.overrideRefKey)} className="px-3 py-1.5 text-xs font-bold text-white bg-orange-500 rounded-lg hover:bg-orange-600">그래도 바꾸기</button>
                 </div>
               </div>
             )}
@@ -2233,7 +2272,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
                   onClick={() => setPickerTab('project')}
                   className={`flex-1 py-2.5 text-xs font-bold transition-colors ${pickerTab === 'project' ? 'text-purple-600 dark:text-purple-400 border-b-2 border-purple-600 dark:border-purple-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'}`}
                 >
-                  이 프로젝트{styleName ? ` · ${styleName}` : ''} ({projectChars.length})
+                  이 작품 ({projectChars.length})
                 </button>
                 <button
                   onClick={() => setPickerTab('library')}
@@ -2340,7 +2379,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
                             <div className="text-[9px] text-gray-400 dark:text-gray-500 truncate mt-0.5">{c.project_title}</div>
                           )}
                           {c.episode_count != null && (
-                            <div className="text-[10px] text-gray-400 dark:text-gray-500">{c.episode_count}개 에피소드에서 사용 중</div>
+                            <div className="text-[10px] text-gray-400 dark:text-gray-500">{c.episode_count}개 작품에서 사용 중</div>
                           )}
                         </div>
                       </div>

@@ -1489,7 +1489,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
         {/* idea_brief가 아직 없고 raw도 없을 때 (기존 에피소드 호환) */}
         {!ideaBrief?.raw && !briefLoading && (
           <p className="text-sm text-gray-400 dark:text-zinc-500 py-2">
-            이 에피소드는 아이디어 정리 없이 생성되었습니다. 아래에서 직접 기획을 생성하세요.
+            아이디어 정리 없이 만들어진 작품입니다. 아래에서 직접 기획을 생성하세요.
           </p>
         )}
       </div>

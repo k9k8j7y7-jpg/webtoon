@@ -227,7 +227,7 @@ export default function QuickPage() {
     if (!result || expanding) return;
     setExpanding(true);
     setError('');
-    setToast(expandPurpose === 'story' ? '이야기 프로젝트를 만들어요' : '광고 프로젝트를 만들어요');
+    setToast(expandPurpose === 'story' ? '이야기를 만들어요' : '광고 작품을 만들어요');
     try {
       const { data } = await api.post(`/quick/${result.episode_id}/expand?purpose=${expandPurpose}`);
       setTimeout(() => {

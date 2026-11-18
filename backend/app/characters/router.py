@@ -918,8 +918,8 @@ async def link_character(
                 status_code=409,
                 detail=f"이 에피소드에 이미 ref_key '{effective_ref_key}'를 가진 캐릭터가 있습니다",
             )
-        # 고아 캐릭터 정리: 같은 (episode_id, ref_key)이지만 미연결 → 삭제 (uq_char_ref 충돌 방지)
-        from app.characters.models import CharacterImage
+        # 고아 캐릭터 ref_key 충돌 해소: 같은 (episode_id, ref_key)이지만 미연결 → ref_key 접미사 변경
+        # (삭제하면 원래 에피소드 캐릭터 시트 소실 위험)
         orphans = (
             db.query(Character)
             .filter(
@@ -933,9 +933,9 @@ async def link_character(
             )
             .all()
         )
+        import time
         for orphan in orphans:
-            db.query(CharacterImage).filter(CharacterImage.character_id == orphan.id).delete()
-            db.delete(orphan)
+            orphan.ref_key = f"{orphan.ref_key}_prev_{int(time.time())}"
         if orphans:
             db.flush()
         # 복제본 생성 (ref_key만 변경, 이미지는 원본 공유)

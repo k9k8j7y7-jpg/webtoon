@@ -227,7 +227,7 @@ export default function SeriesPage() {
   const handleDeleteItem = (no) => {
     const item = series.outline.find((x) => x.no === no);
     if (item?.episode_id) {
-      alert('에피소드가 연결된 회차는 삭제할 수 없습니다.');
+      alert('작품이 연결된 회차는 삭제할 수 없습니다.');
       return;
     }
     if (!confirm(`${no}화를 삭제합니다.`)) return;
@@ -385,7 +385,7 @@ export default function SeriesPage() {
         onClick={() => navigate(`/projects/${projectId}`)}
         className="flex items-center gap-1 text-sm font-bold text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 mb-4 transition-colors"
       >
-        <ArrowLeft size={16} /> 프로젝트
+        <ArrowLeft size={16} /> 돌아가기
       </button>
 
       <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
@@ -992,7 +992,7 @@ export default function SeriesPage() {
                             : 'text-blue-600 dark:text-blue-400'
                         }`}>
                           <CheckCircle size={14} />
-                          {item.has_images ? '이미지 생성됨' : item.status === 'script_done' ? '대본 완료' : '에피소드 생성됨'}
+                          {item.has_images ? '이미지 생성됨' : item.status === 'script_done' ? '대본 완료' : '생성됨'}
                         </span>
                         <div className="flex items-center gap-2">
                           {/* 수정 후 재생성 버튼 — 대본 완료 + 이미지 없음 */}

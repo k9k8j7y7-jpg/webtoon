@@ -128,6 +128,7 @@ WEBTOON/
 - **StepHeader:** `STEPS` 단일 상수. [단계 이동]은 보기만, 수정은 각 게이트 [수정하기]→`POST revert`
 - **캐릭터 ref_key:** 바이블/기획 시점 확정(영문 snake_case). 시트·대본·컷 전부 이 키. 불일치 시 ⚠
 - **캐릭터 승계:** Gate1 카드 값이 원본. AI gender/name/age는 카드 값 덮어씀. description은 카드 원문 앞+AI 뒤
+- **고아 캐릭터 보존:** 교체(unlink→link)로 미연결된 에피소드 캐릭터는 **삭제 금지** — ref_key에 `_prev_{timestamp}` 접미사 붙여 충돌 해소(`characters/router.py` link_character). 시트·이미지 소실 방지
 - **ref_key UI:** 직접 노출 금지 → 한글 이름 + 작은 회색 ref_key. `refNames.js` 헬퍼
 - **연출 강도:** `drama.py`(light/normal/strong). strong은 보호 문구+효과음 글자 금지
 

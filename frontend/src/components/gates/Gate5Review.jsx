@@ -1136,9 +1136,9 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (window.confirm('에피소드 기본값으로 되돌릴까요?\n(이미지는 재생성하지 않아요)')) handleClearDramaOverride(cut.cut_id);
+                        if (window.confirm('기본값으로 되돌릴까요?\n(이미지는 재생성하지 않아요)')) handleClearDramaOverride(cut.cut_id);
                       }}
-                      title="에피소드 기본값으로 되돌리기"
+                      title="기본값으로 되돌리기"
                       className="ml-auto shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors"
                     >
                       {DRAMA_LABELS[cut.drama_level] || cut.drama_level}
