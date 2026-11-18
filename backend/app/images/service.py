@@ -849,9 +849,12 @@ async def generate_all_cuts(
 
     total = len(cut_ids)
 
-    # 패킷 사전 확인 (배치 전체 필요량)
+    # 패킷 사전 확인 (배치 전체 필요량 — 상세페이지 섹션은 2패킷)
     from app.packets.service import require_packets
-    require_packets(user_id, total, db)
+    from app.workflow.gate import get_purpose as _get_purpose
+    _ep = db.query(Episode).filter(Episode.id == episode_id).first()
+    _pkt_per = 2 if _ep and _get_purpose(_ep.gate_status) == "detail_page" else 1
+    require_packets(user_id, total * _pkt_per, db)
     logger.warning("generate_all_cuts START: episode=%s, total=%s, cut_ids=%s", episode_id, total, cut_ids)
     results = []
     failed_cuts = []

@@ -521,7 +521,7 @@ export default function QuickPage() {
               <div className="text-center">
                 <p className="text-sm text-gray-400 mb-2">환영 패킷을 다 썼어요</p>
                 <button onClick={() => navigate('/packets')} className="px-6 py-3 rounded-full bg-gradient-to-r from-purple-600 to-cyan-500 text-white font-bold text-sm hover:scale-105 transition-transform">
-                  체험 팩 3,900원
+                  패킷 충전하기
                 </button>
               </div>
             ) : (

@@ -33,10 +33,10 @@ const LANDING_REEL_POSTER = '/storage/landing/reel_hairpack_poster.jpg';
 
 const PRODUCT_LABELS = { packet_15: '체험', packet_30: '시작', packet_100: '인기', packet_300: '대용량' };
 const PRODUCT_DESC = {
-  packet_15: '약 15컷 · 8컷 에피소드 1~2편',
-  packet_30: '약 30컷 · 8컷 에피소드 3~4편',
-  packet_100: '약 100컷 · 8컷 에피소드 12편 · 릴스 포함 넉넉',
-  packet_300: '약 300컷 · 8컷 에피소드 37편',
+  packet_15: '한 컷 광고 15장',
+  packet_30: '한 컷 광고 30장 · 인스타툰 4컷 7편',
+  packet_100: '한 컷 광고 100장 · 인스타툰 4컷 25편',
+  packet_300: '한 컷 광고 300장 · 인스타툰 4컷 75편',
 };
 
 const USE_CASES = [
@@ -64,12 +64,12 @@ const USE_CASES = [
 const faqs = [
   { q: "웹툰을 한 번도 그려본 적이 없는데 사용할 수 있나요?", a: "네, EziToon은 그림을 전혀 그리지 못해도 사진과 이야기만 있으면 AI가 알아서 컷과 말풍선을 구성해 완성해 줍니다." },
   { q: "사진은 어떤 사진을 올려야 하나요?", a: "가족, 반려동물, 친구들과 찍은 일상 사진이나, 우리 가게 사진 등 어떤 사진이든 웹툰의 훌륭한 소재가 될 수 있습니다." },
-  { q: "패킷은 뭔가요?", a: "AI 이미지를 만드는 데 쓰는 단위입니다. 컷 1장 = 1패킷, 컷 영상 = 4패킷, 릴스 = 1패킷. 기획·대본·콘티·말풍선·내레이션은 무료이고, 실패하면 차감되지 않습니다." },
-  { q: "한 편에 얼마 드나요?", a: "8컷짜리 에피소드 한 편이 패킷 8개입니다. 인기 팩(100패킷, 19,900원) 기준 한 편에 약 1,600원이에요." },
+  { q: "패킷은 뭔가요?", a: "AI 이미지를 만드는 데 쓰는 단위입니다. 패킷 1개 = 한 컷 광고 1장. 상세페이지 섹션 1장 = 2패킷, 컷 영상 = 4패킷, 릴스 = 1패킷. 기획·대본·콘티·말풍선·내레이션은 무료이고, 실패하면 차감되지 않습니다." },
+  { q: "얼마나 들어요?", a: "패킷 1개 = 한 컷 광고 1장입니다. 인기 팩(100패킷)이면 한 컷 광고 100장, 인스타툰 4컷 25편을 만들 수 있어요." },
   { q: "생성된 웹툰의 저작권은 누구에게 있나요?", a: "서비스를 통해 생성한 웹툰 콘텐츠의 저작권은 전적으로 창작자인 사용자 본인에게 귀속됩니다." },
-  { q: "환불은 어떻게 하나요?", a: "결제 후 7일 이내 사용하지 않은 패킷은 전액 환불, 사용한 패킷은 1개당 230원 공제됩니다. 1:1 문의로 요청해 주세요." },
+  { q: "환불은 어떻게 하나요?", a: "결제 후 7일 이내 사용하지 않은 패킷은 전액 환불, 사용한 패킷은 1개당 300원 공제됩니다. 1:1 문의로 요청해 주세요." },
   { q: "AI 그림을 인스타에 올려도 되나요?", a: "네, 자유롭게 올릴 수 있습니다. 인스타그램 정책에 따라 AI 생성 콘텐츠에는 'AI 생성' 라벨을 표시하는 것을 권장하며, EziToon 인스타 내보내기를 쓰면 크레딧이 자동으로 붙습니다." },
-  { q: "패킷은 어떻게 차감되나요?", a: "AI 이미지 생성 시 1장당 1패킷이 차감됩니다. 텍스트나 말풍선 작업은 무료이며, 생성에 실패한 경우에는 패킷이 차감되지 않습니다." }
+  { q: "패킷은 어떻게 차감되나요?", a: "AI 이미지 생성 시 1장당 1패킷(상세페이지 섹션은 2패킷)이 차감됩니다. 텍스트나 말풍선 작업은 무료이며, 생성에 실패한 경우에는 패킷이 차감되지 않습니다." }
 ];
 
 export default function LandingPage() {
@@ -231,8 +231,8 @@ export default function LandingPage() {
             </span>
           </h2>
           <p className="text-sm sm:text-base text-gray-400 mb-6 max-w-xl z-10 break-keep leading-relaxed">
-            기획·대본·콘티는 무료, 그림 1장 = 1패킷.<br/>
-            <strong className="text-gray-200">8컷 한 편이 패킷 8개(약 1,600원).</strong>
+            기획·대본·콘티는 무료, 패킷 1개 = 한 컷 광고 1장.<br/>
+            <strong className="text-gray-200">캐릭터 만들기 2패킷 · 움직이게 4패킷 · 상세페이지 섹션 2패킷.</strong>
           </p>
           <button onClick={() => navigate(startPath)} className="group relative px-8 py-3.5 rounded-full overflow-hidden transition-all hover:scale-105 hover:shadow-[0_0_40px_rgba(168,85,247,0.4)] z-10 mb-2">
             <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-cyan-500 opacity-80 group-hover:opacity-100 transition-opacity"></div>
@@ -350,8 +350,8 @@ export default function LandingPage() {
               </div>
               <div className="px-6 py-4 bg-gradient-to-br from-purple-900/30 to-cyan-900/30 rounded-xl border border-purple-500/30">
                 <p className="text-sm text-cyan-400 mb-1">EziToon</p>
-                <p className="text-2xl font-bold text-white">~1,600원</p>
-                <p className="text-xs text-gray-400">8컷 한 편 = 패킷 8개</p>
+                <p className="text-2xl font-bold text-white">패킷 1개</p>
+                <p className="text-xs text-gray-400">= 한 컷 광고 1장</p>
               </div>
             </div>
             <p className="text-xs text-gray-500">기획·대본·콘티가 무료라서 그림 값만 들어요</p>

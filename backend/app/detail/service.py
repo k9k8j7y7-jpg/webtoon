@@ -317,12 +317,12 @@ async def generate_detail_section(
     log = GenerationLog(
         cut_id=cut.cut_id, episode_id=episode_id, project_id=project_id, user_id=user_id,
         kind="cut", model=result.model, model_tier="gpt",
-        cost_usd=0.04 if retried else 0.02, credits_charged=0, packets_charged=1,
+        cost_usd=0.04 if retried else 0.02, credits_charged=0, packets_charged=2,
         seed=result.seed, source=source,
     )
     db.add(log)
     db.flush()
-    charge_packets(user_id, 1, "generation", log.id, db)
+    charge_packets(user_id, 2, "generation", log.id, db)
 
     logger.info("detail cut %s done: title_ok=%s body=%s extra=%d claims=%s retried=%s",
                 cut.cut_id, chk.get("title_ok"), chk.get("body_exact"), len(chk.get("extra_lines", [])),

@@ -17,10 +17,10 @@ const REASON_COLOR = {
   purchase: 'text-comic-orange',
 };
 const PRODUCT_DESC = {
-  packet_15: { episodes: '1~2편', label: '체험' },
-  packet_30: { episodes: '3~4편', label: '시작' },
-  packet_100: { episodes: '12편', label: '인기' },
-  packet_300: { episodes: '37편', label: '대용량' },
+  packet_15: { desc: '한 컷 광고 15장', label: '체험' },
+  packet_30: { desc: '한 컷 광고 30장 · 인스타툰 4컷 7편', label: '시작' },
+  packet_100: { desc: '한 컷 광고 100장 · 인스타툰 4컷 25편', label: '인기' },
+  packet_300: { desc: '한 컷 광고 300장 · 인스타툰 4컷 75편', label: '대용량' },
 };
 
 export default function PacketsPage() {
@@ -295,7 +295,7 @@ export default function PacketsPage() {
                   {p.amount.toLocaleString()}<span className="text-xs font-bold">원</span>
                 </div>
                 {desc && (
-                  <div className="text-[10px] text-gray-400 mt-1">약 {p.packets}컷 · 8컷 에피소드 약 {desc.episodes}</div>
+                  <div className="text-[10px] text-gray-400 mt-1">{desc.desc}</div>
                 )}
                 {(desc?.label === '인기' || p.code === 'packet_100') && (
                   <div className="absolute -top-2 -right-2 bg-comic-orange text-white text-[10px] font-black px-2 py-0.5 rounded-full">

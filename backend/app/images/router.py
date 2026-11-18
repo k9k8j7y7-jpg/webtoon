@@ -13,7 +13,7 @@ from app.projects.models import Project, Episode
 from app.storyboard.models import Cut
 from app.images.service import generate_all_cuts, generate_cut_image
 from app.jobs import create_job, run_job_in_background
-from app.workflow.gate import get_gate_number
+from app.workflow.gate import get_gate_number, get_purpose
 from app.packets.service import require_packets
 
 router = APIRouter(tags=["gate5-images"])
@@ -67,8 +67,10 @@ async def generate_images(
     if cuts_count == 0:
         raise HTTPException(status_code=400, detail="No pending cuts to generate")
 
-    # 패킷 사전 확인: 컷 1개 = 1패킷
-    require_packets(current_user.id, cuts_count, db)
+    # 패킷 사전 확인: 컷 1개 = 1패킷, 상세페이지 섹션 = 2패킷
+    _purpose = get_purpose(episode.gate_status)
+    _pkt_per_cut = 2 if _purpose == "detail_page" else 1
+    require_packets(current_user.id, cuts_count * _pkt_per_cut, db)
 
     job = create_job(total=cuts_count)
 
@@ -109,8 +111,10 @@ async def regenerate_cut(
     if not episode:
         raise HTTPException(status_code=404, detail="Episode not found")
 
-    # 패킷 사전 확인: 재생성 1컷 = 1패킷
-    require_packets(current_user.id, 1, db)
+    # 패킷 사전 확인: 재생성 1컷 = 1패킷, 상세페이지 섹션 = 2패킷
+    _purpose = get_purpose(episode.gate_status)
+    _pkt_per_cut = 2 if _purpose == "detail_page" else 1
+    require_packets(current_user.id, _pkt_per_cut, db)
 
     # 재생성 파라미터 적용
     if body and body.params:
@@ -358,23 +362,24 @@ async def copy_report(
         db.commit()
         return {"ok": True, "message": "글자는 정확해요", "check": check}
 
-    # 글자 틀림 → 1패킷 환불 + 재생성
+    # 글자 틀림 → 환불 + 재생성 (상세페이지 2패킷, 그 외 1패킷)
     import logging
     logger = logging.getLogger(__name__)
+    _refund_pkt = 2 if purpose == "detail_page" else 1
     logger.warning(
-        "Copy report: cut=%s version=%d MISMATCH → refund + regen. check=%s",
-        cut_id, version, check,
+        "Copy report: cut=%s version=%d MISMATCH → refund %d + regen. check=%s",
+        cut_id, version, _refund_pkt, check,
     )
 
     from app.packets.service import grant_packets
-    grant_packets(current_user.id, 1, db)
+    grant_packets(current_user.id, _refund_pkt, db)
     logger.warning(
-        "Copy error refund: user=%d cut=%s version=%d (admin_grant 1 packet)",
-        current_user.id, cut_id, version,
+        "Copy error refund: user=%d cut=%s version=%d (admin_grant %d packet)",
+        current_user.id, cut_id, version, _refund_pkt,
     )
 
-    # 재생성 (1패킷 재차감 → 결과적으로 무료)
-    require_packets(current_user.id, 1, db)
+    # 재생성 (동일 패킷 재차감 → 결과적으로 무료)
+    require_packets(current_user.id, _refund_pkt, db)
     db.commit()
 
     regen_episode_id = cut.episode_id

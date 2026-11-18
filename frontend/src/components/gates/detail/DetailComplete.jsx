@@ -112,13 +112,13 @@ export default function DetailComplete({ projectId, episodeId, readOnly }) {
         {!readOnly && pending.length > 0 && (
           confirm === 'all' ? (
             <div className="neon-btn w-full !cursor-default flex items-center justify-center gap-2 text-xs font-bold">
-              <span>{pending.length}패킷을 써서 그릴까요?</span>
+              <span>{pending.length * 2}패킷을 써서 그릴까요?</span>
               <button onClick={generateAll} className="px-3 py-1 rounded-full bg-white text-comic-orange">그리기</button>
               <button onClick={() => setConfirm(null)} className="px-3 py-1 rounded-full bg-white/20 text-white">취소</button>
             </div>
           ) : (
             <button onClick={() => setConfirm('all')} disabled={busyAny} className="neon-btn w-full disabled:opacity-50 flex items-center justify-center gap-2">
-              {`전부 생성 · ${pending.length}패킷`}
+              {`전부 생성 · ${pending.length * 2}패킷`}
             </button>
           )
         )}
@@ -259,7 +259,7 @@ function SectionCard({ cut, index, readOnly, working, confirming, onAskGenerate,
         <div className="mt-3 flex items-center gap-2 flex-wrap">
           {confirming ? (
             <>
-              <span className="text-xs font-bold text-gray-600 dark:text-gray-300">1패킷 · 실패하면 차감 안 돼요</span>
+              <span className="text-xs font-bold text-gray-600 dark:text-gray-300">2패킷 · 실패하면 차감 안 돼요</span>
               <button onClick={onGenerate} className="px-3 py-1.5 rounded-full text-xs font-bold bg-comic-orange text-white">그리기</button>
               <button onClick={onCancel} className="px-3 py-1.5 rounded-full text-xs font-bold bg-gray-100 dark:bg-zinc-800 text-gray-500 dark:text-gray-400">취소</button>
             </>
@@ -271,7 +271,7 @@ function SectionCard({ cut, index, readOnly, working, confirming, onAskGenerate,
               <button onClick={onReport} disabled={disabled} className="text-[11px] font-bold text-gray-400 dark:text-zinc-500 underline disabled:opacity-50">글자가 틀렸나요?</button>
             </>
           ) : (
-            <button onClick={onAskGenerate} disabled={disabled} className="px-3.5 py-2 rounded-full text-xs font-bold bg-comic-orange text-white disabled:opacity-50">이 섹션 생성 · 1패킷</button>
+            <button onClick={onAskGenerate} disabled={disabled} className="px-3.5 py-2 rounded-full text-xs font-bold bg-comic-orange text-white disabled:opacity-50">이 섹션 생성 · 2패킷</button>
           )}
         </div>
       )}
@@ -315,10 +315,10 @@ function RedrawSheet({ cut, onClose, onSubmit }) {
           <button onClick={() => setCharacter(false)} className={`flex items-center gap-1 ${chipCls(!character)}`}><Package size={12} /> 제품만</button>
         </div>
         {step === 'edit' ? (
-          <button onClick={() => setStep('confirm')} className="neon-btn w-full mt-4">다시 그리기 · 1패킷</button>
+          <button onClick={() => setStep('confirm')} className="neon-btn w-full mt-4">다시 그리기 · 2패킷</button>
         ) : (
           <div className="mt-4 flex items-center gap-2">
-            <span className="text-xs font-bold text-gray-600 dark:text-gray-300 flex-1">1패킷이 차감돼요 (실패하면 차감 안 돼요)</span>
+            <span className="text-xs font-bold text-gray-600 dark:text-gray-300 flex-1">2패킷이 차감돼요 (실패하면 차감 안 돼요)</span>
             <button onClick={() => onSubmit({ note: note.trim(), character })} className="px-4 py-2 rounded-full text-xs font-bold bg-comic-orange text-white">그리기</button>
             <button onClick={() => setStep('edit')} className="px-3 py-2 rounded-full text-xs font-bold bg-gray-100 dark:bg-zinc-800 text-gray-500 dark:text-gray-400">취소</button>
           </div>
