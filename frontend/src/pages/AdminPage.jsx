@@ -1278,11 +1278,461 @@ function ReportsTab() {
   );
 }
 
+/* ── 통계 상세 ────────────────────────────────── */
+const STATS_SUB_TABS = [
+  { key: 'money', label: '돈' },
+  { key: 'people', label: '사람' },
+  { key: 'quality', label: '품질' },
+  { key: 'status', label: '상태' },
+];
+
+const RANGE_CHIPS = [
+  { key: '1d', label: '오늘' },
+  { key: '7d', label: '7일' },
+  { key: '30d', label: '30일' },
+  { key: 'all', label: '전체' },
+];
+
+function krw(n) {
+  if (n == null) return '—';
+  return `\u20A9${Number(n).toLocaleString()}`;
+}
+function pct(n) {
+  if (n == null) return '—';
+  return `${Number(n).toFixed(1)}%`;
+}
+
+function StatsCard({ label, value, badge }) {
+  return (
+    <div className="bg-[#1a1a2e] border border-white/10 rounded-xl p-5 flex flex-col gap-1.5">
+      <span className="text-xs text-gray-400">{label}</span>
+      <span className="text-2xl font-bold text-white leading-tight">
+        {value ?? '—'}
+        {badge && <span className="ml-2 px-1.5 py-0.5 text-[10px] rounded bg-amber-500/20 text-amber-400 font-bold align-middle">{badge}</span>}
+      </span>
+    </div>
+  );
+}
+
+function CssBarChart({ rows, labelKey, bars }) {
+  if (!rows?.length) return <p className="text-gray-500 text-sm py-6 text-center">데이터 없음</p>;
+  const maxVal = Math.max(...rows.flatMap(r => bars.map(b => Number(r[b.key]) || 0)), 1);
+  return (
+    <div className="space-y-1.5 max-h-[360px] overflow-y-auto pr-1">
+      {rows.map((r, i) => (
+        <div key={i} className="flex items-center gap-2 text-xs">
+          <span className="w-16 shrink-0 text-gray-400 text-right font-mono">{r[labelKey]}</span>
+          <div className="flex-1 flex flex-col gap-0.5">
+            {bars.map(b => {
+              const v = Number(r[b.key]) || 0;
+              const w = (v / maxVal) * 100;
+              return (
+                <div key={b.key} className="flex items-center gap-1">
+                  <div className={`h-3 rounded-sm ${b.color}`} style={{ width: `${Math.max(w, 0.5)}%` }} />
+                  <span className="text-gray-500 text-[10px]">{v.toLocaleString()}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MoneySubTab() {
+  const [range, setRange] = useState('30d');
+  const [measuredOnly, setMeasuredOnly] = useState(false);
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    const qs = `range=${range}${measuredOnly ? '&measured_only=true' : ''}`;
+    api.get(`/admin/stats/money?${qs}`)
+      .then(({ data: d }) => setData(d))
+      .catch(err => console.error(err))
+      .finally(() => setLoading(false));
+  }, [range, measuredOnly]);
+
+  const costSource = data?.cost?.source;
+  const sourceBadge = costSource === 'mixed' ? '혼합 (실측+추정)'
+    : costSource === 'estimated' ? '추정'
+    : costSource === 'measured' ? '실측' : null;
+
+  return (
+    <div className="space-y-6">
+      {/* Period chips + measured-only toggle */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex gap-1.5">
+          {RANGE_CHIPS.map(c => (
+            <button key={c.key} onClick={() => setRange(c.key)}
+              className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
+                range === c.key ? 'bg-cyan-500 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10'
+              }`}>{c.label}</button>
+          ))}
+        </div>
+        <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer select-none">
+          <input type="checkbox" checked={measuredOnly} onChange={e => setMeasuredOnly(e.target.checked)}
+            className="rounded border-gray-600 bg-transparent text-cyan-500 focus:ring-cyan-500/30 w-3.5 h-3.5" />
+          실측만 (기록 시작 11-19 이후)
+        </label>
+      </div>
+
+      {loading ? <div className="text-gray-400 py-12 text-center">로딩 중...</div> : !data ? <div className="text-red-400 py-12 text-center">로드 실패</div> : (
+        <>
+          {/* 6 stat cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <StatsCard label="매출" value={krw(data.revenue?.total_krw)} />
+            <StatsCard label="사용 패킷" value={data.packets?.used?.toLocaleString()} />
+            <div className="bg-[#1a1a2e] border border-white/10 rounded-xl p-5 flex flex-col gap-1.5">
+              <span className="text-xs text-gray-400">API 원가
+                {sourceBadge && <span className={`ml-1.5 px-1.5 py-0.5 text-[10px] rounded font-bold align-middle ${
+                  costSource === 'measured' ? 'bg-green-500/20 text-green-400'
+                  : costSource === 'estimated' ? 'bg-amber-500/20 text-amber-400'
+                  : 'bg-blue-500/20 text-blue-400'
+                }`}>{sourceBadge}</span>}
+              </span>
+              <span className="text-2xl font-bold text-white leading-tight">{krw(data.cost?.total_krw)}</span>
+              {costSource === 'mixed' && data.cost?.measured_krw != null && data.cost?.estimated_krw != null && (
+                <span className="text-[11px] text-gray-500">실측 {krw(data.cost.measured_krw)} + 추정 {krw(data.cost.estimated_krw)}</span>
+              )}
+            </div>
+            <StatsCard label="패킷당 원가" value={krw(data.per_packet_cost_krw)} />
+            <div className="bg-[#1a1a2e] border border-white/10 rounded-xl p-5 flex flex-col gap-1.5">
+              <span className="text-xs text-gray-400">마진율</span>
+              <span className="text-2xl font-bold text-white leading-tight">{pct(data.margin_pct)}</span>
+              {data.margin_note && <span className="text-[11px] text-gray-500">{data.margin_note}</span>}
+            </div>
+            <StatsCard label="패킷 부채" value={krw(data.packets?.balance_total != null && data.avg_sell_price_krw != null
+              ? data.packets.balance_total * data.avg_sell_price_krw : null)} />
+          </div>
+
+          {/* Purpose table */}
+          {data.by_purpose?.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold text-gray-300 mb-2">용도별</h3>
+              <div className="bg-[#1a1a2e] border border-white/10 rounded-xl overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-white/10 text-gray-400">
+                      <th className="text-left px-4 py-2 font-medium">용도</th>
+                      <th className="text-right px-4 py-2 font-medium">건수</th>
+                      <th className="text-right px-4 py-2 font-medium">패킷</th>
+                      <th className="text-right px-4 py-2 font-medium">원가</th>
+                      <th className="text-right px-4 py-2 font-medium">패킷당</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.by_purpose.map(r => (
+                      <tr key={r.purpose} className="border-b border-white/5 hover:bg-white/[0.02]">
+                        <td className="px-4 py-2 text-white">{r.purpose}</td>
+                        <td className="px-4 py-2 text-right text-gray-300 font-mono">{r.count?.toLocaleString()}</td>
+                        <td className="px-4 py-2 text-right text-gray-300 font-mono">{r.packets?.toLocaleString()}</td>
+                        <td className="px-4 py-2 text-right text-gray-300 font-mono">{krw(r.cost_krw)}</td>
+                        <td className="px-4 py-2 text-right text-gray-300 font-mono">{krw(r.per_packet_cost_krw)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Daily chart */}
+          {data.daily?.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold text-gray-300 mb-2">일별 추이</h3>
+              <div className="bg-[#1a1a2e] border border-white/10 rounded-xl p-4">
+                <div className="flex gap-4 text-[10px] text-gray-400 mb-3">
+                  <span className="flex items-center gap-1"><span className="w-3 h-2 rounded-sm bg-blue-500 inline-block" /> 매출</span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-2 rounded-sm bg-red-500 inline-block" /> 원가</span>
+                </div>
+                <CssBarChart rows={data.daily} labelKey="date"
+                  bars={[
+                    { key: 'revenue_krw', color: 'bg-blue-500' },
+                    { key: 'cost_krw', color: 'bg-red-500' },
+                  ]}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Provider cost table */}
+          {data.by_provider?.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold text-gray-300 mb-2">제공사별 원가</h3>
+              <div className="bg-[#1a1a2e] border border-white/10 rounded-xl overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-white/10 text-gray-400">
+                      <th className="text-left px-4 py-2 font-medium">제공사</th>
+                      <th className="text-right px-4 py-2 font-medium">건수</th>
+                      <th className="text-right px-4 py-2 font-medium">원가</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.by_provider.map(r => (
+                      <tr key={r.provider} className="border-b border-white/5 hover:bg-white/[0.02]">
+                        <td className="px-4 py-2 text-white">{r.provider}</td>
+                        <td className="px-4 py-2 text-right text-gray-300 font-mono">{r.count?.toLocaleString()}</td>
+                        <td className="px-4 py-2 text-right text-gray-300 font-mono">{krw(r.cost_krw)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function PeopleSubTab() {
+  const [range, setRange] = useState('30d');
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    api.get(`/admin/stats/people?range=${range}`)
+      .then(({ data: d }) => setData(d))
+      .catch(err => console.error(err))
+      .finally(() => setLoading(false));
+  }, [range]);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex gap-1.5">
+        {RANGE_CHIPS.map(c => (
+          <button key={c.key} onClick={() => setRange(c.key)}
+            className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
+              range === c.key ? 'bg-cyan-500 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10'
+            }`}>{c.label}</button>
+        ))}
+      </div>
+
+      {loading ? <div className="text-gray-400 py-12 text-center">로딩 중...</div> : !data ? <div className="text-red-400 py-12 text-center">로드 실패</div> : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <StatsCard label="가입자" value={data.total_users?.toLocaleString()} />
+            <StatsCard label="활성" value={data.active_users?.toLocaleString()} />
+            <StatsCard label="결제 전환율" value={pct(data.paid_conversion_rate)} />
+            <StatsCard label="환영만 이탈율" value={pct(data.welcome_only_churn_rate)} />
+          </div>
+
+          {/* Daily signups chart */}
+          {data.daily_signups?.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold text-gray-300 mb-2">일별 가입</h3>
+              <div className="bg-[#1a1a2e] border border-white/10 rounded-xl p-4">
+                <CssBarChart rows={data.daily_signups} labelKey="date"
+                  bars={[{ key: 'count', color: 'bg-cyan-500' }]}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Top users table */}
+          {data.top_users?.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold text-gray-300 mb-2">상위 사용자</h3>
+              <div className="bg-[#1a1a2e] border border-white/10 rounded-xl overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-white/10 text-gray-400">
+                      <th className="text-center px-3 py-2 font-medium w-10">#</th>
+                      <th className="text-left px-4 py-2 font-medium">닉네임</th>
+                      <th className="text-right px-4 py-2 font-medium">사용 패킷</th>
+                      <th className="text-right px-4 py-2 font-medium">결제액</th>
+                      <th className="text-left px-4 py-2 font-medium">마지막 활동</th>
+                      <th className="text-center px-3 py-2 font-medium"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.top_users.map((u, i) => (
+                      <tr key={u.user_id || i} className="border-b border-white/5 hover:bg-white/[0.02]">
+                        <td className="px-3 py-2 text-center text-gray-500 font-mono">{i + 1}</td>
+                        <td className="px-4 py-2 text-white">{u.nickname || '—'}</td>
+                        <td className="px-4 py-2 text-right text-gray-300 font-mono">{u.packets_used?.toLocaleString()}</td>
+                        <td className="px-4 py-2 text-right text-gray-300 font-mono">{krw(u.paid_krw)}</td>
+                        <td className="px-4 py-2 text-gray-400 text-xs">{u.last_active?.split('T')[0] || '—'}</td>
+                        <td className="px-3 py-2 text-center">
+                          {u.is_test && <span className="px-1.5 py-0.5 text-[10px] rounded bg-purple-500/20 text-purple-400 font-bold">테스트</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function QualitySubTab() {
+  const [range, setRange] = useState('30d');
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    api.get(`/admin/stats/quality?range=${range}`)
+      .then(({ data: d }) => setData(d))
+      .catch(err => console.error(err))
+      .finally(() => setLoading(false));
+  }, [range]);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex gap-1.5">
+        {RANGE_CHIPS.map(c => (
+          <button key={c.key} onClick={() => setRange(c.key)}
+            className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
+              range === c.key ? 'bg-cyan-500 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10'
+            }`}>{c.label}</button>
+        ))}
+      </div>
+
+      {loading ? <div className="text-gray-400 py-12 text-center">로딩 중...</div> : !data ? <div className="text-red-400 py-12 text-center">로드 실패</div> : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <StatsCard label="평균 생성 시간" value={data.avg_generation_sec != null ? `${Number(data.avg_generation_sec).toFixed(1)}초` : '—'} />
+            <StatsCard label="카피 신고 건수" value={data.copy_report_count?.toLocaleString()} />
+          </div>
+
+          {/* Purpose quality table */}
+          {data.by_purpose?.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold text-gray-300 mb-2">용도별 품질</h3>
+              <div className="bg-[#1a1a2e] border border-white/10 rounded-xl overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-white/10 text-gray-400">
+                      <th className="text-left px-4 py-2 font-medium">용도</th>
+                      <th className="text-right px-4 py-2 font-medium">성공</th>
+                      <th className="text-right px-4 py-2 font-medium">실패</th>
+                      <th className="text-right px-4 py-2 font-medium">실패율</th>
+                      <th className="text-right px-4 py-2 font-medium">재생성율</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.by_purpose.map(r => (
+                      <tr key={r.purpose} className="border-b border-white/5 hover:bg-white/[0.02]">
+                        <td className="px-4 py-2 text-white">{r.purpose}</td>
+                        <td className="px-4 py-2 text-right text-green-400 font-mono">{r.success?.toLocaleString()}</td>
+                        <td className="px-4 py-2 text-right text-red-400 font-mono">{r.failure?.toLocaleString()}</td>
+                        <td className="px-4 py-2 text-right text-gray-300 font-mono">{pct(r.failure_rate)}</td>
+                        <td className="px-4 py-2 text-right text-gray-300 font-mono">{pct(r.regen_rate)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+const STATUS_CIRCLE = { ok: 'bg-green-500', warn: 'bg-yellow-500', fail: 'bg-red-500' };
+
+function StatusSubTab() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [runBusy, setRunBusy] = useState(false);
+
+  const fetchStatus = useCallback(() => {
+    setLoading(true);
+    api.get('/admin/stats/status')
+      .then(({ data: d }) => setData(d))
+      .catch(err => console.error(err))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { fetchStatus(); }, [fetchStatus]);
+
+  const handleRun = async () => {
+    setRunBusy(true);
+    try {
+      await api.post('/admin/stats/status/run');
+      fetchStatus();
+    } catch (err) {
+      alert('점검 실패: ' + (err.response?.data?.detail || err.message));
+    } finally {
+      setRunBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="text-xs text-gray-500">
+          {data?.last_run && `마지막 점검: ${new Date(data.last_run).toLocaleString('ko-KR')}`}
+        </div>
+        <button onClick={handleRun} disabled={runBusy || loading}
+          className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:bg-gray-700 text-white rounded-lg text-sm transition-colors">
+          {runBusy ? '점검 중...' : '지금 점검'}
+        </button>
+      </div>
+
+      {loading ? <div className="text-gray-400 py-12 text-center">로딩 중...</div> : !data ? <div className="text-red-400 py-12 text-center">로드 실패</div> : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {data.checks?.map((c, i) => (
+            <div key={c.key || i} className="bg-[#1a1a2e] border border-white/10 rounded-xl p-4 flex items-start gap-3">
+              <span className={`w-3 h-3 rounded-full shrink-0 mt-0.5 ${STATUS_CIRCLE[c.status] || 'bg-gray-500'}`} />
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold text-white">{c.key}</div>
+                <div className="text-lg font-bold text-white mt-0.5">{c.value ?? '—'}</div>
+                {c.detail && <div className="text-xs text-gray-400 mt-1 break-words">{c.detail}</div>}
+              </div>
+            </div>
+          ))}
+          {(!data.checks || data.checks.length === 0) && (
+            <p className="text-gray-500 text-sm col-span-full text-center py-8">점검 항목 없음</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatsTab() {
+  const [sub, setSub] = useState('money');
+
+  return (
+    <div>
+      <h2 className="text-xl font-bold text-white mb-6">운영 통계</h2>
+      {/* Sub-tab chips */}
+      <div className="flex gap-2 mb-6">
+        {STATS_SUB_TABS.map(t => (
+          <button key={t.key} onClick={() => setSub(t.key)}
+            className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+              sub === t.key ? 'bg-cyan-500/20 text-cyan-300 font-semibold' : 'text-gray-400 hover:bg-white/5'
+            }`}>{t.label}</button>
+        ))}
+      </div>
+      {sub === 'money' && <MoneySubTab />}
+      {sub === 'people' && <PeopleSubTab />}
+      {sub === 'quality' && <QualitySubTab />}
+      {sub === 'status' && <StatusSubTab />}
+    </div>
+  );
+}
+
 /* ── 메뉴 항목 ────────────────────────────────── */
 const NAV_ITEMS = [
   { to: '/admin', label: '대시보드', end: true },
   { to: '/admin/gallery', label: '갤러리' },
   { to: '/admin/packets', label: '패킷' },
+  { to: '/admin/stats', label: '통계' },
   { to: '/admin/notices', label: '공지' },
   { to: '/admin/products', label: '상품' },
   { to: '/admin/inquiries', label: '문의' },
@@ -1340,6 +1790,7 @@ export default function AdminPage() {
           <Route index element={<DashboardTab />} />
           <Route path="gallery" element={<GalleryTab />} />
           <Route path="packets" element={<PacketsTab />} />
+          <Route path="stats" element={<StatsTab />} />
           <Route path="notices" element={<NoticesTab />} />
           <Route path="products" element={<ProductsTab />} />
           <Route path="inquiries" element={<InquiriesTab />} />

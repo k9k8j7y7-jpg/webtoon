@@ -32,6 +32,7 @@ from app.packets.router import router as packets_router
 from app.payments.router import router as payments_router
 from app.showcase.router import router as showcase_router
 from app.admin.router import router as admin_router
+from app.admin.stats_router import router as admin_stats_router
 from app.products.router import router as products_router
 from app.inquiries.router import router as inquiries_router
 from app.social.router import router as social_router
@@ -79,6 +80,7 @@ app.include_router(packets_router, prefix=settings.API_V1_PREFIX)
 app.include_router(payments_router, prefix=settings.API_V1_PREFIX)
 app.include_router(showcase_router, prefix=settings.API_V1_PREFIX)
 app.include_router(admin_router, prefix=settings.API_V1_PREFIX)
+app.include_router(admin_stats_router, prefix=settings.API_V1_PREFIX)
 app.include_router(products_router, prefix=settings.API_V1_PREFIX)
 app.include_router(inquiries_router, prefix=settings.API_V1_PREFIX)
 app.include_router(social_router, prefix=settings.API_V1_PREFIX)

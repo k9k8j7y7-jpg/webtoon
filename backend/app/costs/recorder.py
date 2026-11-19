@@ -9,7 +9,7 @@
 import json
 import logging
 from contextvars import ContextVar
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 logger = logging.getLogger(__name__)
@@ -234,3 +234,70 @@ def record_api_call(
 
     except Exception as e:
         logger.warning("record_api_call outer error: %s", e)
+
+
+# ── Legacy cost estimation ──────────────────────────────────
+
+# Per-generation estimated costs (USD) for period before api_calls recording
+_LEGACY_COST = {
+    # kind, model_tier → USD
+    ("cut", "gpt"):       Decimal("0.068"),   # OpenAI image $0.067 + 2 vision $0.0005
+    ("cut", "flash"):     Decimal("0.034"),   # Gemini image $0.0336 + 2 vision $0.0005
+    ("character", None):  Decimal("0.072"),   # Gemini image x2 (front+expr) + text
+    ("location", None):   Decimal("0.037"),   # Gemini image + text
+    ("product", None):    Decimal("0.001"),   # Gemini vision only
+}
+
+
+def estimate_legacy_costs(db, date_from: date, date_to: date) -> dict:
+    """generation_logs 기반으로 api_calls 기록 이전 기간의 비용을 추정한다.
+
+    Returns {"total_usd", "total_krw", "count", "by_purpose", "estimated": True}
+    """
+    from sqlalchemy import text as sa_text
+
+    rows = db.execute(
+        sa_text(
+            "SELECT gl.kind, gl.model_tier, COUNT(*) AS cnt "
+            "FROM generation_logs gl "
+            "WHERE gl.created_at >= :dt_from AND gl.created_at < :dt_to "
+            "GROUP BY gl.kind, gl.model_tier"
+        ),
+        {"dt_from": datetime.combine(date_from, datetime.min.time()),
+         "dt_to": datetime.combine(date_to, datetime.min.time()) + timedelta(days=1)},
+    ).fetchall()
+
+    total_usd = Decimal("0")
+    total_count = 0
+    by_purpose: dict[str, dict] = {}
+
+    for kind, model_tier, cnt in rows:
+        # Look up cost: try (kind, model_tier) first, then (kind, None)
+        unit_cost = _LEGACY_COST.get((kind, model_tier))
+        if unit_cost is None:
+            unit_cost = _LEGACY_COST.get((kind, None), Decimal("0.034"))
+
+        cost = unit_cost * cnt
+        total_usd += cost
+        total_count += cnt
+
+        purpose_key = kind or "unknown"
+        if purpose_key not in by_purpose:
+            by_purpose[purpose_key] = {"count": 0, "usd": Decimal("0")}
+        by_purpose[purpose_key]["count"] += cnt
+        by_purpose[purpose_key]["usd"] += cost
+
+    # Exchange rate
+    rate = _ensure_exchange_rate(db)
+    total_krw = int(total_usd * rate)
+
+    return {
+        "total_usd": round(float(total_usd), 4),
+        "total_krw": total_krw,
+        "count": total_count,
+        "by_purpose": {
+            k: {"count": v["count"], "usd": round(float(v["usd"]), 4)}
+            for k, v in by_purpose.items()
+        },
+        "estimated": True,
+    }

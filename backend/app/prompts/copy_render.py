@@ -77,6 +77,7 @@ def check_copy_text(
     검사 자체 실패(타임아웃 등)면 head_ok=True, sub_ok=True 반환 (통과 처리).
     """
     try:
+        import time as _time
         from google.genai import types
         from app.adapters.gemini import get_client, AI_TOKENS_SHORT, parse_ai_json
 
@@ -89,6 +90,7 @@ def check_copy_text(
             "}. "
             "Compare character by character. A single wrong character means false. ONLY JSON."
         )
+        _t0 = _time.time()
         resp = client.models.generate_content(
             model="gemini-2.5-flash",
             contents=[
@@ -100,6 +102,17 @@ def check_copy_text(
                 max_output_tokens=AI_TOKENS_SHORT,
             ),
         )
+        _dur = int((_time.time() - _t0) * 1000)
+        try:
+            from app.costs.recorder import record_api_call
+            _u = {}
+            _usage = getattr(resp, "usage_metadata", None)
+            if _usage:
+                _u["tokens_in"] = getattr(_usage, "prompt_token_count", 0) or 0
+                _u["tokens_out"] = getattr(_usage, "candidates_token_count", 0) or 0
+            record_api_call(provider="gemini", model="gemini-2.5-flash", kind="vision", purpose="check", units=_u, duration_ms=_dur)
+        except Exception:
+            pass
         result = parse_ai_json(resp.text)
         return {
             "head_ok": bool(result.get("head_ok", True)),
@@ -120,6 +133,7 @@ def check_anatomy(image_bytes: bytes) -> dict:
     검사 실패(타임아웃 등)면 ok=True 반환 (통과 처리).
     """
     try:
+        import time as _time
         from google.genai import types
         from app.adapters.gemini import get_client, AI_TOKENS_SHORT, parse_ai_json
 
@@ -130,6 +144,7 @@ def check_anatomy(image_bytes: bytes) -> dict:
             'Return JSON only: {"hands": <int>, "arms": <int>}. '
             "ONLY JSON, no other text."
         )
+        _t0 = _time.time()
         resp = client.models.generate_content(
             model="gemini-2.5-flash",
             contents=[
@@ -141,6 +156,17 @@ def check_anatomy(image_bytes: bytes) -> dict:
                 max_output_tokens=AI_TOKENS_SHORT,
             ),
         )
+        _dur = int((_time.time() - _t0) * 1000)
+        try:
+            from app.costs.recorder import record_api_call
+            _u = {}
+            _usage = getattr(resp, "usage_metadata", None)
+            if _usage:
+                _u["tokens_in"] = getattr(_usage, "prompt_token_count", 0) or 0
+                _u["tokens_out"] = getattr(_usage, "candidates_token_count", 0) or 0
+            record_api_call(provider="gemini", model="gemini-2.5-flash", kind="vision", purpose="check", units=_u, duration_ms=_dur)
+        except Exception:
+            pass
         result = parse_ai_json(resp.text)
         hands = int(result.get("hands", 2))
         arms = int(result.get("arms", 2))
