@@ -9,6 +9,17 @@ import { PAGE_FORMATS, FORMAT_KEYS } from '../../utils/pageFormats';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
 
+// (102) 그림체 키 → 한글 라벨
+const STYLE_LABEL_KO = {
+  korean_webtoon: '한국 웹툰체', romance: '순정/로맨스체', sd_gag: 'SD/개그체',
+  kakao_webtoon: '카카오웹툰풍', action_shonen: '소년만화', semi_realistic: '반실사',
+  anime: '애니메이션풍', watercolor: '수채화', pixel_art: '픽셀아트',
+  fantasy_rpg: '판타지 RPG', cyberpunk: '네온 사이버펑크', storybook: '그림책풍',
+  emotional_romance: '감성로맨스', marvel: '마블풍', western_fantasy: '서양판타지',
+  bw_manga: '흑백 만화',
+};
+const styleKo = (key) => STYLE_LABEL_KO[key] || key?.replace(/_/g, ' ') || '';
+
 export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatus }) {
   const [characters, setCharacters] = useState([]);
   const [locations, setLocations] = useState([]);
@@ -926,7 +937,14 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
         setMappingChoice(data.candidates[0] || '');
         return;
       }
-      const charName = (pickerTab === 'library' ? libraryChars : pickerTab === 'preset' ? presetChars : projectChars).find(c => c.id === characterId)?.name || '';
+      const pickedChar = (pickerTab === 'library' ? libraryChars : pickerTab === 'preset' ? presetChars : projectChars).find(c => c.id === characterId);
+      const charName = pickedChar?.name || '';
+      // (101) 이름이 같으면 출처(프로젝트명 또는 그림체) 붙이기
+      const charLabel = (() => {
+        if (!charName) return '';
+        const source = pickedChar?.project_title || styleKo(pickedChar?.style);
+        return source ? `${charName}(${source})` : charName;
+      })();
       setShowPicker(false);
       setMappingState(null);
       setReplaceState(null);
@@ -934,12 +952,12 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
       await loadAssets();
       // (99) "A → B로 바꿨어요" 토스트
       if (data.style_warning) {
-        setToast(`${charName || '캐릭터'} 연결됨 — ${data.style_warning}`);
-        setTimeout(() => setToast(''), 3000);
+        setToast(`${charLabel || '캐릭터'} 연결됨 — ${data.style_warning}`);
+        setTimeout(() => setToast(''), 4000);
       } else if (charName) {
         const prev = prevCharNames.length === 1 ? prevCharNames[0] : '';
-        setToast(prev ? `${prev} → ${charName}(으)로 바꿨어요` : `${charName}(으)로 바꿨어요`);
-        setTimeout(() => setToast(''), 3000);
+        setToast(prev ? `${prev} → ${charLabel}(으)로 바꿨어요` : `${charLabel}(으)로 바꿨어요`);
+        setTimeout(() => setToast(''), 4000);
       }
     } catch (err) {
       if (err.response?.status === 409 && isAdPurpose) {
@@ -1921,9 +1939,12 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
                 {!c.is_photo_real && c.images && c.images.length > 0 && (() => {
                   const LABEL_MAP = { '정면': '정면', 'expressions': '표정 시트', 'smile': '😊', 'angry': '😠', 'front': '정면' };
                   const displayLabel = (img) => LABEL_MAP[img.label] || LABEL_MAP[img.type] || img.label || img.type;
+                  // (103) 정면 → 표정 시트 순서 보장
+                  const IMG_ORDER = { front: 0, '정면': 0, expressions: 1 };
+                  const sorted = [...c.images].sort((a, b) => (IMG_ORDER[a.type] ?? 9) - (IMG_ORDER[b.type] ?? 9));
                   return (
                     <div className="flex gap-2 mt-2 overflow-x-auto">
-                      {c.images.map((img, idx) => (
+                      {sorted.map((img, idx) => (
                         <div key={idx} className="flex-shrink-0 cursor-pointer" onClick={() => setLightbox({ url: imageUrl(img.url), label: `${c.name} — ${displayLabel(img)}` })}>
                           <img
                             src={imageUrl(img.url)}
@@ -2171,9 +2192,9 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
         </div>
       )}
 
-      {/* 토스트 */}
+      {/* 토스트 — z-[80]: 모달(z-50) 위에 표시 */}
       {toast && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[70] px-5 py-2.5 bg-green-600 text-white text-sm font-bold rounded-full shadow-lg animate-pulse">
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[80] px-5 py-2.5 bg-green-600 text-white text-sm font-bold rounded-full shadow-lg animate-pulse pointer-events-none">
           {toast}
         </div>
       )}
@@ -2226,7 +2247,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
                   그림체가 조금 달라질 수 있어요
                 </p>
                 <p className="text-xs text-orange-600 dark:text-orange-400 mb-3">
-                  현재 스타일과 다른 그림체({styleConfirm.charStyle})로 만든 캐릭터입니다.
+                  현재 스타일과 다른 그림체({styleKo(styleConfirm.charStyle)})로 만든 캐릭터입니다.
                 </p>
                 <div className="flex gap-2">
                   <button onClick={() => setStyleConfirm(null)} className="px-3 py-1.5 text-xs font-bold text-gray-500 dark:text-gray-400 border border-border dark:border-zinc-700 rounded-lg">취소</button>
@@ -2372,7 +2393,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
                               <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">프리셋</span>
                             )}
                             {c.style && (
-                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-500 dark:bg-purple-900/20 dark:text-purple-400">{c.style.replace(/_/g, ' ')}</span>
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-500 dark:bg-purple-900/20 dark:text-purple-400">{styleKo(c.style)}</span>
                             )}
                           </div>
                           {pickerTab === 'library' && c.project_title && (

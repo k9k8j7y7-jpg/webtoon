@@ -8,7 +8,7 @@
 import { X, Download, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 
 export default function ExportProgressModal({ state, done, total, format, error, onCancel, onRetry, onClose }) {
-  const formatLabel = { png_cuts: 'PNG ZIP', vertical_single: '세로 PNG', instagram_carousel: '인스타 ZIP' }[format] || format;
+  const formatLabel = { png_cuts: 'PNG 묶음', vertical_single: '세로 1장', instagram_carousel: '인스타 정사각', a4_grid: 'A4 인쇄용', a4_single: 'A4 인쇄용' }[format] || format;
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
 
   // 예상 시간 (컷당 약 1.2초 기준)
@@ -74,7 +74,7 @@ export default function ExportProgressModal({ state, done, total, format, error,
               <p className="font-bold text-sm">완성! 다운로드가 시작됩니다 🎉</p>
             </div>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              총 {total}컷이 {formatLabel}으로 저장되었어요.
+              총 {total}컷이 {formatLabel}(으)로 저장되었어요.
             </p>
             <button
               onClick={onClose}

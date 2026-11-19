@@ -297,6 +297,16 @@ async def generate_script(
                 )
                 result = await _generate_and_parse()
 
+    # (112b) 광고 대본 — 대사 텍스트에서 "ref_key: " 접두 제거
+    if is_ad:
+        import re
+        _ref_pat = re.compile(r"^[\w_]+:\s*")
+        for _s in result.get("scenes", []):
+            for _c in _s.get("cuts", []):
+                for _d in _c.get("dialogue", []):
+                    if _d.get("text"):
+                        _d["text"] = _ref_pat.sub("", _d["text"])
+
     return result
 
 

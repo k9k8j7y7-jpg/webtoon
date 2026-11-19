@@ -11,7 +11,7 @@ import { Check, Lock, AlertTriangle, Pencil, ChevronDown, ArrowRight } from 'luc
 const STEPS_DEFAULT = [
   { n: 1, key: '1_planning',    name: '기획',     desc: '아이디어와 등장인물을 정리해요', gates: [1] },
   { n: 2, key: '2_script',      name: '대본',     desc: '컷별 대사와 장면을 만들어요', gates: [2] },
-  { n: 3, key: '3_assets',      name: '자산 준비', desc: '캐릭터 시트·장소·스타일을 정해요', gates: [3] },
+  { n: 3, key: '3_assets',      name: '준비', desc: '캐릭터 시트·장소·스타일을 정해요', gates: [3] },
   { n: 4, key: '4_storyboard',  name: '콘티·장소', desc: '컷 구성과 말풍선 배치를 확인해요', gates: [4] },
   { n: 5, key: '5_review',      name: '웹툰 만들기', desc: '컷을 생성하고 공개·내보내요', gates: [5] },
 ];

@@ -30,4 +30,5 @@ def get_active_notice(db: Session = Depends(get_db)):
         "title": notice.title,
         "body": notice.body,
         "notice_type": notice.notice_type,
+        "created_at": notice.created_at.isoformat() if notice.created_at else None,
     }

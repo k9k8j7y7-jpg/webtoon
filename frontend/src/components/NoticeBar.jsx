@@ -25,6 +25,11 @@ export default function NoticeBar() {
       if (!data) return;
       const dismissedId = localStorage.getItem('dismissed_notice_id');
       if (dismissedId === String(data.id)) return;
+      // (111) 시행일 + 30일 경과 자동 숨김
+      if (data.created_at) {
+        const age = Date.now() - new Date(data.created_at).getTime();
+        if (age > 30 * 24 * 60 * 60 * 1000) return;
+      }
       setNotice(data);
     }).catch(() => {});
   }, []);

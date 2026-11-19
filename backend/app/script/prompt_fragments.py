@@ -130,6 +130,7 @@ AD_SCRIPT_INSTRUCTION_ADDON = """
   {"type": "narration", "speaker": null, "text": "헤드카피", "bubble_style": "headcopy"}
   {"type": "narration", "speaker": null, "text": "서브카피", "bubble_style": "box"}
 - 한 컷에 손 동작은 하나만(제품 들기 vs 머리 만지기 중 택1). 제품 든 컷은 나머지 손은 자연스럽게 내려놓거나 몸 옆에.
+- dialogue의 text 필드에 화자 이름 접두("model: ", "주인공: " 등)를 절대 넣지 마라. text는 순수 대사/나레이션 본문만.
 """
 
 # 인스타툰 광고 컷 수별 구조 — target_cuts로 분기
@@ -368,4 +369,5 @@ ONECUT_AD_SYSTEM_INSTRUCTION = """너는 SNS 한 컷 광고 대본 작가야.
 - speech 타입 말풍선은 선택 (있으면 1개, 없어도 됨)
 - shot 값: long | full | bust | close_up 중 택1
 - character_id는 기획안 등장인물의 ref_key를 그대로 사용
+- dialogue의 text에 화자 이름 접두("model: " 등)를 넣지 마라. text는 순수 본문만.
 """

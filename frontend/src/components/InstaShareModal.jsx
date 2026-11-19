@@ -99,10 +99,11 @@ function sanitizeFilename(str) {
 }
 
 // ── 기본 캡션 생성 ──
-function buildDefaultCaption({ episodeTitle, nickname, shareUrl, isPublic }) {
+function buildDefaultCaption({ episodeTitle, nickname, shareUrl, isPublic, purpose }) {
+  const genre = ['onecut_ad', 'instatoon_ad', 'brand_series', 'detail_page'].includes(purpose) ? '광고툰' : '웹툰';
   const lines = [
-    episodeTitle || '웹툰',
-    `by ${nickname || '작가'} · EziToon으로 만든 웹툰`,
+    episodeTitle || genre,
+    `by ${nickname || '작가'} · EziToon으로 만든 ${genre}`,
   ];
   if (isPublic && shareUrl) lines.push(shareUrl);
   lines.push('#EziToon #이지툰 #AI웹툰');
@@ -128,6 +129,7 @@ export default function InstaShareModal({
   onZipDownload,
   motionVideoUrls, // [{cut_number, url}] — selected motion mp4 URLs
   reelPath, // string | null — 릴스 mp4 URL
+  purpose, // episode purpose for caption
 }) {
   // ── 렌더링 상태 ──
   const [renderState, setRenderState] = useState('idle'); // idle | rendering | done | error
@@ -141,6 +143,7 @@ export default function InstaShareModal({
   const [copyState, setCopyState] = useState('idle'); // idle | copied
   const [linkCopyState, setLinkCopyState] = useState('idle');
   const [shareError, setShareError] = useState(null);
+  const [pcToast, setPcToast] = useState('');
 
   // ── 페이지/컷별 토글 ──
   const hasPageFormat = !!(pageFormat && pageFormat.per_page);
@@ -266,7 +269,7 @@ export default function InstaShareModal({
   // ── open 시 초기화 + 렌더 시작 ──
   useEffect(() => {
     if (!open) return;
-    setCaption(buildDefaultCaption({ episodeTitle, nickname, shareUrl, isPublic }));
+    setCaption(buildDefaultCaption({ episodeTitle, nickname, shareUrl, isPublic, purpose }));
     setCopyState('idle');
     setLinkCopyState('idle');
     setShareError(null);
@@ -538,24 +541,54 @@ export default function InstaShareModal({
             </button>
           )}
 
-          {/* 미지원(PC) 모드 — 피드 안내 없음 */}
+          {/* 미지원(PC) 모드 — 이미지 저장 + 캡션 복사 */}
           {!isShareSupported && (
             <div className="space-y-3">
-              <div className="bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 rounded-xl p-3">
-                <p className="text-xs text-zinc-600 dark:text-zinc-300 leading-relaxed">
-                  폰에서 ssagda.com/WEBTOON을 열고 같은 버튼을 누르면 인스타로 바로 보낼 수 있어요.
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <button onPointerDown={handleCopyLink} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
-                  {linkCopyState === 'copied' ? <><Check size={13} className="text-emerald-500" /> 복사됨 ✓</> : <><Copy size={13} /> 링크 복사</>}
+              <button
+                onClick={async () => {
+                  try {
+                    // 이미지 다운로드
+                    const file = filesRef.current?.[0];
+                    if (file) {
+                      const url = URL.createObjectURL(file);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = file.name || 'ezitoon.jpg';
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      setTimeout(() => URL.revokeObjectURL(url), 5000);
+                    }
+                    // 캡션 복사
+                    if (caption) {
+                      await navigator.clipboard.writeText(caption);
+                    }
+                    setPcToast('이미지 저장 · 캡션 복사 완료');
+                    setTimeout(() => setPcToast(''), 3000);
+                  } catch {
+                    setPcToast('저장에 실패했어요');
+                    setTimeout(() => setPcToast(''), 3000);
+                  }
+                }}
+                disabled={renderState !== 'done' || !filesRef.current?.length}
+                className={`neon-btn w-full py-3 text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2 ${renderState === 'done' && filesRef.current?.length ? 'opacity-100 hover:-translate-y-0.5 active:scale-95' : 'opacity-50 cursor-not-allowed'}`}
+              >
+                <Download size={16} />
+                {renderState === 'rendering' ? '이미지 준비 중…' : '이미지 저장 + 캡션 복사'}
+              </button>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 text-center leading-relaxed">
+                PC에서는 공유창이 안 떠요. 저장한 이미지를 인스타 앱에서 올리고 캡션을 붙여 넣어요.
+              </p>
+              {onZipDownload && (
+                <button onPointerDown={onZipDownload} className="w-full flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
+                  <Download size={13} /> ZIP 받기
                 </button>
-                {onZipDownload && (
-                  <button onPointerDown={onZipDownload} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold rounded-xl neon-btn transition-all hover:-translate-y-0.5">
-                    <Download size={13} /> ZIP 받기
-                  </button>
-                )}
-              </div>
+              )}
+              {pcToast && (
+                <div className="text-center text-xs font-bold text-emerald-500 dark:text-emerald-400 animate-pulse">
+                  {pcToast}
+                </div>
+              )}
             </div>
           )}
 

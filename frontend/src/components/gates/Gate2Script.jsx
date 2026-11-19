@@ -22,6 +22,7 @@ export default function Gate2Script({ projectId, episodeId, onRefresh, readOnly 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [toneGenerating, setToneGenerating] = useState(false);
+  const [charNameMap, setCharNameMap] = useState({});
 
   const isInvalidated = gateStatus?.gates?.['2_script']?.status === 'invalidated';
   const purpose = gateStatus?.purpose || 'story';
@@ -33,6 +34,15 @@ export default function Gate2Script({ projectId, episodeId, onRefresh, readOnly 
   const loadScript = async () => {
     const { data } = await api.get(`/projects/${projectId}/episodes/${episodeId}/script`);
     if (data) setScript(data);
+    // (112a) ref_key → 한글 이름 매핑
+    try {
+      const { data: plan } = await api.get(`/projects/${projectId}/episodes/${episodeId}/planning`);
+      if (plan?.characters) {
+        const m = {};
+        plan.characters.forEach(c => { m[c.ref_key] = c.name || c.ref_key; });
+        setCharNameMap(m);
+      }
+    } catch {}
   };
 
   const { loading, error: loadError, retry: retryLoad } = useGateLoad(loadScript);
@@ -207,7 +217,10 @@ export default function Gate2Script({ projectId, episodeId, onRefresh, readOnly 
                   })()}
                   <span>{SHOT_LABELS[cut.shot] || cut.shot}</span>
                   <span>·</span>
-                  <span>{cut.characters?.map(c => typeof c === 'string' ? c : c.character_id).join(', ')}</span>
+                  <span>{cut.characters?.map(c => {
+                      const key = typeof c === 'string' ? c : c.character_id;
+                      return charNameMap[key] || key;
+                    }).join(', ')}</span>
                   {editEnabled && (
                     <button
                       onClick={() => openEdit(sceneIdx, cutIdx)}
@@ -223,7 +236,7 @@ export default function Gate2Script({ projectId, episodeId, onRefresh, readOnly 
                     <span className="not-italic text-[10px] font-bold bg-gray-100 dark:bg-zinc-800 text-gray-500 dark:text-gray-400 px-1 py-0.5 rounded mr-1">
                       {DIALOGUE_TYPE_LABELS[d.type] || d.type}
                     </span>
-                    {d.speaker ? `${d.speaker}: ` : ''}{d.text}
+                    {d.speaker ? `${charNameMap[d.speaker] || d.speaker}: ` : ''}{d.text?.replace(/^[\w_]+:\s*/, '')}
                   </p>
                 ))}
                 {cut.kind === 'explain' && cut.labels?.length > 0 && (
@@ -319,7 +332,7 @@ export default function Gate2Script({ projectId, episodeId, onRefresh, readOnly 
           disabled={approving}
           className="flex items-center gap-1.5 px-5 py-2.5 bg-green-600 dark:bg-green-600 text-white rounded-full text-sm font-bold hover:bg-green-700 hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50"
         >
-          <Check size={14} /> {approving ? '승인 중...' : '승인하고 STEP 3 자산 준비로 →'}
+          <Check size={14} /> {approving ? '승인 중...' : '승인하고 준비로 →'}
         </button>
       )}
     </div>

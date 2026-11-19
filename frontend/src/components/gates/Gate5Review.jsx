@@ -12,7 +12,7 @@ import CutEditor from '../CutEditor';
 import SfxLayer from '../SfxLayer';
 import EffectLayer from '../EffectLayer';
 import ProductLayer from '../ProductLayer';
-import { locationName, locationOptionLabel, characterName } from '../../utils/refNames';
+import { locationName, characterName } from '../../utils/refNames';
 import PngBubbleLayer from '../PngBubbleLayer';
 import ExportProgressModal from '../ExportProgressModal';
 import { exportAsPNGZip, exportAsVertical, exportAsInstagram, exportAsA4Single, exportAsA4Grid } from '../../utils/exportRenderer';
@@ -119,6 +119,9 @@ function CutImageWithBubbles({ cut, imageUrl, onZoom, products, aspectRatio, res
       >
         <ZoomIn size={28} className="text-white opacity-0 group-hover/img:opacity-100 transition-opacity drop-shadow-lg" />
       </button>
+      <div className="absolute bottom-1.5 right-1.5 p-1 bg-black/50 rounded-full pointer-events-none">
+        <ZoomIn size={14} className="text-white" />
+      </div>
       {cut.status === 'invalidated' && (
         <div className="absolute inset-0 flex items-center justify-center bg-amber-900/20 pointer-events-none">
           <span className="bg-amber-500 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1 font-bold">
@@ -232,6 +235,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
   const [reelDropdown, setReelDropdown] = useState(false);
   const [reelPreview, setReelPreview] = useState(false); // 미리보기 모달
   const [motionToast, setMotionToast] = useState(''); // 모션 조건 미충족 토스트
+  const [toastMsg, setToastMsg] = useState(''); // 일반 토스트
 
   const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
 
@@ -428,7 +432,8 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
         const ext = (format === 'vertical_single' || format === 'a4_single') ? 'png'
           : (format === 'a4_grid' && cuts.filter(c => c.image_url).length <= 12) ? 'png'
           : 'zip';
-        const filename = `episode_${episodeId}_${format}.${ext}`;
+        const isOnecut = gateStatus?.purpose === 'onecut_ad';
+        const filename = isOnecut ? `${safeTitle}.${ext}` : `${safeTitle}_${FORMAT_SUFFIX[format] || format}.${ext}`;
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -639,6 +644,8 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
 
   const pendingCuts = cuts.filter(c => c.status === 'pending' || c.status === 'invalidated');
   const hasImages = cuts.some(c => c.image_url);
+  const safeTitle = (epMeta?.title || '').replace(/[^\w가-힣\s\-]/g, '').replace(/\s+/g, '_').slice(0, 40) || `이지툰_작품${projectId}`;
+  const FORMAT_SUFFIX = { png_cuts: 'PNG', vertical_single: '세로', instagram_carousel: '인스타', a4_grid: 'A4', a4_single: 'A4' };
 
   // ── 모션 헬퍼 ──
   const getMotion = (cut) => cut.motion || (cut.spec?.motion) || {};
@@ -759,8 +766,8 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                 </span>
               </div>
             )}
-            {/* 페이지 미리보기 토글 (vertical이 아닐 때만) */}
-            {hasImages && (() => {
+            {/* 페이지 미리보기 토글 (vertical이 아닐 때만, onecut_ad 제외) */}
+            {hasImages && gateStatus?.purpose !== 'onecut_ad' && (() => {
               const pf = gateStatus?.page_format || 'vertical';
               const fmt = PAGE_FORMATS[pf];
               if (!fmt || !fmt.per_page) return null;
@@ -777,7 +784,143 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                 </button>
               );
             })()}
-            {hasImages && (
+            {/* onecut_ad: 4버튼 (이미지 저장 / 인스타 공유 / 움직이게·MP4 / 릴스) */}
+            {hasImages && gateStatus?.purpose === 'onecut_ad' && (
+              <div className="flex flex-wrap gap-2 sm:gap-1">
+                {/* 1. 이미지 저장 (single PNG) */}
+                <button
+                  onClick={() => handleExport('vertical_single')}
+                  disabled={exporting}
+                  className="flex items-center gap-1 h-10 sm:h-auto px-3 py-2 bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-gray-300 rounded-full text-xs font-bold whitespace-nowrap hover:bg-gray-200 dark:hover:bg-white/20 transition-colors shadow-sm disabled:opacity-50 dark:border dark:border-white/10"
+                >
+                  <Download size={12} /> 이미지 저장
+                </button>
+                {/* 2. 인스타 공유 */}
+                <button
+                  onClick={() => setInstaShareOpen(true)}
+                  disabled={exporting}
+                  className="flex items-center gap-1 h-10 sm:h-auto px-3 py-2 bg-gradient-to-r from-purple-500/20 to-pink-500/20 dark:from-purple-500/30 dark:to-pink-500/30 text-purple-700 dark:text-purple-300 rounded-full text-xs font-bold whitespace-nowrap hover:from-purple-500/30 hover:to-pink-500/30 dark:hover:from-purple-500/40 dark:hover:to-pink-500/40 transition-colors shadow-sm disabled:opacity-50 border border-purple-200 dark:border-purple-500/30"
+                >
+                  <Share2 size={12} /> 인스타 공유
+                </button>
+                {/* 3. 움직이게 / MP4 저장 */}
+                {(() => {
+                  const cut0 = cuts[0];
+                  const motion0 = cut0 ? getMotion(cut0) : {};
+                  const hasSelectedMotion = !!motion0.selected;
+                  if (hasSelectedMotion) {
+                    return (
+                      <button
+                        onClick={async () => {
+                          try {
+                            const { data } = await api.get(`/cuts/${cut0.cut_id}/motion/export`);
+                            const url = data.video_url ? imageUrl(data.video_url) : null;
+                            if (!url) return;
+                            const resp = await fetch(url);
+                            const blob = await resp.blob();
+                            const a = document.createElement('a');
+                            a.href = URL.createObjectURL(blob);
+                            a.download = `${safeTitle}_컷${cut0.cut_number}.mp4`;
+                            a.click();
+                            URL.revokeObjectURL(a.href);
+                          } catch { /* skip */ }
+                        }}
+                        className="flex items-center gap-1 h-10 sm:h-auto px-3 py-2 bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 rounded-full text-xs font-bold whitespace-nowrap hover:bg-violet-100 dark:hover:bg-violet-900/30 transition-colors shadow-sm border border-violet-200 dark:border-violet-500/30"
+                      >
+                        <Film size={12} /> MP4 저장
+                      </button>
+                    );
+                  }
+                  return (
+                    <button
+                      onClick={() => { if (cut0) setMotionModalCut(cut0); }}
+                      className="flex items-center gap-1 h-10 sm:h-auto px-3 py-2 bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 rounded-full text-xs font-bold whitespace-nowrap hover:bg-violet-100 dark:hover:bg-violet-900/30 transition-colors shadow-sm border border-violet-200 dark:border-violet-500/30"
+                    >
+                      <Film size={12} /> 움직이게 · 4패킷
+                    </button>
+                  );
+                })()}
+                {/* 4. 릴스 영상 */}
+                {(() => {
+                  const rs = reelStatus?.status;
+                  const isRunning = rs === 'queued' || rs === 'running' || !!reelJob;
+                  const isDone = rs === 'done';
+                  const isStale = reelStatus?.is_stale;
+                  if (isRunning) {
+                    return (
+                      <span className="flex items-center gap-1 h-10 sm:h-auto px-3 py-2 text-xs font-bold text-rose-500 dark:text-rose-400 animate-pulse">
+                        <span className="animate-spin"><Clapperboard size={12} /></span> 릴스 만드는 중…
+                      </span>
+                    );
+                  }
+                  if (isDone) {
+                    return (
+                      <>
+                        <button
+                          data-reel-btn
+                          onClick={() => { setReelDropdown(!reelDropdown); }}
+                          className="flex items-center gap-1 h-10 sm:h-auto px-3 py-2 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-full text-xs font-bold whitespace-nowrap hover:bg-rose-100 dark:hover:bg-rose-900/30 transition-colors shadow-sm border border-rose-200 dark:border-rose-500/30"
+                          title={isStale ? '컷이 바뀌었어요 — 다시 만들기' : undefined}
+                        >
+                          <span className="relative shrink-0">
+                            <Clapperboard size={12} />
+                            {isStale && <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-500" />}
+                          </span>
+                          릴스 영상
+                          <ChevronDown data-reel-chevron size={10} className="shrink-0" />
+                        </button>
+                        {reelDropdown && createPortal(
+                          <div className="fixed inset-0 z-[60]" onClick={() => setReelDropdown(false)}>
+                            <div className="fixed z-[60] bg-white dark:bg-zinc-800 border-2 border-border dark:border-zinc-600 rounded-xl shadow-lg p-2 w-52"
+                              style={{ top: 'min(50%, 400px)', right: '1rem' }} onClick={e => e.stopPropagation()}>
+                              {isStale && <p className="px-3 py-1.5 text-[11px] text-gray-400 dark:text-gray-500 leading-snug">컷이 바뀌었어요 — 다시 만들면 최신 컷으로 만들어요</p>}
+                              <button onClick={() => { setReelDropdown(false); setReelPreview(true); }}
+                                className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-700 flex items-center gap-2">
+                                <Play size={14} /> 미리보기
+                              </button>
+                              <button onClick={async () => {
+                                setReelDropdown(false);
+                                if (!reelStatus?.path) return;
+                                const resp = await fetch(imageUrl(reelStatus.path));
+                                const blob = await resp.blob();
+                                const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+                                a.download = 'reel.mp4'; a.click(); URL.revokeObjectURL(a.href);
+                              }} className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-700 flex items-center gap-2">
+                                <Download size={14} /> 받기 (MP4)
+                              </button>
+                              <button onClick={() => { setReelDropdown(false); setInstaShareOpen(true); }}
+                                className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-700 flex items-center gap-2">
+                                <Share2 size={14} /> 인스타 공유
+                              </button>
+                              <button onClick={() => { setReelDropdown(false); setReelModalOpen(true); }}
+                                className="w-full text-left px-3 py-2 text-sm text-rose-500 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-900/20 flex items-center gap-2">
+                                <RefreshCw size={14} /> 다시 만들기 (1패킷)
+                              </button>
+                              <button onClick={() => { setReelDropdown(false); handleReelDelete(); }}
+                                className="w-full text-left px-3 py-2 text-sm text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2">
+                                <Trash2 size={14} /> 삭제
+                              </button>
+                            </div>
+                          </div>,
+                          document.body
+                        )}
+                      </>
+                    );
+                  }
+                  return (
+                    <button
+                      onClick={() => setReelModalOpen(true)}
+                      disabled={!hasImages}
+                      className="flex items-center gap-1 h-10 sm:h-auto px-3 py-2 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-full text-xs font-bold whitespace-nowrap hover:bg-rose-100 dark:hover:bg-rose-900/30 transition-colors shadow-sm border border-rose-200 dark:border-rose-500/30 disabled:opacity-50"
+                    >
+                      <Clapperboard size={12} /> 릴스 영상
+                    </button>
+                  );
+                })()}
+              </div>
+            )}
+            {/* 기존 버튼 (non-onecut_ad) */}
+            {hasImages && gateStatus?.purpose !== 'onecut_ad' && (
               <div className="flex flex-wrap gap-2 sm:gap-1">
                 <button
                   onClick={() => handleExport('vertical_single')}
@@ -821,7 +964,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                           const blob = await resp.blob();
                           const a = document.createElement('a');
                           a.href = URL.createObjectURL(blob);
-                          a.download = `cut_${c.cut_number}.mp4`;
+                          a.download = `${safeTitle}_컷${c.cut_number}.mp4`;
                           a.click();
                           URL.revokeObjectURL(a.href);
                           if (motionCuts.length > 1) await new Promise(r => setTimeout(r, 300));
@@ -1301,9 +1444,9 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                           setError('');
                           const { data } = await api.post(`/cuts/${cut.cut_id}/copy-report`);
                           if (data.ok) {
-                            alert('글자는 정확해요. 다른 이유면 다시 그리기(1패킷)로 새로 만들어 보세요!');
+                            setToastMsg('글자는 정확해요. 다른 이유면 다시 그리기(1패킷)로 새로 만들어 보세요!'); setTimeout(() => setToastMsg(''), 4000);
                           } else {
-                            alert('글자 오류 확인 — 패킷을 돌려드리고 다시 그려요');
+                            setToastMsg('신고 완료, 패킷을 돌려드렸어요'); setTimeout(() => setToastMsg(''), 4000);
                             if (data.job_id) {
                               setJob({ job_id: data.job_id, status: 'processing', progress: { done: 0, total: 1 } });
                               await pollJob(data.job_id, setJob);
@@ -1315,7 +1458,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                           }
                         } catch (err) {
                           const msg = err.response?.data?.detail || '검사에 실패했어요';
-                          alert(msg);
+                          setToastMsg(msg); setTimeout(() => setToastMsg(''), 4000);
                         }
                       }}
                       className="text-indigo-500 dark:text-indigo-400 hover:underline font-bold"
@@ -1558,7 +1701,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
               >
                 <option value="">장소 없음</option>
                 {episodeLocations.map(l => (
-                  <option key={l.ref_key} value={l.ref_key}>{locationOptionLabel(l.ref_key, l.name)}</option>
+                  <option key={l.ref_key} value={l.ref_key}>{l.name || l.ref_key}</option>
                 ))}
               </select>
             </div>
@@ -1597,7 +1740,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                         : 'bg-gray-100 dark:bg-zinc-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-zinc-600'
                     }`}
                   >
-                    {c.name} <span className="opacity-50 text-[10px]">({c.ref_key})</span>
+                    {c.name || c.ref_key}
                   </button>
                 ))}
                 {/* 알 수 없는 ref_key (에피소드 캐릭터에 없는 키) */}
@@ -1718,7 +1861,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 text-xs text-comic-blue hover:underline mb-4"
             >
-              <ExternalLink size={12} /> 콘티 전체 보기 (게이트 4)
+              <ExternalLink size={12} /> 콘티 전체 보기
             </a>
 
             {/* 버튼 */}
@@ -1737,11 +1880,15 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
                 <Save size={14} /> 저장만
               </button>
               <button
-                onClick={() => saveStoryboard(true)}
+                onClick={() => {
+                  const pkt = gateStatus?.purpose === 'detail_page' ? 2 : 1;
+                  if (!window.confirm(`${pkt}패킷을 사용합니다. 계속할까요?`)) return;
+                  saveStoryboard(true);
+                }}
                 disabled={savingStoryboard || !!job}
                 className="flex items-center gap-1 px-4 py-2 bg-amber-500 text-white rounded-full text-sm font-bold hover:bg-amber-600 hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50"
               >
-                <RefreshCw size={14} /> {savingStoryboard ? '처리 중...' : '저장 후 재생성'}
+                <RefreshCw size={14} /> {savingStoryboard ? '처리 중...' : `저장 후 다시 그리기 · ${gateStatus?.purpose === 'detail_page' ? 2 : 1}패킷`}
               </button>
             </div>
           </div>
@@ -1761,6 +1908,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
             characters={cut.characters || []}
             charNameMap={charNameMap}
             purpose={gateStatus?.purpose}
+            initialMode="edit"
             onClose={() => setEditCutIndex(null)}
             onSave={async () => {
               setCacheBuster(Date.now());
@@ -1868,6 +2016,14 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
         document.body
       )}
 
+      {/* 일반 토스트 */}
+      {toastMsg && createPortal(
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[70] bg-ink-black dark:bg-white text-white dark:text-ink-black px-5 py-2.5 rounded-full text-sm font-bold shadow-lg animate-slide-up max-w-xs text-center">
+          {toastMsg}
+        </div>,
+        document.body
+      )}
+
       {/* 모션 피커 */}
       {motionPickerCut && (
         <MotionPicker
@@ -1901,6 +2057,7 @@ export default function Gate5Review({ projectId, episodeId, onRefresh, gateStatu
           return url ? { cut_number: c.cut_number, url: imageUrl(url), cut_id: c.cut_id } : null;
         }).filter(Boolean)}
         reelPath={reelStatus?.status === 'done' && reelStatus?.path ? imageUrl(reelStatus.path) : null}
+        purpose={gateStatus?.purpose}
       />
     </div>
   );
