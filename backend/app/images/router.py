@@ -15,6 +15,7 @@ from app.images.service import generate_all_cuts, generate_cut_image
 from app.jobs import create_job, run_job_in_background
 from app.workflow.gate import get_gate_number, get_purpose
 from app.packets.service import require_packets
+from app.costs.recorder import set_api_purpose, set_api_user, set_api_episode
 
 router = APIRouter(tags=["gate5-images"])
 
@@ -54,6 +55,11 @@ async def generate_images(
 ):
     """승인된 컷 명세 → 이미지 일괄 생성. 비동기."""
     episode = _get_episode_for_user(db, project_id, episode_id, current_user.id)
+
+    # Cost recording context
+    set_api_purpose(get_purpose(episode.gate_status))
+    set_api_user(current_user.id)
+    set_api_episode(episode_id)
 
     gate = get_gate_number(episode.gate_status)
     if gate != 5:
@@ -110,6 +116,11 @@ async def regenerate_cut(
     episode = db.query(Episode).filter(Episode.id == cut.episode_id).first()
     if not episode:
         raise HTTPException(status_code=404, detail="Episode not found")
+
+    # Cost recording context
+    set_api_purpose(get_purpose(episode.gate_status))
+    set_api_user(current_user.id)
+    set_api_episode(cut.episode_id)
 
     # 패킷 사전 확인: 재생성 1컷 = 1패킷, 상세페이지 섹션 = 2패킷
     _purpose = get_purpose(episode.gate_status)

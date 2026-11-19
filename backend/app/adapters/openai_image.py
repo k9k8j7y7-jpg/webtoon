@@ -8,6 +8,7 @@ import io
 import base64
 import asyncio
 import logging
+import time
 
 from app.config import get_settings
 from app.adapters.base import ImageAdapter, ImageResult
@@ -93,7 +94,9 @@ class OpenAIImageAdapter(ImageAdapter):
                 image_files.append(buf)
 
         last_error = None
+        num_refs = len(reference_images) if reference_images else 0
         for attempt in range(1, MAX_RETRIES + 2):
+            t0 = time.time()
             try:
                 if image_files:
                     # 매번 seek(0) — 재시도 시 파일 위치 초기화
@@ -118,7 +121,23 @@ class OpenAIImageAdapter(ImageAdapter):
                         n=1,
                     )
 
+                duration_ms = int((time.time() - t0) * 1000)
                 img_data = base64.b64decode(response.data[0].b64_json)
+
+                # Extract usage if available
+                try:
+                    from app.costs.recorder import record_api_call
+                    units = {"ref_images": num_refs}
+                    usage = getattr(response, "usage", None)
+                    if usage:
+                        units["tokens_out"] = getattr(usage, "output_tokens", 0) or 0
+                        units["tokens_in"] = getattr(usage, "input_tokens", 0) or 0
+                    record_api_call(
+                        provider="openai", model=GPT_IMAGE_MODEL, kind="image",
+                        units=units, duration_ms=duration_ms,
+                    )
+                except Exception:
+                    pass
 
                 # 중앙 크롭 (3:4, 4:3)
                 crop_target = _CROP_TARGETS.get(aspect_ratio)
@@ -136,6 +155,17 @@ class OpenAIImageAdapter(ImageAdapter):
                 )
 
             except Exception as e:
+                duration_ms = int((time.time() - t0) * 1000)
+                try:
+                    from app.costs.recorder import record_api_call
+                    record_api_call(
+                        provider="openai", model=GPT_IMAGE_MODEL, kind="image",
+                        units={"ref_images": num_refs}, duration_ms=duration_ms,
+                        status="error", error_code=type(e).__name__,
+                    )
+                except Exception:
+                    pass
+
                 last_error = e
                 if attempt <= MAX_RETRIES:
                     logger.warning(

@@ -10,7 +10,8 @@ from app.users.models import User
 from app.projects.models import Project, Episode
 from app.story.service import generate_planning, suggest_characters, generate_idea_brief, revise_idea_brief
 from app.story.prompt_fragments import build_story_options_prompt
-from app.workflow.gate import approve_gate, get_gate_number, get_idea_brief, set_idea_brief, is_ad_episode
+from app.workflow.gate import approve_gate, get_gate_number, get_idea_brief, set_idea_brief, is_ad_episode, get_purpose
+from app.costs.recorder import set_api_purpose, set_api_user, set_api_episode
 
 router = APIRouter(tags=["gate1-planning"])
 
@@ -226,6 +227,11 @@ async def create_idea_brief(
 ):
     """아이디어 원문 → LLM → idea_brief 생성. hint가 있으면 재정리."""
     episode = _get_episode_for_user(db, project_id, episode_id, current_user.id)
+
+    # Cost recording context
+    set_api_purpose(get_purpose(episode.gate_status))
+    set_api_user(current_user.id)
+    set_api_episode(episode_id)
     gs = episode.gate_status or {}
 
     existing = get_idea_brief(gs)
@@ -369,6 +375,11 @@ async def create_planning(
     current_user: User = Depends(get_current_user),
 ):
     episode = _get_episode_for_user(db, project_id, episode_id, current_user.id)
+
+    # Cost recording context
+    set_api_purpose(get_purpose(episode.gate_status))
+    set_api_user(current_user.id)
+    set_api_episode(episode_id)
 
     gate = get_gate_number(episode.gate_status)
     if gate != 1:

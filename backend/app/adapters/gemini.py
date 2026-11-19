@@ -8,6 +8,7 @@ import json
 import logging
 import re
 import asyncio
+import time
 
 from google import genai
 from google.genai import types
@@ -54,16 +55,46 @@ async def generate_text(
 
     last_error = None
     for attempt in range(1, MAX_RETRIES + 2):
+        t0 = time.time()
         try:
             response = client.models.generate_content(
                 model="gemini-2.5-flash",
                 contents=prompt,
                 config=config,
             )
+            duration_ms = int((time.time() - t0) * 1000)
+
+            # Record cost
+            try:
+                from app.costs.recorder import record_api_call
+                units = {}
+                usage = getattr(response, "usage_metadata", None)
+                if usage:
+                    units["tokens_in"] = getattr(usage, "prompt_token_count", 0) or 0
+                    units["tokens_out"] = getattr(usage, "candidates_token_count", 0) or 0
+                record_api_call(
+                    provider="gemini", model="gemini-2.5-flash", kind="text",
+                    units=units, duration_ms=duration_ms,
+                )
+            except Exception:
+                pass
+
             if attempt > 1:
                 logger.warning("generate_text succeeded on attempt %d", attempt)
             return response.text
         except Exception as e:
+            duration_ms = int((time.time() - t0) * 1000)
+            # Record error cost
+            try:
+                from app.costs.recorder import record_api_call
+                record_api_call(
+                    provider="gemini", model="gemini-2.5-flash", kind="text",
+                    duration_ms=duration_ms, status="error",
+                    error_code=type(e).__name__,
+                )
+            except Exception:
+                pass
+
             last_error = e
             if attempt <= MAX_RETRIES:
                 logger.warning("generate_text attempt %d failed: %s — retrying in %ds", attempt, e, RETRY_DELAY)

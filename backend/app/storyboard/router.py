@@ -18,6 +18,7 @@ from app.storyboard.service import (
     create_cuts_from_script, recommend_cut_count, readjust_storyboard,
     auto_add_mentioned_characters, episode_character_names,
 )
+from app.costs.recorder import set_api_purpose, set_api_user, set_api_episode
 from app.workflow.gate import approve_gate, get_gate_number, get_page_format
 from app.composition.service import compose_cut
 from app.adapters.gemini import generate_text, parse_ai_json, AI_TOKENS_MEDIUM
@@ -60,6 +61,12 @@ async def create_storyboard(
 ):
     """대본 → 컷 명세 생성. 게이트 4. target_cut_count로 컷 수 조정 가능."""
     episode = _get_episode_for_user(db, project_id, episode_id, current_user.id)
+
+    # Cost recording context
+    from app.workflow.gate import get_purpose as _gp_cost
+    set_api_purpose(_gp_cost(episode.gate_status))
+    set_api_user(current_user.id)
+    set_api_episode(episode_id)
 
     gate = get_gate_number(episode.gate_status)
     if gate != 4:

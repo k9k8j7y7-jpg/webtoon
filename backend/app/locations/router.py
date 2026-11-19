@@ -22,6 +22,7 @@ from app.jobs import create_job, run_job_in_background
 from app.workflow.gate import get_gate_number, get_aspect_ratio
 from app.styles.models import Style, STYLE_PRESETS
 from app.packets.service import require_packets
+from app.costs.recorder import set_api_purpose, set_api_user, set_api_episode
 
 router = APIRouter(tags=["gate3-locations"])
 
@@ -60,6 +61,11 @@ async def create_locations(
     current_user: User = Depends(get_current_user),
 ):
     episode = _get_episode_for_user(db, project_id, episode_id, current_user.id)
+
+    # Cost recording context
+    set_api_purpose("location")
+    set_api_user(current_user.id)
+    set_api_episode(episode_id)
 
     gate = get_gate_number(episode.gate_status)
     if gate not in (3, 4, 5):
@@ -180,6 +186,10 @@ async def regenerate_location(
     current_user: User = Depends(get_current_user),
 ):
     """장소 레퍼런스 이미지 재생성 (mood_notes 반영)."""
+    # Cost recording context
+    set_api_purpose("location")
+    set_api_user(current_user.id)
+
     location = db.query(Location).filter(Location.id == location_id).first()
     if not location:
         raise HTTPException(status_code=404, detail="Location not found")

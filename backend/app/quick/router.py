@@ -18,6 +18,7 @@ from app.products.models import Product
 from app.storyboard.models import Cut
 from app.styles.models import Style, STYLE_PRESETS
 from app.images.service import generate_cut_image
+from app.costs.recorder import set_api_purpose, set_api_user
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +82,9 @@ async def create_quick_cut(
     current_user=Depends(get_current_user),
 ):
     """빠른 컷 생성: 프리셋 복사 → 프로젝트·에피소드 자동 생성 → 1컷 이미지."""
+    # Cost recording context
+    set_api_purpose("onecut_ad")
+    set_api_user(current_user.id)
 
     body, product_file = await _parse_quick_request(request)
 

@@ -21,6 +21,7 @@ from app.styles.models import Style, STYLE_PRESETS
 from app.storyboard.models import CutAssetRef
 from app.packets.service import require_packets
 from app.story.service import _is_animal_character
+from app.costs.recorder import set_api_purpose, set_api_user, set_api_episode
 
 router = APIRouter(tags=["gate3-characters"])
 
@@ -63,6 +64,11 @@ async def create_characters(
 ):
     """대본 인물 → 캐릭터 시트 생성. 비동기(202 + job_id)."""
     episode = _get_episode_for_user(db, project_id, episode_id, current_user.id)
+
+    # Cost recording context
+    set_api_purpose("character")
+    set_api_user(current_user.id)
+    set_api_episode(episode_id)
 
     gate = get_gate_number(episode.gate_status)
     if gate != 3:
@@ -473,6 +479,10 @@ async def regenerate_character(
     current_user: User = Depends(get_current_user),
 ):
     """캐릭터 시트 재생성. 기존 이미지는 유지(stale)."""
+    # Cost recording context
+    set_api_purpose("character")
+    set_api_user(current_user.id)
+
     character = db.query(Character).filter(Character.id == character_id).first()
     if not character:
         raise HTTPException(status_code=404, detail="Character not found")

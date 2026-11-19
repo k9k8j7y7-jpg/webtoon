@@ -118,6 +118,26 @@ def _pad_to_aspect(image_bytes: bytes, target_aspect: str) -> tuple[bytes, dict]
     }
 
 
+# ── Veo API 비용 기록 헬퍼 ───────────────────────────────────
+
+def _record_veo_call(duration_ms: int, status: str = "ok", error_code: str | None = None):
+    """Veo 호출 비용을 기록한다. 실패해도 무시."""
+    try:
+        from app.costs.recorder import record_api_call
+        record_api_call(
+            provider="gemini",
+            model=settings.VIDEO_MODEL,
+            kind="video",
+            purpose="motion",
+            units={"seconds": 3},
+            duration_ms=duration_ms,
+            status=status,
+            error_code=error_code,
+        )
+    except Exception:
+        pass
+
+
 # ── Veo API 호출 ─────────────────────────────────────────────
 
 async def _call_veo(image_bytes: bytes, prompt: str, veo_aspect: str) -> bytes | None:
@@ -146,10 +166,12 @@ async def _call_veo(image_bytes: bytes, prompt: str, veo_aspect: str) -> bytes |
             resp = await client.post(url, json=body)
         except Exception as e:
             logger.error("Video API request failed: %s", str(e)[:200])
+            _record_veo_call(int((time.time() - t0) * 1000), "error", "request_failed")
             return None
 
         if resp.status_code != 200:
             logger.error("Video API failed: %d %s", resp.status_code, resp.text[:300])
+            _record_veo_call(int((time.time() - t0) * 1000), "error", f"http_{resp.status_code}")
             return None
 
         data = resp.json()
@@ -158,6 +180,7 @@ async def _call_veo(image_bytes: bytes, prompt: str, veo_aspect: str) -> bytes |
         if data.get("status") == "failed" or data.get("error"):
             err = data.get("error", {})
             logger.error("Video API error: %s", json.dumps(err)[:300] if err else data.get("status"))
+            _record_veo_call(int((time.time() - t0) * 1000), "error", "api_error")
             return None
 
         # steps → model_output → video 추출
@@ -169,6 +192,7 @@ async def _call_veo(image_bytes: bytes, prompt: str, veo_aspect: str) -> bytes |
                         video_bytes = base64.b64decode(content["data"])
                         elapsed = time.time() - t0
                         logger.info("Video done (base64): %.1fs, %d KB", elapsed, len(video_bytes) // 1024)
+                        _record_veo_call(int(elapsed * 1000), "ok")
                         return video_bytes
                     # URI 반환
                     if content.get("uri"):
@@ -177,11 +201,14 @@ async def _call_veo(image_bytes: bytes, prompt: str, veo_aspect: str) -> bytes |
                         if dl.status_code == 200 and len(dl.content) > 1000:
                             elapsed = time.time() - t0
                             logger.info("Video done (URI): %.1fs, %d KB", elapsed, len(dl.content) // 1024)
+                            _record_veo_call(int(elapsed * 1000), "ok")
                             return dl.content
                         logger.error("Video download failed: %d, %d bytes", dl.status_code, len(dl.content))
+                        _record_veo_call(int((time.time() - t0) * 1000), "error", "download_failed")
                         return None
 
         logger.error("Video API: no video in response (keys: %s)", list(data.keys()))
+        _record_veo_call(int((time.time() - t0) * 1000), "error", "no_video")
         return None
 
 
@@ -373,19 +400,46 @@ async def _vision_check(
     ]
     body = {"contents": [{"parts": parts}]}
 
+    t0_vision = time.time()
     try:
         async with httpx.AsyncClient(timeout=90) as client:
             resp = await client.post(url, json=body)
             if resp.status_code != 200:
                 logger.error("Vision check API error: %d", resp.status_code)
+                try:
+                    from app.costs.recorder import record_api_call
+                    record_api_call(
+                        provider="gemini", model="gemini-2.5-flash", kind="vision",
+                        purpose="motion", duration_ms=int((time.time() - t0_vision) * 1000),
+                        status="error", error_code=f"http_{resp.status_code}",
+                    )
+                except Exception:
+                    pass
                 return {"hands_ok": True, "same_character": True, "note": "vision API error, passed by default", "raw": {}}
 
-            text = resp.json().get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+            resp_json = resp.json()
+            text = resp_json.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
             text = text.strip()
             if text.startswith("```"):
                 text = text.split("\n", 1)[1] if "\n" in text else text[3:]
                 text = text.rsplit("```", 1)[0]
             raw = json.loads(text)
+
+            # Record vision call cost
+            try:
+                from app.costs.recorder import record_api_call
+                usage = resp_json.get("usageMetadata", {})
+                units = {
+                    "tokens_in": usage.get("promptTokenCount", 0),
+                    "tokens_out": usage.get("candidatesTokenCount", 0),
+                }
+                record_api_call(
+                    provider="gemini", model="gemini-2.5-flash", kind="vision",
+                    purpose="motion", units=units,
+                    duration_ms=int((time.time() - t0_vision) * 1000),
+                )
+            except Exception:
+                pass
 
             # 프레임별 판정 파싱
             frames = raw.get("frames", [])

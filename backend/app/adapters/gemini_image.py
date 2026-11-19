@@ -7,6 +7,7 @@ adapters/ 추상화 레이어 경유.
 import random
 import asyncio
 import logging
+import time
 
 from google import genai
 from google.genai import types
@@ -53,6 +54,7 @@ class GeminiImageAdapter(ImageAdapter):
 
         last_error = None
         for attempt in range(1, MAX_RETRIES + 2):  # 1 + MAX_RETRIES attempts
+            t0 = time.time()
             try:
                 response = self._client.models.generate_content(
                     model=IMAGE_MODEL,
@@ -68,6 +70,16 @@ class GeminiImageAdapter(ImageAdapter):
                 # 응답에서 이미지 추출
                 for part in response.candidates[0].content.parts:
                     if part.inline_data and part.inline_data.mime_type.startswith("image/"):
+                        duration_ms = int((time.time() - t0) * 1000)
+                        try:
+                            from app.costs.recorder import record_api_call
+                            record_api_call(
+                                provider="gemini", model=IMAGE_MODEL, kind="image",
+                                units={"images": 1}, duration_ms=duration_ms,
+                            )
+                        except Exception:
+                            pass
+
                         if attempt > 1:
                             logger.warning("generate_image succeeded on attempt %d", attempt)
                         return ImageResult(
@@ -80,6 +92,17 @@ class GeminiImageAdapter(ImageAdapter):
                 last_error = RuntimeError("Gemini did not return an image")
             except Exception as e:
                 last_error = e
+
+            duration_ms = int((time.time() - t0) * 1000)
+            try:
+                from app.costs.recorder import record_api_call
+                record_api_call(
+                    provider="gemini", model=IMAGE_MODEL, kind="image",
+                    units={"images": 1}, duration_ms=duration_ms,
+                    status="error", error_code=type(last_error).__name__,
+                )
+            except Exception:
+                pass
 
             if attempt <= MAX_RETRIES:
                 logger.warning("generate_image attempt %d failed: %s — retrying in %ds", attempt, last_error, RETRY_DELAY)

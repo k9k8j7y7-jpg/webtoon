@@ -16,6 +16,7 @@ from app.packets.service import require_packets
 from app.jobs import create_job, get_job, run_job_in_background
 from app.config import get_settings
 from app.workflow.gate import get_gate_number, get_aspect_ratio
+from app.costs.recorder import set_api_purpose, set_api_user, set_api_episode
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -41,6 +42,10 @@ async def create_motion(
     current_user: User = Depends(get_current_user),
 ):
     """컷 이미지 → 모션 영상 생성 시작."""
+    # Cost recording context
+    set_api_purpose("motion")
+    set_api_user(current_user.id)
+
     cut = db.query(Cut).filter(Cut.cut_id == cut_id).first()
     if not cut:
         raise HTTPException(status_code=404, detail="Cut not found")

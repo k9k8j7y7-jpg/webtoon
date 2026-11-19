@@ -11,6 +11,7 @@ from app.projects.models import Project, Episode, Series
 from app.script.service import generate_script, extract_character_names, extract_location_names
 from app.workflow.gate import approve_gate, get_gate_number, is_ad_episode, get_purpose
 from app.workflow.service import compute_invalidation_scope, invalidate_from_gate
+from app.costs.recorder import set_api_purpose, set_api_user, set_api_episode
 
 router = APIRouter(tags=["gate2-script"])
 
@@ -60,6 +61,11 @@ async def create_script(
     current_user: User = Depends(get_current_user),
 ):
     episode = _get_episode_for_user(db, project_id, episode_id, current_user.id)
+
+    # Cost recording context
+    set_api_purpose(get_purpose(episode.gate_status))
+    set_api_user(current_user.id)
+    set_api_episode(episode_id)
 
     gate = get_gate_number(episode.gate_status)
     if gate != 2:
