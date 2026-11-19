@@ -101,6 +101,7 @@ WEBTOON/
 - **텍스트 AI:** `AI_TOKENS_SHORT`(4096)/`MEDIUM`(8192)/`LONG`(16384) 상수. `parse_ai_json()` 경유
 - **컷 프롬프트 한글 금지:** appearance_en, location_spec_en(영어)만 주입. spec_en 없으면 한글 폴백
 - **Gemini:** `.env`의 `GEMINI_API_KEY` + `IMAGE_MODEL`(현재 `gemini-3.1-flash-image`)
+- **원가 기록:** 외부 API 새로 붙이면 `app/costs/recorder.py`의 `record_api_call()` 필수. 기록 실패가 생성 실패로 번지면 안 됨(try/except)
 - **FormData 업로드:** `{ headers: { 'Content-Type': 'multipart/form-data' } }` 필수(누락 시 422 흰 화면)
 
 ### 말풍선·렌더링
