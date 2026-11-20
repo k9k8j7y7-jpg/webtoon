@@ -85,10 +85,17 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
   // 카피 디자인 (onecut_ad 전용)
   const [copyDesign, setCopyDesign] = useState(() => gateStatus?.idea_brief?.copy_design || { font: 'handwritten', position: 'auto', emphasis: null });
   // 설명 장치 (onecut_ad 전용)
-  const [onecutDeviceOn, setOnecutDeviceOn] = useState(() => !!gateStatus?.idea_brief?.onecut_device?.device);
-  const [onecutDevice, setOnecutDevice] = useState(() => gateStatus?.idea_brief?.onecut_device?.device || 'process');
-  const [onecutLabels, setOnecutLabels] = useState(() => gateStatus?.idea_brief?.onecut_device?.labels || []);
-  const [onecutCompare, setOnecutCompare] = useState(() => gateStatus?.idea_brief?.onecut_device?.compare || '');
+  // 기본 OFF: 제품 없거나 목적이 SNS콘텐츠·이벤트·정보전달·밈
+  const _DEVICE_OFF_PURPOSES = new Set(['sns_content', 'event_promo', 'info_delivery', 'meme_parody']);
+  const _savedDevice = gateStatus?.idea_brief?.onecut_device;
+  const _hasProduct = !!(gateStatus?.idea_brief?.product_name);
+  const _deviceDefault = _savedDevice?.device
+    ? true  // 이미 저장된 값이 있으면 존중
+    : (_hasProduct && !_DEVICE_OFF_PURPOSES.has(gateStatus?.idea_brief?.ad_purpose));
+  const [onecutDeviceOn, setOnecutDeviceOn] = useState(() => _deviceDefault);
+  const [onecutDevice, setOnecutDevice] = useState(() => _savedDevice?.device || 'process');
+  const [onecutLabels, setOnecutLabels] = useState(() => _savedDevice?.labels || []);
+  const [onecutCompare, setOnecutCompare] = useState(() => _savedDevice?.compare || '');
 
   const [characters, setCharacters] = useState([]);
   const [charTouched, setCharTouched] = useState(false); // 등장인물 user_touched
@@ -1143,11 +1150,24 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                   const handleToggle = () => {
                     const next = !onecutDeviceOn;
                     setOnecutDeviceOn(next);
-                    if (next && onecutLabels.length === 0 && aiVp) {
-                      setOnecutDevice(aiVp.device || 'process');
-                      setOnecutLabels(aiVp.labels || []);
-                      setOnecutCompare(aiVp.compare || '');
-                      saveDevice(true, aiVp.device || 'process', aiVp.labels || [], aiVp.compare || '');
+                    if (next && onecutLabels.length === 0) {
+                      // AI 제안 라벨이 있고, 플레이스홀더("특징N", "과정N" 등)가 아닌 실제 값이면 프리필
+                      const aiLabels = (aiVp?.labels || []).filter(l => l && !/^(특징|과정|단계)\d*$/.test(l));
+                      if (aiLabels.length > 0) {
+                        const dev = aiVp?.device || 'process';
+                        setOnecutDevice(dev);
+                        setOnecutLabels(aiLabels);
+                        setOnecutCompare(aiVp?.compare || '');
+                        saveDevice(true, dev, aiLabels, aiVp?.compare || '');
+                      } else {
+                        // 빈 라벨 — 사용자에게 안내
+                        const d = DEVICES.find(x => x.key === onecutDevice) || DEVICES[5];
+                        const cnt = Array.isArray(d.count) ? d.count[0] : d.count;
+                        const emptyLabels = Array(cnt).fill('');
+                        setOnecutLabels(emptyLabels);
+                        saveDevice(true, onecutDevice, emptyLabels, onecutCompare);
+                        showToast('라벨을 적어주세요');
+                      }
                     } else {
                       saveDevice(next, onecutDevice, onecutLabels, onecutCompare);
                     }
@@ -1157,9 +1177,9 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                     const d = DEVICES.find(x => x.key === key);
                     setOnecutDevice(key);
                     const cnt = Array.isArray(d.count) ? d.count[0] : d.count;
-                    // 기존 값 개수만큼 유지, 부족하면 placeholder로 채움
-                    const kept = onecutLabels.slice(0, cnt);
-                    const newLabels = kept.length >= cnt ? kept : [...kept, ...d.ph.slice(kept.length, cnt)];
+                    // 기존 값 개수만큼 유지, 부족하면 빈 문자열로 채움 (플레이스홀더 금지)
+                    const kept = onecutLabels.slice(0, cnt).map(l => /^(특징|과정|단계)\d*$/.test(l) ? '' : l);
+                    const newLabels = kept.length >= cnt ? kept : [...kept, ...Array(cnt - kept.length).fill('')];
                     setOnecutLabels(newLabels);
                     setOnecutCompare('');
                     saveDevice(true, key, newLabels, '');
