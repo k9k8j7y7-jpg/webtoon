@@ -13,6 +13,42 @@ from sqlalchemy.orm import Session
 
 log = logging.getLogger(__name__)
 
+# 한글 키·설명 매핑
+CHECK_KO = {
+    "disk":           {"label": "디스크 사용률",   "desc": "서버 디스크 용량"},
+    "backup":         {"label": "최근 백업",       "desc": "DB 백업 최신 여부"},
+    "failed_jobs":    {"label": "실패 생성",       "desc": "24시간 내 실패한 컷 생성"},
+    "packet_ledger":  {"label": "패킷 원장",       "desc": "잔액 vs 거래 합계 불일치"},
+    "api_errors":     {"label": "API 오류",        "desc": "24시간 내 API 에러"},
+    "inquiries":      {"label": "미답변 문의",     "desc": "대기 중인 문의"},
+    "exchange_rate":  {"label": "환율",            "desc": "오늘 USD/KRW 환율"},
+    "prices_missing": {"label": "단가 누락",       "desc": "api_prices 미등록 모델"},
+    "apache_config":  {"label": "Apache 설정",     "desc": "리버스 프록시 정상 여부"},
+}
+
+
+def _relative_time(dt):
+    """datetime → '21시간 전', '29일' 형태의 한글 상대 시간."""
+    if not dt:
+        return ""
+    if isinstance(dt, str):
+        try:
+            dt = datetime.fromisoformat(dt)
+        except Exception:
+            return dt
+    diff = datetime.now() - dt if dt.tzinfo is None else datetime.utcnow() - dt
+    secs = diff.total_seconds()
+    if secs < 0:
+        return "방금"
+    if secs < 60:
+        return f"{int(secs)}초 전"
+    if secs < 3600:
+        return f"{int(secs // 60)}분 전"
+    if secs < 86400:
+        return f"{int(secs // 3600)}시간 전"
+    days = int(secs // 86400)
+    return f"{days}일 전"
+
 # ── 개별 점검 함수 ──────────────────────────────────────────────
 
 
@@ -37,22 +73,23 @@ def check_backup() -> dict:
     try:
         backup_dir = Path("/home/bitnami/backups")
         if not backup_dir.exists():
-            return {"key": "backup", "status": "warn", "value": "no dir", "detail": "backups directory not found"}
+            return {"key": "backup", "status": "warn", "value": "디렉토리 없음", "detail": "backups 디렉토리 미생성"}
         files = sorted(backup_dir.iterdir(), key=lambda f: f.stat().st_mtime, reverse=True)
         if not files:
-            return {"key": "backup", "status": "fail", "value": "empty", "detail": "no backup files found"}
+            return {"key": "backup", "status": "fail", "value": "파일 없음", "detail": "백업 파일 없음"}
         newest = files[0]
-        age = datetime.now() - datetime.fromtimestamp(newest.stat().st_mtime)
+        newest_dt = datetime.fromtimestamp(newest.stat().st_mtime)
+        age = datetime.now() - newest_dt
         hours = age.total_seconds() / 3600
         status = "fail" if hours > 72 else ("warn" if hours > 48 else "ok")
         return {
             "key": "backup",
             "status": status,
-            "value": f"{hours:.0f}h ago",
-            "detail": f"newest: {newest.name}",
+            "value": _relative_time(newest_dt),
+            "detail": newest.name,
         }
     except Exception as e:
-        return {"key": "backup", "status": "fail", "value": "error", "detail": str(e)}
+        return {"key": "backup", "status": "fail", "value": "오류", "detail": str(e)}
 
 
 def check_failed_jobs(db: Session) -> dict:
@@ -142,17 +179,17 @@ def check_inquiries(db: Session) -> dict:
         cnt = rows[0] or 0
         oldest = rows[1]
         if cnt == 0:
-            return {"key": "inquiries", "status": "ok", "value": "0", "detail": "no pending inquiries"}
+            return {"key": "inquiries", "status": "ok", "value": "0건", "detail": "대기 문의 없음"}
         age_hours = (datetime.utcnow() - oldest).total_seconds() / 3600 if oldest else 0
         status = "warn" if age_hours > 24 else "ok"
         return {
             "key": "inquiries",
             "status": status,
-            "value": f"{cnt} pending",
-            "detail": f"oldest: {age_hours:.0f}h ago",
+            "value": f"{cnt}건 대기",
+            "detail": f"가장 오래된: {_relative_time(oldest)}",
         }
     except Exception as e:
-        return {"key": "inquiries", "status": "fail", "value": "error", "detail": str(e)}
+        return {"key": "inquiries", "status": "fail", "value": "오류", "detail": str(e)}
 
 
 def check_exchange_rate(db: Session) -> dict:
@@ -196,6 +233,28 @@ def check_prices_missing(db: Session) -> dict:
         return {"key": "prices_missing", "status": "fail", "value": "error", "detail": str(e)}
 
 
+def check_apache_config() -> dict:
+    """Apache 리버스 프록시 설정 파일 존재 + /WEBTOON/ ProxyPass 확인."""
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["grep", "-rl", "WEBTOON", "/opt/bitnami/apache/conf/vhosts/"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            conf_file = result.stdout.strip().split('\n')[0]
+            # Check ProxyPass inside
+            check = subprocess.run(
+                ["grep", "-c", "ProxyPass", conf_file],
+                capture_output=True, text=True, timeout=5,
+            )
+            cnt = int(check.stdout.strip()) if check.returncode == 0 else 0
+            return {"key": "apache_config", "status": "ok", "value": f"정상 ({cnt}규칙)", "detail": conf_file}
+        return {"key": "apache_config", "status": "warn", "value": "미확인", "detail": "webtoon.conf 미발견"}
+    except Exception as e:
+        return {"key": "apache_config", "status": "warn", "value": "확인 불가", "detail": str(e)}
+
+
 # ── 전체 실행 ───────────────────────────────────────────────────
 
 
@@ -205,11 +264,11 @@ def run_all_checks(db: Session, source: str = "page") -> list[dict]:
     results = []
 
     # DB 불필요 점검
-    for fn in [check_disk, check_backup]:
+    for fn in [check_disk, check_backup, check_apache_config]:
         try:
             results.append(fn())
         except Exception as e:
-            results.append({"key": fn.__name__.replace("check_", ""), "status": "fail", "value": "error", "detail": str(e)})
+            results.append({"key": fn.__name__.replace("check_", ""), "status": "fail", "value": "오류", "detail": str(e)})
 
     # DB 필요 점검
     for fn in [check_failed_jobs, check_packet_ledger, check_api_errors,
@@ -217,7 +276,7 @@ def run_all_checks(db: Session, source: str = "page") -> list[dict]:
         try:
             results.append(fn(db))
         except Exception as e:
-            results.append({"key": fn.__name__.replace("check_", ""), "status": "fail", "value": "error", "detail": str(e)})
+            results.append({"key": fn.__name__.replace("check_", ""), "status": "fail", "value": "오류", "detail": str(e)})
 
     # admin_checks 테이블에 저장
     for r in results:
@@ -245,8 +304,11 @@ def run_all_checks(db: Session, source: str = "page") -> list[dict]:
         log.exception("Failed to commit check results")
         db.rollback()
 
-    # run_at 추가
+    # run_at + 한글 라벨 추가
     for r in results:
         r["run_at"] = now.isoformat()
+        ko = CHECK_KO.get(r["key"], {})
+        r["label"] = ko.get("label", r["key"])
+        r["desc"] = ko.get("desc", "")
 
     return results

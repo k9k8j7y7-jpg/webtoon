@@ -1287,7 +1287,7 @@ const STATS_SUB_TABS = [
 ];
 
 const RANGE_CHIPS = [
-  { key: '1d', label: '오늘' },
+  { key: 'today', label: '오늘' },
   { key: '7d', label: '7일' },
   { key: '30d', label: '30일' },
   { key: 'all', label: '전체' },
@@ -1314,6 +1314,13 @@ function StatsCard({ label, value, badge }) {
   );
 }
 
+function fmtDateLabel(raw) {
+  if (!raw) return '';
+  // "2026-11-14" → "11-14"
+  const parts = String(raw).split('-');
+  return parts.length >= 3 ? `${parts[1]}-${parts[2]}` : raw;
+}
+
 function CssBarChart({ rows, labelKey, bars }) {
   if (!rows?.length) return <p className="text-gray-500 text-sm py-6 text-center">데이터 없음</p>;
   const maxVal = Math.max(...rows.flatMap(r => bars.map(b => Number(r[b.key]) || 0)), 1);
@@ -1321,14 +1328,14 @@ function CssBarChart({ rows, labelKey, bars }) {
     <div className="space-y-1.5 max-h-[360px] overflow-y-auto pr-1">
       {rows.map((r, i) => (
         <div key={i} className="flex items-center gap-2 text-xs">
-          <span className="w-16 shrink-0 text-gray-400 text-right font-mono">{r[labelKey]}</span>
+          <span className="w-12 shrink-0 text-gray-400 text-right font-mono">{fmtDateLabel(r[labelKey])}</span>
           <div className="flex-1 flex flex-col gap-0.5">
             {bars.map(b => {
               const v = Number(r[b.key]) || 0;
               const w = (v / maxVal) * 100;
               return (
                 <div key={b.key} className="flex items-center gap-1">
-                  <div className={`h-3 rounded-sm ${b.color}`} style={{ width: `${Math.max(w, 0.5)}%` }} />
+                  <div className={`h-3 rounded-sm ${b.color} ${v === 0 ? 'opacity-20' : ''}`} style={{ width: `${Math.max(w, 0.5)}%` }} />
                   <span className="text-gray-500 text-[10px]">{v.toLocaleString()}</span>
                 </div>
               );
@@ -1446,12 +1453,14 @@ function MoneySubTab() {
               <div className="bg-[#1a1a2e] border border-white/10 rounded-xl p-4">
                 <div className="flex gap-4 text-[10px] text-gray-400 mb-3">
                   <span className="flex items-center gap-1"><span className="w-3 h-2 rounded-sm bg-blue-500 inline-block" /> 매출</span>
-                  <span className="flex items-center gap-1"><span className="w-3 h-2 rounded-sm bg-red-500 inline-block" /> 원가</span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-2 rounded-sm bg-red-500 inline-block" /> 실측 원가</span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-2 rounded-sm bg-amber-500 inline-block" /> 추정 원가</span>
                 </div>
                 <CssBarChart rows={data.daily} labelKey="date"
                   bars={[
                     { key: 'revenue_krw', color: 'bg-blue-500' },
                     { key: 'cost_krw', color: 'bg-red-500' },
+                    { key: 'estimated_cost_krw', color: 'bg-amber-500' },
                   ]}
                 />
               </div>
@@ -1517,10 +1526,22 @@ function PeopleSubTab() {
       {loading ? <div className="text-gray-400 py-12 text-center">로딩 중...</div> : !data ? <div className="text-red-400 py-12 text-center">로드 실패</div> : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            <StatsCard label="가입자" value={data.total_users?.toLocaleString()} />
+            <div className="bg-[#1a1a2e] border border-white/10 rounded-xl p-5 flex flex-col gap-1.5">
+              <span className="text-xs text-gray-400">가입자</span>
+              <span className="text-2xl font-bold text-white leading-tight">{data.period_signups?.toLocaleString() ?? '—'}</span>
+              {range !== 'all' && <span className="text-[11px] text-gray-500">전체 {data.total_users?.toLocaleString()}</span>}
+            </div>
             <StatsCard label="활성" value={data.active_users?.toLocaleString()} />
-            <StatsCard label="결제 전환율" value={pct(data.paid_conversion_rate)} />
-            <StatsCard label="환영만 이탈율" value={pct(data.welcome_only_churn_rate)} />
+            <div className="bg-[#1a1a2e] border border-white/10 rounded-xl p-5 flex flex-col gap-1.5">
+              <span className="text-xs text-gray-400">결제 전환율</span>
+              <span className="text-2xl font-bold text-white leading-tight">{pct(data.paid_conversion_rate)}</span>
+              <span className="text-[11px] text-gray-500">결제자 {data.paying_users ?? 0} / 전체 {data.total_users ?? 0}</span>
+            </div>
+            <div className="bg-[#1a1a2e] border border-white/10 rounded-xl p-5 flex flex-col gap-1.5">
+              <span className="text-xs text-gray-400">환영만 이탈율</span>
+              <span className="text-2xl font-bold text-white leading-tight">{pct(data.welcome_only_churn_rate)}</span>
+              <span className="text-[11px] text-gray-500">이탈 {data.welcome_churned ?? 0} / 환영 {data.welcome_total ?? 0}</span>
+            </div>
           </div>
 
           {/* Daily signups chart */}
@@ -1601,20 +1622,33 @@ function QualitySubTab() {
 
       {loading ? <div className="text-gray-400 py-12 text-center">로딩 중...</div> : !data ? <div className="text-red-400 py-12 text-center">로드 실패</div> : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <StatsCard label="평균 생성 시간" value={data.avg_generation_sec != null ? `${Number(data.avg_generation_sec).toFixed(1)}초` : '—'} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="bg-[#1a1a2e] border border-white/10 rounded-xl p-5 flex flex-col gap-1.5">
+              <span className="text-xs text-gray-400">평균 생성 시간 <span className="text-gray-600 text-[10px]">{data.avg_generation_note}</span></span>
+              <span className="text-2xl font-bold text-white leading-tight">{data.avg_generation_sec != null ? `${Number(data.avg_generation_sec).toFixed(1)}초` : '—'}</span>
+            </div>
             <StatsCard label="카피 신고 건수" value={data.copy_report_count?.toLocaleString()} />
+            <div className="bg-[#1a1a2e] border border-white/10 rounded-xl p-5 flex flex-col gap-1.5">
+              <span className="text-xs text-gray-400">모션 성공률</span>
+              <span className="text-2xl font-bold text-white leading-tight">{data.motion?.total > 0 ? pct(data.motion.success_rate) : '—'}</span>
+              {data.motion?.total > 0 && <span className="text-[11px] text-gray-500">{data.motion.success}/{data.motion.total}</span>}
+            </div>
+            <div className="bg-[#1a1a2e] border border-white/10 rounded-xl p-5 flex flex-col gap-1.5">
+              <span className="text-xs text-gray-400">상세페이지 경고</span>
+              <span className="text-2xl font-bold text-white leading-tight">{pct(data.detail_warnings?.rate)}</span>
+              <span className="text-[11px] text-gray-500">{data.detail_warnings?.warned ?? 0}/{data.detail_warnings?.total ?? 0}</span>
+            </div>
           </div>
 
           {/* Purpose quality table */}
           {data.by_purpose?.length > 0 && (
             <div>
-              <h3 className="text-sm font-semibold text-gray-300 mb-2">용도별 품질</h3>
-              <div className="bg-[#1a1a2e] border border-white/10 rounded-xl overflow-hidden">
+              <h3 className="text-sm font-semibold text-gray-300 mb-2">트랙별 품질 {data.failure_note && <span className="text-[10px] text-gray-500 font-normal ml-1">실패: {data.failure_note}</span>}</h3>
+              <div className="bg-[#1a1a2e] border border-white/10 rounded-xl overflow-hidden overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-white/10 text-gray-400">
-                      <th className="text-left px-4 py-2 font-medium">용도</th>
+                      <th className="text-left px-4 py-2 font-medium">트랙</th>
                       <th className="text-right px-4 py-2 font-medium">성공</th>
                       <th className="text-right px-4 py-2 font-medium">실패</th>
                       <th className="text-right px-4 py-2 font-medium">실패율</th>
@@ -1626,7 +1660,7 @@ function QualitySubTab() {
                       <tr key={r.purpose} className="border-b border-white/5 hover:bg-white/[0.02]">
                         <td className="px-4 py-2 text-white">{r.purpose}</td>
                         <td className="px-4 py-2 text-right text-green-400 font-mono">{r.success?.toLocaleString()}</td>
-                        <td className="px-4 py-2 text-right text-red-400 font-mono">{r.failure?.toLocaleString()}</td>
+                        <td className="px-4 py-2 text-right text-red-400 font-mono">{r.failed?.toLocaleString()}</td>
                         <td className="px-4 py-2 text-right text-gray-300 font-mono">{pct(r.failure_rate)}</td>
                         <td className="px-4 py-2 text-right text-gray-300 font-mono">{pct(r.regen_rate)}</td>
                       </tr>
@@ -1648,6 +1682,9 @@ function StatusSubTab() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [runBusy, setRunBusy] = useState(false);
+  const [extConfirm, setExtConfirm] = useState(false);
+  const [extBusy, setExtBusy] = useState(false);
+  const [extResult, setExtResult] = useState(null);
 
   const fetchStatus = useCallback(() => {
     setLoading(true);
@@ -1671,17 +1708,72 @@ function StatusSubTab() {
     }
   };
 
+  const handleExtCheck = async () => {
+    setExtBusy(true);
+    setExtConfirm(false);
+    try {
+      const { data: d } = await api.post('/admin/stats/status/check-external');
+      setExtResult(d);
+    } catch (err) {
+      alert('외부 모델 점검 실패: ' + (err.response?.data?.detail || err.message));
+    } finally {
+      setExtBusy(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="text-xs text-gray-500">
           {data?.last_run && `마지막 점검: ${new Date(data.last_run).toLocaleString('ko-KR')}`}
         </div>
-        <button onClick={handleRun} disabled={runBusy || loading}
-          className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:bg-gray-700 text-white rounded-lg text-sm transition-colors">
-          {runBusy ? '점검 중...' : '지금 점검'}
-        </button>
+        <div className="flex items-center gap-2">
+          {/* External model check with inline confirm */}
+          {!extConfirm ? (
+            <button onClick={() => setExtConfirm(true)} disabled={extBusy}
+              className="px-3 py-2 bg-amber-600/80 hover:bg-amber-500 disabled:bg-gray-700 text-white rounded-lg text-sm transition-colors">
+              {extBusy ? '점검 중...' : `외부 모델 점검 · 약 ${data?.ext_check_cost_krw ?? 1}원`}
+            </button>
+          ) : (
+            <span className="flex items-center gap-1.5">
+              <span className="text-xs text-amber-400">GPT+Gemini 호출, 약 {data?.ext_check_cost_krw ?? 1}원 소요</span>
+              <button onClick={handleExtCheck}
+                className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-white rounded-lg text-xs font-bold">실행</button>
+              <button onClick={() => setExtConfirm(false)}
+                className="px-2 py-1.5 bg-white/10 text-gray-400 rounded-lg text-xs">취소</button>
+            </span>
+          )}
+          <button onClick={handleRun} disabled={runBusy || loading}
+            className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:bg-gray-700 text-white rounded-lg text-sm transition-colors">
+            {runBusy ? '점검 중...' : '지금 점검'}
+          </button>
+        </div>
       </div>
+
+      {/* External check results */}
+      {extResult && (
+        <div className="bg-[#1a1a2e] border border-white/10 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <h3 className="text-sm font-semibold text-gray-300">외부 모델 점검 결과</h3>
+            <span className={`px-1.5 py-0.5 text-[10px] rounded font-bold ${extResult.all_ok ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+              {extResult.all_ok ? '전체 정상' : '이상 있음'}
+            </span>
+            {extResult.total_cost_krw > 0 && (
+              <span className="text-[10px] text-gray-500">비용 {krw(extResult.total_cost_krw)}</span>
+            )}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {extResult.results?.map((r, i) => (
+              <div key={i} className="flex items-center gap-2 text-sm">
+                <span className={`w-2.5 h-2.5 rounded-full ${r.status === 'ok' ? 'bg-green-500' : 'bg-red-500'}`} />
+                <span className="text-white">{r.name}</span>
+                {r.ms != null && <span className="text-gray-500 text-xs">{r.ms}ms</span>}
+                {r.detail && <span className="text-red-400 text-xs truncate">{r.detail}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {loading ? <div className="text-gray-400 py-12 text-center">로딩 중...</div> : !data ? <div className="text-red-400 py-12 text-center">로드 실패</div> : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1689,7 +1781,8 @@ function StatusSubTab() {
             <div key={c.key || i} className="bg-[#1a1a2e] border border-white/10 rounded-xl p-4 flex items-start gap-3">
               <span className={`w-3 h-3 rounded-full shrink-0 mt-0.5 ${STATUS_CIRCLE[c.status] || 'bg-gray-500'}`} />
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-semibold text-white">{c.key}</div>
+                <div className="text-sm font-semibold text-white">{c.label || c.key}</div>
+                {c.desc && <div className="text-[11px] text-gray-500">{c.desc}</div>}
                 <div className="text-lg font-bold text-white mt-0.5">{c.value ?? '—'}</div>
                 {c.detail && <div className="text-xs text-gray-400 mt-1 break-words">{c.detail}</div>}
               </div>

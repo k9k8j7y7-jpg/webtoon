@@ -301,3 +301,30 @@ def estimate_legacy_costs(db, date_from: date, date_to: date) -> dict:
         },
         "estimated": True,
     }
+
+
+def estimate_legacy_costs_daily(db, date_from: date, date_to: date) -> dict[str, int]:
+    """generation_logs 기반 일별 추정 원가(KRW). {date_str: krw} 반환."""
+    from sqlalchemy import text as sa_text
+
+    rows = db.execute(
+        sa_text(
+            "SELECT DATE(gl.created_at) AS d, gl.kind, gl.model_tier, COUNT(*) AS cnt "
+            "FROM generation_logs gl "
+            "WHERE gl.created_at >= :dt_from AND gl.created_at < :dt_to "
+            "GROUP BY d, gl.kind, gl.model_tier ORDER BY d"
+        ),
+        {"dt_from": datetime.combine(date_from, datetime.min.time()),
+         "dt_to": datetime.combine(date_to, datetime.min.time()) + timedelta(days=1)},
+    ).fetchall()
+
+    rate = _ensure_exchange_rate(db)
+    daily: dict[str, Decimal] = {}
+    for d, kind, model_tier, cnt in rows:
+        unit_cost = _LEGACY_COST.get((kind, model_tier))
+        if unit_cost is None:
+            unit_cost = _LEGACY_COST.get((kind, None), Decimal("0.034"))
+        ds = str(d)
+        daily[ds] = daily.get(ds, Decimal("0")) + unit_cost * cnt
+
+    return {ds: int(v * rate) for ds, v in daily.items()}
