@@ -1,0 +1,16 @@
+[Unit]
+Description=EziToon API (uvicorn)
+After=network.target mariadb.service
+
+[Service]
+User=bitnami
+WorkingDirectory=/home/bitnami/project-t/backend
+EnvironmentFile=/home/bitnami/project-t/backend/.env
+ExecStart=/home/bitnami/project-t/backend/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -98,7 +98,36 @@ from app.storage import LOCAL_STORAGE_DIR
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok"}
+    import subprocess
+    from datetime import datetime
+    from app.database import get_db
+    # DB check
+    db_ok = False
+    try:
+        db = next(get_db())
+        from sqlalchemy import text as sa_text
+        db.execute(sa_text("SELECT 1"))
+        db_ok = True
+    except Exception:
+        pass
+    # Git version
+    version = "unknown"
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=3,
+            cwd=os.path.dirname(os.path.dirname(__file__)),
+        )
+        if result.returncode == 0:
+            version = result.stdout.strip()
+    except Exception:
+        pass
+    return {
+        "status": "ok" if db_ok else "degraded",
+        "db": "ok" if db_ok else "error",
+        "time": datetime.utcnow().isoformat(),
+        "version": version,
+    }
 
 
 # 프론트엔드 SPA 서빙 (맨 마지막에 마운트)
