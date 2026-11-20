@@ -655,30 +655,41 @@ def stats_quality(
 # ── GET /admin/stats/status ─────────────────────────────────────
 
 def _estimate_check_cost(db) -> int:
-    """외부 모델 점검 예상 비용(KRW). 단가표 기반."""
+    """외부 모델 점검 예상 비용(KRW). 단가표 기반.
+
+    GPT: gpt-image-2.5-sunburst low 1024×1024 1장 (약 272 output tokens + 50 input tokens)
+    Gemini text: gemini-2.5-flash 10 tok in + 5 tok out
+    Gemini vision: gemini-2.5-flash 15 tok in + 5 tok out
+    """
     try:
         from decimal import Decimal as D
-        # Gemini text: 10 tok in + 5 tok out
+        # Gemini text/vision pricing
         gemini_in = db.execute(text(
             "SELECT usd_per_unit FROM api_prices WHERE provider='gemini' AND model='gemini-2.5-flash' AND kind='text' AND unit='1k_tokens_in' LIMIT 1"
         )).scalar() or D("0.0003")
         gemini_out = db.execute(text(
             "SELECT usd_per_unit FROM api_prices WHERE provider='gemini' AND model='gemini-2.5-flash' AND kind='text' AND unit='1k_tokens_out' LIMIT 1"
         )).scalar() or D("0.0025")
-        # Gemini vision: 15 tok in + 5 tok out (same pricing)
-        # GPT-4.1-mini: $0.40/1M in, $1.60/1M out → $0.0004/1k in, $0.0016/1k out
-        gpt_in = D("0.0004")
-        gpt_out = D("0.0016")
+
+        # GPT image: gpt-image-2.5-sunburst low 1024×1024
+        # input $5/1M tok = $0.005/1k, output $32/1M tok = $0.032/1k
+        # low 1024×1024 ≈ 272 output tokens, ~50 input tokens
+        gpt_img_in = db.execute(text(
+            "SELECT usd_per_unit FROM api_prices WHERE provider='openai' AND model='gpt-image-2.5-sunburst' AND unit='1k_tokens_in' LIMIT 1"
+        )).scalar() or D("0.005")
+        gpt_img_out = db.execute(text(
+            "SELECT usd_per_unit FROM api_prices WHERE provider='openai' AND model='gpt-image-2.5-sunburst' AND unit='1k_tokens_out' LIMIT 1"
+        )).scalar() or D("0.032")
 
         cost_gemini_text = D(gemini_in) * D("10") / D("1000") + D(gemini_out) * D("5") / D("1000")
         cost_gemini_vision = D(gemini_in) * D("15") / D("1000") + D(gemini_out) * D("5") / D("1000")
-        cost_gpt = gpt_in * D("10") / D("1000") + gpt_out * D("5") / D("1000")
+        cost_gpt = D(gpt_img_in) * D("50") / D("1000") + D(gpt_img_out) * D("272") / D("1000")
         total_usd = cost_gemini_text + cost_gemini_vision + cost_gpt
 
         rate = db.execute(text("SELECT usd_krw FROM exchange_rates ORDER BY date DESC LIMIT 1")).scalar() or D("1330")
         return max(1, int(total_usd * D(str(rate))))
     except Exception:
-        return 1
+        return 12
 
 
 @router.get("/status")
@@ -714,29 +725,33 @@ def check_external_models(
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    """외부 모델 헬스체크: GPT low, Gemini 텍스트, Gemini 비전. purpose=check 기록."""
+    """외부 모델 헬스체크: 운영 이미지 모델(GPT low 1024), Gemini 텍스트·비전. purpose=check 기록."""
     import time
-    from app.config import settings
+    from app.config import get_settings
+    settings = get_settings()
     from app.costs.recorder import record_api_call, set_api_purpose, set_api_user
 
     set_api_purpose("check")
     set_api_user(admin.id)
 
+    GEMINI_MODEL = "gemini-2.5-flash"  # 운영 텍스트·비전 모델
     results = []
     total_cost_krw = 0
 
-    # 1. Gemini text check
+    # 1. Gemini text check (google.genai SDK — 운영과 동일)
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=settings.GEMINI_API_KEY)
+        from google import genai as _genai
+        client = _genai.Client(api_key=settings.GEMINI_API_KEY)
         t0 = time.time()
-        model = genai.GenerativeModel(settings.TEXT_MODEL if hasattr(settings, 'TEXT_MODEL') else "gemini-2.5-flash")
-        resp = model.generate_content("Reply with just the word 'ok'.")
+        resp = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents="Reply with just the word 'ok'.",
+        )
         dur = int((time.time() - t0) * 1000)
         ok = bool(resp and resp.text)
         try:
             rec = record_api_call(
-                provider="gemini", model=model.model_name or "gemini-2.5-flash",
+                provider="gemini", model=GEMINI_MODEL,
                 kind="text", purpose="check",
                 units={"tokens_in": 10, "tokens_out": 5},
                 duration_ms=dur, status="ok" if ok else "error",
@@ -745,21 +760,22 @@ def check_external_models(
                 total_cost_krw += rec.cost_krw or 0
         except Exception:
             pass
-        results.append({"name": "Gemini 텍스트", "status": "ok" if ok else "fail", "ms": dur})
+        results.append({"name": f"Gemini 텍스트 ({GEMINI_MODEL})", "status": "ok" if ok else "fail", "ms": dur})
     except Exception as e:
         results.append({"name": "Gemini 텍스트", "status": "fail", "detail": str(e)[:100]})
 
-    # 2. Gemini vision check (use a tiny test)
+    # 2. Gemini vision check (텍스트 프롬프트로 비전 모델 가용성 확인)
     try:
         t0 = time.time()
-        model_v = genai.GenerativeModel("gemini-2.5-flash")
-        # Vision with a minimal prompt (no actual image — tests model availability)
-        resp_v = model_v.generate_content("Describe what you see: a white square. Reply in one word.")
+        resp_v = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents="Describe what you see: a white square. Reply in one word.",
+        )
         dur_v = int((time.time() - t0) * 1000)
         ok_v = bool(resp_v and resp_v.text)
         try:
             rec = record_api_call(
-                provider="gemini", model="gemini-2.5-flash",
+                provider="gemini", model=GEMINI_MODEL,
                 kind="vision", purpose="check",
                 units={"tokens_in": 15, "tokens_out": 5},
                 duration_ms=dur_v, status="ok" if ok_v else "error",
@@ -768,36 +784,45 @@ def check_external_models(
                 total_cost_krw += rec.cost_krw or 0
         except Exception:
             pass
-        results.append({"name": "Gemini 비전", "status": "ok" if ok_v else "fail", "ms": dur_v})
+        results.append({"name": f"Gemini 비전 ({GEMINI_MODEL})", "status": "ok" if ok_v else "fail", "ms": dur_v})
     except Exception as e:
         results.append({"name": "Gemini 비전", "status": "fail", "detail": str(e)[:100]})
 
-    # 3. GPT check (low tier)
+    # 3. GPT image check (운영 모델 gpt-image-2.5-sunburst, low quality, 1024×1024)
     try:
         from openai import OpenAI
+        from app.adapters.openai_image import GPT_IMAGE_MODEL
         t0 = time.time()
-        client = OpenAI(api_key=settings.OPENAI_API_KEY, timeout=30.0)
-        resp_gpt = client.chat.completions.create(
-            model="gpt-4.1-mini",
-            messages=[{"role": "user", "content": "Reply with just the word 'ok'."}],
-            max_tokens=5,
+        client = OpenAI(api_key=settings.OPENAI_API_KEY, timeout=120.0)
+        resp_gpt = client.images.generate(
+            model=GPT_IMAGE_MODEL,
+            prompt="A single white square on a plain white background. Minimal.",
+            size="1024x1024",
+            quality="low",
+            n=1,
         )
         dur_gpt = int((time.time() - t0) * 1000)
-        ok_gpt = bool(resp_gpt and resp_gpt.choices)
+        ok_gpt = bool(resp_gpt and resp_gpt.data and len(resp_gpt.data) > 0)
+        # Extract usage if available
+        units = {"images": 1}
+        if hasattr(resp_gpt, "usage") and resp_gpt.usage:
+            usage = resp_gpt.usage
+            units["tokens_in"] = getattr(usage, "input_tokens", 0) or 0
+            units["tokens_out"] = getattr(usage, "output_tokens", 0) or 0
         try:
             rec = record_api_call(
-                provider="openai", model="gpt-4.1-mini",
-                kind="text", purpose="check",
-                units={"tokens_in": 10, "tokens_out": 5},
-                duration_ms=dur_gpt, status="ok" if ok_gpt else "error",
+                provider="openai", model=GPT_IMAGE_MODEL,
+                kind="image", purpose="check",
+                units=units, duration_ms=dur_gpt,
+                status="ok" if ok_gpt else "error",
             )
             if rec and hasattr(rec, 'cost_krw'):
                 total_cost_krw += rec.cost_krw or 0
         except Exception:
             pass
-        results.append({"name": "GPT (low)", "status": "ok" if ok_gpt else "fail", "ms": dur_gpt})
+        results.append({"name": f"GPT 이미지 ({GPT_IMAGE_MODEL})", "status": "ok" if ok_gpt else "fail", "ms": dur_gpt})
     except Exception as e:
-        results.append({"name": "GPT (low)", "status": "fail", "detail": str(e)[:100]})
+        results.append({"name": "GPT 이미지", "status": "fail", "detail": str(e)[:100]})
 
     try:
         db.commit()
