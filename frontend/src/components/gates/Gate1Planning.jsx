@@ -100,6 +100,8 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
   const [saving, setSaving] = useState(false);
   const [editData, setEditData] = useState(null);
   const [error, setError] = useState('');
+  const [toast, setToast] = useState('');
+  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 5000); };
 
   // 3축 선택 상태 + 개별 touched
   const [genre, setGenre] = useState(null);
@@ -779,7 +781,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
       setAdScript(data.script || newScript);
       setAdScriptEditing(false);
     } catch (err) {
-      alert(err.response?.data?.detail || '대본 저장에 실패했어요');
+      showToast(err.response?.data?.detail || '대본 저장에 실패했어요');
     } finally {
       setAdScriptSaving(false);
     }
@@ -791,7 +793,14 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
       await api.post(`/projects/${projectId}/episodes/${episodeId}/script/approve`, { auto_advance: false });
       await onRefresh?.();
     } catch (err) {
-      alert(err.response?.data?.detail || '승인에 실패했어요');
+      const status = err.response?.status;
+      const detail = err.response?.data?.detail;
+      if (status === 400 && /gate/i.test(detail || '')) {
+        showToast('이미 다음 단계예요');
+        onRefresh?.();
+      } else {
+        showToast(typeof detail === 'string' ? detail : '승인에 실패했어요');
+      }
     } finally {
       setAdScriptApproving(false);
     }
@@ -876,13 +885,22 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
 
               // 3) onecut_ad: 대본 생성/재생성 (대본 카드에 표시)
               if (purpose === 'onecut_ad') {
-                const { data } = await api.post(`/projects/${projectId}/episodes/${episodeId}/script`, {});
-                setAdScript(data?.scenes ? data : data?.script || data);
-                setAdScriptHighlight(true);
-                setTimeout(() => {
-                  setAdScriptHighlight(false);
-                  document.getElementById('ad-script-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }, 300);
+                try {
+                  const { data } = await api.post(`/projects/${projectId}/episodes/${episodeId}/script`, {});
+                  setAdScript(data?.scenes ? data : data?.script || data);
+                  setAdScriptHighlight(true);
+                  setTimeout(() => {
+                    setAdScriptHighlight(false);
+                    document.getElementById('ad-script-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  }, 300);
+                } catch (e) {
+                  const status = e.response?.status;
+                  if (status === 400 && /gate/i.test(e.response?.data?.detail || '')) {
+                    showToast('이미 다음 단계예요');
+                  } else {
+                    showToast('대본 생성에 실패했어요 · 다시 만들기');
+                  }
+                }
               }
 
               // 4) instatoon_ad·brand_series: 대본 자동 생성 (gate2에서 바로 보이도록)
@@ -890,8 +908,12 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                 try {
                   await api.post(`/projects/${projectId}/episodes/${episodeId}/script`, {});
                 } catch (e) {
-                  console.warn('Auto script generation failed:', e.response?.data?.detail || e.message);
-                  alert('대본 생성에 실패했어요. 다시 시도해 주세요.');
+                  const status = e.response?.status;
+                  if (status === 400 && /gate/i.test(e.response?.data?.detail || '')) {
+                    showToast('이미 다음 단계예요');
+                  } else {
+                    showToast('대본 생성에 실패했어요 · 다시 만들기');
+                  }
                 }
               }
 
@@ -903,6 +925,9 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                 }, 400);
               }
             } catch (err) {
+              const detail = err.response?.data?.detail;
+              const msg = typeof detail === 'string' ? detail : (typeof detail === 'object' && detail?.message ? detail.message : '처리에 실패했어요');
+              showToast(msg);
               console.error('onBriefDone error:', err.response?.data || err.message);
             } finally {
               setAdScriptGenerating(false);
@@ -1888,6 +1913,12 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
         </div>
         );
       })()}
+      {/* 토스트 */}
+      {toast && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[70] bg-ink-black dark:bg-white text-white dark:text-ink-black px-5 py-2.5 rounded-full text-sm font-bold shadow-lg animate-slide-up">
+          {toast}
+        </div>
+      )}
     </div>
   );
 }

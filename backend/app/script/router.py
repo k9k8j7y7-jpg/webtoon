@@ -116,7 +116,6 @@ async def create_script(
     first_product = db.query(Product).filter(Product.episode_id == episode.id).first()
     _product_name = first_product.name if first_product else None
 
-    from app.workflow.gate import get_purpose
     _purpose = get_purpose(episode.gate_status)
 
     # 광고 3종: idea_brief(카피·장면·브리프)를 planning에 합쳐 전달

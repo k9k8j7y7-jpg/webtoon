@@ -102,6 +102,7 @@ WEBTOON/
 - **컷 프롬프트 한글 금지:** appearance_en, location_spec_en(영어)만 주입. spec_en 없으면 한글 폴백
 - **Gemini:** `.env`의 `GEMINI_API_KEY` + `IMAGE_MODEL`(현재 `gemini-3.1-flash-image`)
 - **원가 기록:** 외부 API 새로 붙이면 `app/costs/recorder.py`의 `record_api_call()` 필수. 기록 실패가 생성 실패로 번지면 안 됨(try/except)
+- **대본·콘티 회귀:** `script/`·`storyboard/`·`workflow/` 변경 시 트랙 4종(한 컷·인스타툰·연재·상세) 각 1회 대본 생성 회귀 필수. 11-19 `792c2ae` 로컬 import 충돌로 전 트랙 500 사고
 - **FormData 업로드:** `{ headers: { 'Content-Type': 'multipart/form-data' } }` 필수(누락 시 422 흰 화면)
 
 ### 말풍선·렌더링
