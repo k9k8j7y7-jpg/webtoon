@@ -142,8 +142,8 @@ WEBTOON/
 ### DB·배포
 - **DB 마이그레이션:** `stepN.sql`+`stepN_down.sql` 쌍. 리허설 `project_t_test`에서만. mysqldump 백업+승인 필수
 - **마이그레이션 리허설:** 운영 DB 절대 금지. `project_t_test` 없으면 먼저 생성
-- **배포 전:** 서버 로그에서 진행 중 생성·모션·릴스 작업 확인(완료 후 배포). `--reload`는 진행 작업 끊김+인메모리 job 소실
-- **배포:** 파일별 `scp` → `--reload` 감지. `.env` 변경 시 `touch app/config.py` + 로그 확인
+- **배포 전:** 진행 중 생성·모션·릴스 작업 확인(완료 후 배포). 재시작은 진행 작업 끊김+인메모리 job 소실
+- **배포 = `scripts/deploy.sh <backend/파일…> [--frontend]`** (scp → `systemctl restart ezitoon-api` → health JSON). 서버는 systemd `ezitoon-api`(127.0.0.1:8000, workers 1, enable), **`--reload`·nohup 기동 금지**. health = 외부 `https://ssagda.com/WEBTOON/health`·내부 `http://127.0.0.1:8000/health`, `-f`만 말고 `"status":"ok"` grep(SPA fallback이 200 HTML). `.env` 변경 시 `scripts/deploy.sh --restart-only`. 로그 `journalctl -u ezitoon-api`(SystemMaxUse=500M). 롤백 명령 `~/backups/uvicorn_prev_cmd.txt`
 - **dev 서버:** 백그라운드 기동+curl 폴링. 재시작은 묻지 않고 수행
 
 ### 기능별 핵심 규칙
@@ -165,8 +165,9 @@ WEBTOON/
 ## 배포 명령 참고
 
 ```bash
-# 백엔드: scp -i "$USERPROFILE/.ssh/DONGHAESSHKEy.pem" <파일> bitnami@52.79.94.122:/home/bitnami/project-t/backend/<경로>
-# 프론트: cd frontend && npx vite build && scp -r dist/. bitnami@52.79.94.122:/home/bitnami/project-t/backend/frontend/dist/
+# 백엔드: scripts/deploy.sh backend/app/<경로> [...]
+# 프론트: scripts/deploy.sh --frontend
+# 재시작만: scripts/deploy.sh --restart-only
 # DB: ssh bitnami@52.79.94.122 '/opt/bitnami/mariadb/bin/mariadb -u root -p"<비밀번호>" project_t < /home/bitnami/project-t/backend/stepN.sql'
 # JWT: ssh -i "..." bitnami@52.79.94.122 'cd /home/bitnami/project-t/backend && source venv/bin/activate && python3 -c "from app.auth.jwt import create_access_token; print(create_access_token(user_id=1))"'
 ```

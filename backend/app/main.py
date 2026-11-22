@@ -100,28 +100,32 @@ from app.storage import LOCAL_STORAGE_DIR
 def health_check():
     import subprocess
     from datetime import datetime
-    from app.database import get_db
-    # DB check
+    from sqlalchemy import text as sa_text
+    from app.database import engine
+    # DB check (연결은 with로 즉시 반납)
     db_ok = False
     try:
-        db = next(get_db())
-        from sqlalchemy import text as sa_text
-        db.execute(sa_text("SELECT 1"))
+        with engine.connect() as conn:
+            conn.execute(sa_text("SELECT 1"))
         db_ok = True
     except Exception:
         pass
-    # Git version
+    # Version: 서버는 git 저장소가 아니므로 배포 스크립트가 쓴 backend/VERSION 우선, 없으면 git
+    backend_dir = os.path.dirname(os.path.dirname(__file__))
     version = "unknown"
     try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
-            capture_output=True, text=True, timeout=3,
-            cwd=os.path.dirname(os.path.dirname(__file__)),
-        )
-        if result.returncode == 0:
-            version = result.stdout.strip()
+        with open(os.path.join(backend_dir, "VERSION"), encoding="utf-8") as f:
+            version = f.read().strip() or "unknown"
     except Exception:
-        pass
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--short", "HEAD"],
+                capture_output=True, text=True, timeout=3, cwd=backend_dir,
+            )
+            if result.returncode == 0:
+                version = result.stdout.strip()
+        except Exception:
+            pass
     return {
         "status": "ok" if db_ok else "degraded",
         "db": "ok" if db_ok else "error",
