@@ -159,6 +159,7 @@ WEBTOON/
 ### 작업 환경
 - **Antigravity 협업:** 프론트 작업은 Antigravity, 배포·커밋은 Claude Code. ahead 0 필수
 - **다단계 지시서:** `docs/PROGRESS.md`에 현재 단계 갱신
+- **HANDOFF_*.md:** 도도가 `docs/`에 넣은 파일만 커밋(파일명 공백·`·`면 `HANDOFF_YYYYMMDD.md`로 이름만 바꿈). **Claude Code가 직접 작성 금지**
 - **PC 이동:** 떠나기 전 커밋+push, 앉으면 pull. `.env`·SSH 키는 git 밖
 - **로컬 스크립트:** `backend/.env`에 `IMAGE_MODEL`·`GEMINI_API_KEY` 필요
 
