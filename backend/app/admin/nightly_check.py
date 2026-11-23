@@ -445,6 +445,41 @@ def check_script_smoke(db) -> dict:
                     pass
 
 
+# ── 푸시 발송 ──────────────────────────────────────────────────
+
+
+def _send_bot_push(db, body: str, run_at: datetime) -> dict:
+    """관리자 전원에게 웹푸시 발송. 결과를 dict로 반환."""
+    try:
+        from app.push.service import send_push, push_enabled
+
+        if not push_enabled():
+            log.warning("push disabled (VAPID 미설정)")
+            return {"status": "warn", "value": "VAPID 미설정", "detail": "push_enabled() == False"}
+
+        # 관리자 user_id 목록
+        admin_rows = db.execute(
+            text("SELECT id FROM users WHERE is_admin = 1")
+        ).fetchall()
+        admin_ids = [r[0] for r in admin_rows]
+        if not admin_ids:
+            return {"status": "warn", "value": "관리자 없음"}
+
+        send_push(
+            user_ids=admin_ids,
+            type="nightly_check",
+            title="이지툰 야간 점검",
+            body=body,
+            link="/admin/stats",
+        )
+
+        log.info("push sent to admin_ids=%s", admin_ids)
+        return {"status": "ok", "value": f"발송 (관리자 {len(admin_ids)}명)"}
+    except Exception as e:
+        log.exception("push send failed")
+        return {"status": "fail", "value": "발송 실패", "detail": str(e)[:200]}
+
+
 # ── 메인 실행 ──────────────────────────────────────────────────
 
 
@@ -572,14 +607,52 @@ def run_nightly():
             log.info("  %s %-16s %s — %s", icon, r["key"], r.get("value", ""), r.get("detail", ""))
         log.info("=" * 60)
 
-        # D 알림 플레이스홀더 — 아직 미구현, 로그만
-        log.info("[알림 D 미구현] 요약: %s", summary)
+        # D 알림 — 관리자 웹푸시
+        warn_names = [
+            CHECK_KO.get(r["key"], {}).get("label", r["key"])
+            for r in all_results if r["status"] == "warn"
+        ]
+        fail_names = [
+            CHECK_KO.get(r["key"], {}).get("label", r["key"])
+            for r in all_results if r["status"] == "fail"
+        ]
+        push_body = summary
+        if warn_names or fail_names:
+            items = fail_names + warn_names
+            push_body += " — " + ", ".join(items[:5])
+
+        push_status = _send_bot_push(db, push_body, now)
+
+        # notify_push 행 저장
+        try:
+            db.execute(
+                text(
+                    "INSERT INTO admin_checks (run_at, `key`, status, value, detail, source) "
+                    "VALUES (:run_at, :key, :status, :value, :detail, :source)"
+                ),
+                {
+                    "run_at": now,
+                    "key": "notify_push",
+                    "status": push_status["status"],
+                    "value": push_status["value"],
+                    "detail": push_status.get("detail", ""),
+                    "source": "bot",
+                },
+            )
+            db.commit()
+        except Exception:
+            log.exception("Failed to save notify_push result")
+            try:
+                db.rollback()
+            except Exception:
+                pass
 
         return {
             "summary": summary,
             "results": all_results,
             "elapsed_sec": round(elapsed, 1),
             "check_cost_krw": check_cost,
+            "push": push_status,
         }
 
     finally:

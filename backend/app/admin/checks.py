@@ -31,6 +31,7 @@ CHECK_KO = {
     "cost_today":     {"label": "어제 비용",       "desc": "원가 폭주·패킷당 초과"},
     "model_smoke":    {"label": "모델 연기",       "desc": "Gemini·GPT 헬스체크"},
     "script_smoke":   {"label": "대본 연기",       "desc": "한 컷 대본 E2E 테스트"},
+    "notify_push":    {"label": "푸시 발송",       "desc": "관리자 웹푸시 알림"},
 }
 
 
