@@ -1750,6 +1750,42 @@ function StatusSubTab() {
         </div>
       </div>
 
+      {/* 야간 점검 봇 상태 카드 */}
+      {data?.bot ? (
+        <div className={`rounded-xl p-4 border ${
+          data.bot.stale
+            ? 'bg-red-900/30 border-red-500/50'
+            : data.bot.fail > 0
+              ? 'bg-red-900/20 border-red-500/30'
+              : data.bot.warn > 0
+                ? 'bg-yellow-900/20 border-yellow-500/30'
+                : 'bg-green-900/20 border-green-500/30'
+        }`}>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-white">마지막 야간 점검</span>
+              <span className="text-xs text-gray-400">
+                {new Date(data.bot.run_at).toLocaleString('ko-KR')}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-xs">
+              {data.bot.ok > 0 && <span className="text-green-400">정상 {data.bot.ok}</span>}
+              {data.bot.warn > 0 && <span className="text-yellow-400">주의 {data.bot.warn}</span>}
+              {data.bot.fail > 0 && <span className="text-red-400">심각 {data.bot.fail}</span>}
+            </div>
+          </div>
+          {data.bot.stale && (
+            <div className="mt-2 text-xs text-red-400 font-semibold">
+              ⚠ 야간 점검 24시간 이상 없음 — 봇 cron 확인 필요
+            </div>
+          )}
+        </div>
+      ) : !loading && (
+        <div className="rounded-xl p-4 border bg-gray-800/50 border-white/10">
+          <span className="text-sm text-gray-500">야간 점검 기록 없음</span>
+        </div>
+      )}
+
       {/* External check results */}
       {extResult && (
         <div className="bg-[#1a1a2e] border border-white/10 rounded-xl p-4">

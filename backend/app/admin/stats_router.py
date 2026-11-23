@@ -692,6 +692,40 @@ def _estimate_check_cost(db) -> int:
         return 12
 
 
+def _get_bot_summary(db) -> dict | None:
+    """최근 봇 점검 요약 (source=bot 최신 run_at 기준)."""
+    try:
+        last = db.execute(
+            text(
+                "SELECT run_at FROM admin_checks "
+                "WHERE source = 'bot' ORDER BY run_at DESC LIMIT 1"
+            )
+        ).fetchone()
+        if not last:
+            return None
+        run_at = last[0]
+        rows = db.execute(
+            text(
+                "SELECT `key`, status, value, detail FROM admin_checks "
+                "WHERE source = 'bot' AND run_at = :r"
+            ),
+            {"r": run_at},
+        ).fetchall()
+        ok = sum(1 for r in rows if r[1] == "ok")
+        warn = sum(1 for r in rows if r[1] == "warn")
+        fail = sum(1 for r in rows if r[1] == "fail")
+        hours_ago = (datetime.utcnow() - run_at).total_seconds() / 3600
+        return {
+            "run_at": run_at.isoformat(),
+            "ok": ok, "warn": warn, "fail": fail,
+            "total": len(rows),
+            "hours_ago": round(hours_ago, 1),
+            "stale": hours_ago > 24,
+        }
+    except Exception:
+        return None
+
+
 @router.get("/status")
 def stats_status(
     admin: User = Depends(require_admin),
@@ -702,6 +736,7 @@ def stats_status(
         "checks": checks,
         "last_run": datetime.utcnow().isoformat(),
         "ext_check_cost_krw": _estimate_check_cost(db),
+        "bot": _get_bot_summary(db),
     }
 
 
@@ -716,6 +751,46 @@ def stats_status_run(
         "checks": checks,
         "last_run": datetime.utcnow().isoformat(),
     }
+
+
+@router.get("/status/bot-history")
+def stats_bot_history(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """봇 점검 이력 7일 — 각 run_at별 요약."""
+    from app.admin.checks import CHECK_KO
+    since = datetime.utcnow() - timedelta(days=7)
+    rows = db.execute(
+        text(
+            "SELECT run_at, `key`, status, value, detail "
+            "FROM admin_checks WHERE source = 'bot' AND run_at >= :s "
+            "ORDER BY run_at DESC"
+        ),
+        {"s": since},
+    ).fetchall()
+
+    # run_at별 그룹핑
+    runs: dict[str, dict] = {}
+    for r in rows:
+        run_key = r[0].isoformat()
+        if run_key not in runs:
+            runs[run_key] = {"run_at": run_key, "ok": 0, "warn": 0, "fail": 0, "checks": []}
+        entry = runs[run_key]
+        st = r[2]
+        if st == "ok":
+            entry["ok"] += 1
+        elif st == "warn":
+            entry["warn"] += 1
+        else:
+            entry["fail"] += 1
+        ko = CHECK_KO.get(r[1], {})
+        entry["checks"].append({
+            "key": r[1], "label": ko.get("label", r[1]),
+            "status": r[2], "value": r[3], "detail": r[4],
+        })
+
+    return {"runs": list(runs.values())}
 
 
 # ── POST /admin/stats/status/check-external ───────────────────

@@ -24,6 +24,13 @@ CHECK_KO = {
     "exchange_rate":  {"label": "환율",            "desc": "오늘 USD/KRW 환율"},
     "prices_missing": {"label": "단가 누락",       "desc": "api_prices 미등록 모델"},
     "apache_config":  {"label": "Apache 설정",     "desc": "리버스 프록시 정상 여부"},
+    # 봇 전용 점검 (nightly_check.py)
+    "http":           {"label": "HTTP 응답",       "desc": "외부 URL·health 접근"},
+    "ssl":            {"label": "SSL 인증서",      "desc": "만료일 D-14/D-7 경고"},
+    "systemd":        {"label": "서비스 상태",     "desc": "ezitoon-api active·재시작"},
+    "cost_today":     {"label": "어제 비용",       "desc": "원가 폭주·패킷당 초과"},
+    "model_smoke":    {"label": "모델 연기",       "desc": "Gemini·GPT 헬스체크"},
+    "script_smoke":   {"label": "대본 연기",       "desc": "한 컷 대본 E2E 테스트"},
 }
 
 
