@@ -465,6 +465,25 @@ def _send_bot_push(db, body: str, run_at: datetime) -> dict:
         if not admin_ids:
             return {"status": "warn", "value": "관리자 없음"}
 
+        # 인앱 알림 (notifications 테이블) — 관리자 전원
+        for uid in admin_ids:
+            try:
+                db.execute(
+                    text(
+                        "INSERT INTO notifications (user_id, type, title, body, link) "
+                        "VALUES (:uid, 'nightly_check', :title, :body, :link)"
+                    ),
+                    {"uid": uid, "title": "이지툰 야간 점검", "body": body, "link": "/admin/stats"},
+                )
+            except Exception:
+                log.exception("notification insert failed for user %s", uid)
+        try:
+            db.commit()
+        except Exception:
+            log.exception("notification commit failed")
+            db.rollback()
+
+        # 웹푸시
         send_push(
             user_ids=admin_ids,
             type="nightly_check",
@@ -473,7 +492,7 @@ def _send_bot_push(db, body: str, run_at: datetime) -> dict:
             link="/admin/stats",
         )
 
-        log.info("push sent to admin_ids=%s", admin_ids)
+        log.info("push + notification sent to admin_ids=%s", admin_ids)
         return {"status": "ok", "value": f"발송 (관리자 {len(admin_ids)}명)"}
     except Exception as e:
         log.exception("push send failed")
