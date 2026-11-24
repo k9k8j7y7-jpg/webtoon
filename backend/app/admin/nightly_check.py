@@ -22,6 +22,8 @@ from sqlalchemy import text
 
 from app.database import SessionLocal
 
+KST = timezone(timedelta(hours=9))
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -141,7 +143,7 @@ def check_systemd() -> dict:
 def check_cost_today(db) -> dict:
     """어제 API 원가 vs 7일 평균 (3배 이상 warn). 패킷당 원가 299원 초과 warn."""
     try:
-        yesterday = (datetime.utcnow() - timedelta(days=1)).date()
+        yesterday = (datetime.now(KST) - timedelta(days=1)).date()
         week_ago = yesterday - timedelta(days=6)
 
         # 어제 원가
@@ -597,7 +599,8 @@ def run_nightly():
         warn_count = sum(1 for r in all_results if r["status"] == "warn")
         fail_count = sum(1 for r in all_results if r["status"] == "fail")
 
-        date_str = now.strftime("%m-%d")
+        now_kst = now.replace(tzinfo=timezone.utc).astimezone(KST)
+        date_str = now_kst.strftime("%m-%d")
         summary = (
             f"야간 점검 {date_str} · "
             f"정상 {ok_count} / 주의 {warn_count} / 심각 {fail_count} — "
@@ -611,7 +614,7 @@ def run_nightly():
                     "SELECT COALESCE(SUM(cost_krw), 0) FROM api_calls "
                     "WHERE purpose = 'check' AND DATE(created_at) = :d"
                 ),
-                {"d": now.date()},
+                {"d": now_kst.date()},
             ).fetchone()
             check_cost = int(cost_row[0] or 0)
         except Exception:
