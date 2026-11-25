@@ -6,8 +6,10 @@
 #   scripts/deploy.sh --frontend                                          # vite build + dist 업로드
 #   scripts/deploy.sh --frontend backend/app/x.py                         # 둘 다
 #   scripts/deploy.sh --restart-only                                      # 업로드 없이 재시작·health
+#   scripts/deploy.sh --allow-dirty backend/app/x.py                      # 더티 트리 허용
 #
-# 규칙: 진행 중 외부 API 연결(생성·모션·릴스)이 있으면 중단. FORCE=1 로 무시.
+# 규칙: 커밋 안 된 변경이 있으면 중단(--allow-dirty 로 무시).
+#       진행 중 외부 API 연결(생성·모션·릴스)이 있으면 중단. FORCE=1 로 무시.
 #       health는 -f 만이 아니라 JSON "status":"ok" 까지 확인(SPA fallback이 200 HTML을 주기 때문).
 set -euo pipefail
 
@@ -21,16 +23,24 @@ cd "$(git rev-parse --show-toplevel)"
 SSH=(ssh -i "$KEY" -o ConnectTimeout=15 "$HOST")
 SCP=(scp -q -i "$KEY")
 
-FRONTEND=0; RESTART_ONLY=0; FILES=()
+FRONTEND=0; RESTART_ONLY=0; ALLOW_DIRTY=0; FILES=()
 for a in "$@"; do
   case "$a" in
     --frontend) FRONTEND=1 ;;
     --restart-only) RESTART_ONLY=1 ;;
+    --allow-dirty) ALLOW_DIRTY=1 ;;
     *) FILES+=("$a") ;;
   esac
 done
 if [ "$FRONTEND" = 0 ] && [ "$RESTART_ONLY" = 0 ] && [ ${#FILES[@]} = 0 ]; then
   sed -n '2,10p' "$0"; exit 1
+fi
+
+# 0) 더티 트리 차단 — 커밋 안 된 변경이 있으면 중단
+if [ -n "$(git status --porcelain)" ] && [ "$ALLOW_DIRTY" != "1" ]; then
+  echo "ABORT: 커밋 안 된 변경이 있습니다. 먼저 커밋하세요 (무시하려면 --allow-dirty)"
+  git status --short
+  exit 1
 fi
 
 for f in "${FILES[@]}"; do
@@ -56,7 +66,7 @@ if [ "$FRONTEND" = 1 ]; then
   (cd frontend && npx vite build)
   "${SCP[@]}" -r frontend/dist/. "$HOST:$REMOTE/backend/frontend/dist/"; echo "scp frontend/dist"
 fi
-VER=$(git rev-parse --short HEAD)$( [ -n "$(git status --porcelain)" ] && echo "-dirty" || true )
+VER=$(git rev-parse --short HEAD)
 "${SSH[@]}" "echo '$VER' > $REMOTE/backend/VERSION"; echo "VERSION=$VER"
 
 # 3) 재시작 + health
