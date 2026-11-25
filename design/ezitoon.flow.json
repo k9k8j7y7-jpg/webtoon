@@ -1,0 +1,1269 @@
+{
+  "id": "ezitoon-mobile",
+  "title": "이지툰 모바일 흐름",
+  "goal": "한 컷·인스타툰·상세페이지·연재툰 광고 콘텐츠를 생성하고, 패킷을 충전하며, 완성 컷을 편집한다.",
+  "device": "mobile",
+  "start": "landing",
+  "entries": ["my-works", "packets"],
+  "vars": {
+    "loggedIn": false,
+    "packets": 0,
+    "hasNickname": true,
+    "published": false,
+    "episodeTitle": "",
+    "cutCount": 4,
+    "seriesEp": 1
+  },
+  "stages": [
+    "랜딩·인증",
+    "내 작품",
+    "한 컷 광고",
+    "인스타툰 광고",
+    "상세페이지",
+    "연재툰",
+    "결제·패킷",
+    "편집·다시 그리기"
+  ],
+  "review": {
+    "locale": "ko",
+    "groupDirection": "vertical"
+  },
+  "screens": [
+    {
+      "id": "landing",
+      "number": "01.01",
+      "title": "랜딩",
+      "stage": 0,
+      "slot": 0,
+      "origin": "source",
+      "brief": "서비스 소개·갤러리·가격표·FAQ를 한 화면에 보여주고, 가입 또는 빠른 한 컷 체험으로 유도한다.",
+      "body": "AI 웹툰·광고를 3분 만에",
+      "ui": {
+        "bar": "이지툰",
+        "blocks": [
+          {"type": "visual", "label": "히어로 배너 — AI 웹툰 예시"},
+          {"type": "text", "label": "AI로 만드는 웹툰 광고, 3분이면 충분해요"},
+          {"type": "text", "label": "🎨 갤러리  |  💡 만드는 법  |  💰 가격  |  ❓ FAQ"}
+        ]
+      },
+      "actions": [
+        {"id": "cta-signup", "label": "무료로 시작하기", "to": "login", "set": {"loggedIn": false}},
+        {"id": "cta-quick", "label": "한 컷 먼저 만들어보기", "to": "login", "kind": "secondary"},
+        {"id": "gallery-card", "label": "갤러리 작품 보기", "to": "public-viewer", "kind": "inline"},
+        {"id": "pricing-scroll", "label": "가격 보기", "to": "packets", "kind": "inline"}
+      ],
+      "uxConditions": [
+        "비로그인 상태에서 '무료로 시작하기' → 로그인 화면",
+        "로그인 상태면 '내 작품' 버튼이 대신 보임"
+      ]
+    },
+    {
+      "id": "login",
+      "number": "01.02",
+      "title": "로그인",
+      "stage": 0,
+      "slot": 1,
+      "origin": "source",
+      "brief": "OAuth 3사(카카오·구글·네이버)로 소셜 로그인. 신규 가입 시 환영 3패킷 지급.",
+      "body": "소셜 계정으로 간편 로그인",
+      "ui": {
+        "blocks": [
+          {"type": "text", "label": "이지툰에 오신 것을 환영합니다"},
+          {"type": "visual", "label": "카카오 로그인 버튼 (노랑)"},
+          {"type": "visual", "label": "Google 로그인 버튼 (흰)"},
+          {"type": "visual", "label": "네이버 로그인 버튼 (초록)"},
+          {"type": "text", "label": "이용약관 · 개인정보처리방침 · FAQ"}
+        ]
+      },
+      "actions": [
+        {"id": "oauth-kakao", "label": "카카오로 시작하기", "to": "oauth-callback"},
+        {"id": "oauth-google", "label": "Google로 시작하기", "to": "oauth-callback", "kind": "secondary"},
+        {"id": "oauth-naver", "label": "네이버로 시작하기", "to": "oauth-callback", "kind": "secondary"},
+        {"id": "back-landing", "label": "돌아가기", "to": "landing", "kind": "back"}
+      ]
+    },
+    {
+      "id": "oauth-callback",
+      "number": "01.03",
+      "title": "인증 처리 중",
+      "stage": 0,
+      "slot": 2,
+      "origin": "inferred",
+      "tone": "pending",
+      "body": "소셜 인증 결과를 확인하고 있어요…",
+      "actions": [
+        {"id": "auth-success", "label": "인증 성공", "to": "my-works", "kind": "simulation", "set": {"loggedIn": true, "packets": 3}},
+        {"id": "auth-fail", "label": "인증 실패", "to": "login-fail", "kind": "simulation"}
+      ]
+    },
+    {
+      "id": "login-fail",
+      "number": "01.04",
+      "title": "로그인 실패",
+      "stage": 0,
+      "slot": 3,
+      "origin": "inferred",
+      "tone": "error",
+      "body": "인증에 실패했어요. 다시 시도해 주세요.",
+      "actions": [
+        {"id": "retry-login", "label": "다시 로그인", "to": "login"},
+        {"id": "back-landing-fail", "label": "홈으로", "to": "landing", "kind": "secondary"}
+      ]
+    },
+
+    {
+      "id": "my-works",
+      "number": "02.01",
+      "title": "내 작품",
+      "stage": 1,
+      "slot": 0,
+      "origin": "source",
+      "brief": "4가지 입구(한 컷·인스타툰·연재툰·상세페이지) 카드 + 작품 목록. '프로젝트/에피소드' 용어 금지.",
+      "body": "오늘은 어떤 콘텐츠를 만들어 볼까요?",
+      "ui": {
+        "bar": "내 작품",
+        "blocks": [
+          {"type": "visual", "label": "2×2 입구 카드 — 한 컷 / 인스타툰 / 연재툰 / 상세페이지"},
+          {"type": "text", "label": "빠른 한 컷 배너 →"},
+          {"type": "text", "label": "필터: 전체 | 한 컷 | 인스타툰 | 연재 | 상세"},
+          {"type": "text", "label": "작품 목록 (카드 그리드)"}
+        ]
+      },
+      "actions": [
+        {"id": "open-onecut-modal", "label": "한 컷 광고", "to": "onecut-modal", "kind": "inline"},
+        {"id": "open-insta-modal", "label": "인스타툰 광고", "to": "insta-modal", "kind": "inline"},
+        {"id": "open-series-modal", "label": "브랜드 연재툰", "to": "series-modal", "kind": "inline"},
+        {"id": "open-detail-modal", "label": "상세페이지", "to": "detail-modal", "kind": "inline"},
+        {"id": "go-quick", "label": "빠른 한 컷", "to": "landing", "kind": "inline"},
+        {"id": "open-existing-onecut", "label": "기존 한 컷 작품 열기", "to": "g1-onecut-brief", "kind": "inline"},
+        {"id": "open-existing-insta", "label": "기존 인스타툰 열기", "to": "g1-insta-brief", "kind": "inline"},
+        {"id": "open-existing-series", "label": "기존 연재툰 열기", "to": "series-hub", "kind": "inline"},
+        {"id": "open-existing-detail", "label": "기존 상세페이지 열기", "to": "dp-brief", "kind": "inline"},
+        {"id": "go-packets", "label": "패킷", "to": "packets", "kind": "tab"},
+        {"id": "go-settings", "label": "설정", "to": "landing", "kind": "tab"}
+      ]
+    },
+
+    {
+      "id": "onecut-modal",
+      "number": "02.02",
+      "title": "한 컷 만들기",
+      "stage": 1,
+      "slot": 1,
+      "origin": "source",
+      "ui": {"overlay": "my-works"},
+      "body": "제목을 입력하고 한 컷 광고를 시작하세요.",
+      "actions": [
+        {"id": "create-onecut", "label": "만들기", "to": "g1-onecut-brief", "set": {"episodeTitle": "새 한 컷"}},
+        {"id": "close-onecut-modal", "label": "닫기", "to": "my-works", "kind": "close"}
+      ]
+    },
+    {
+      "id": "insta-modal",
+      "number": "02.03",
+      "title": "인스타툰 만들기",
+      "stage": 1,
+      "slot": 2,
+      "origin": "source",
+      "ui": {"overlay": "my-works"},
+      "body": "제목과 컷 수를 선택하세요.",
+      "ui": {
+        "overlay": "my-works",
+        "blocks": [
+          {"type": "input", "label": "제목", "field": "episodeTitle"},
+          {"type": "text", "label": "컷 수: 4 / 6 / 8 / 직접 입력(4~10)"}
+        ]
+      },
+      "actions": [
+        {"id": "create-insta", "label": "만들기", "to": "g1-insta-brief", "set": {"cutCount": 4}},
+        {"id": "close-insta-modal", "label": "닫기", "to": "my-works", "kind": "close"}
+      ]
+    },
+    {
+      "id": "series-modal",
+      "number": "02.04",
+      "title": "연재툰 만들기",
+      "stage": 1,
+      "slot": 3,
+      "origin": "source",
+      "ui": {
+        "overlay": "my-works",
+        "blocks": [
+          {"type": "input", "label": "시리즈 제목", "field": "episodeTitle", "required": true},
+          {"type": "text", "label": "컷 수: 6 / 8 / 10 / 직접 입력(4~20)"},
+          {"type": "text", "label": "비율: 9:16 / 1:1"}
+        ]
+      },
+      "body": "시리즈 제목, 컷 수, 비율을 정하세요.",
+      "actions": [
+        {"id": "create-series", "label": "만들기", "to": "g1-series-brief", "set": {"seriesEp": 1}},
+        {"id": "close-series-modal", "label": "닫기", "to": "my-works", "kind": "close"}
+      ]
+    },
+    {
+      "id": "detail-modal",
+      "number": "02.05",
+      "title": "상세페이지 만들기",
+      "stage": 1,
+      "slot": 4,
+      "origin": "source",
+      "ui": {"overlay": "my-works"},
+      "body": "상세페이지 제목을 입력하세요.",
+      "actions": [
+        {"id": "create-detail", "label": "만들기", "to": "dp-brief"},
+        {"id": "close-detail-modal", "label": "닫기", "to": "my-works", "kind": "close"}
+      ]
+    },
+
+    {
+      "id": "g1-onecut-brief",
+      "number": "03.01",
+      "title": "① 기획 — 한 컷 브리프",
+      "stage": 2,
+      "slot": 0,
+      "origin": "source",
+      "brief": "광고 목적·제품·무드·타겟·카피 입력. 설명 장치 옵션(OFF 기본). 대본도 같은 화면에서 처리(onecut_ad는 Gate1=Gate2).",
+      "body": "광고 브리프를 작성하세요",
+      "ui": {
+        "bar": "한 컷 광고",
+        "heading": "① 기획",
+        "blocks": [
+          {"type": "input", "label": "광고 목적", "field": "episodeTitle"},
+          {"type": "text", "label": "제품 정보 · 무드 · 타겟 · CTA"},
+          {"type": "text", "label": "카피 디자인 (글씨체·위치·강조)"},
+          {"type": "text", "label": "[선택] 설명 장치: OFF / zoom_inset / icon_badges / …"}
+        ]
+      },
+      "actions": [
+        {"id": "approve-onecut-brief", "label": "다음: 자산 준비", "to": "g3-onecut-assets"},
+        {"id": "back-my-onecut", "label": "내 작품", "to": "my-works", "kind": "back"}
+      ],
+      "uxConditions": [
+        "브리프 필수 항목 미입력 시 버튼 비활성",
+        "한 컷은 Gate1이 기획+대본을 겸함 — 기획 승인 시 자동으로 대본도 생성"
+      ]
+    },
+    {
+      "id": "g3-onecut-assets",
+      "number": "03.02",
+      "title": "③ 자산 — 한 컷",
+      "stage": 2,
+      "slot": 1,
+      "origin": "source",
+      "brief": "화풍 선택, 캐릭터 시트 생성(2패킷), 제품 사진 업로드, 비율 선택.",
+      "body": "화풍·캐릭터·제품을 준비하세요",
+      "ui": {
+        "heading": "③ 자산 준비",
+        "blocks": [
+          {"type": "text", "label": "화풍: 한국 웹툰 / 로맨스 / SD / … (16종)"},
+          {"type": "text", "label": "캐릭터 카드 — 시트 생성 (2패킷)"},
+          {"type": "text", "label": "제품 사진 업로드 (투명 PNG)"},
+          {"type": "text", "label": "비율: 9:16 / 1:1 / 4:5 / 16:9"}
+        ]
+      },
+      "actions": [
+        {"id": "gen-sheet-onecut", "label": "캐릭터 시트 생성 (2패킷)", "to": "g3-onecut-assets", "kind": "inline"},
+        {"id": "approve-onecut-assets", "label": "다음: 이미지 생성", "to": "g5-onecut-review", "when": {"packets": 3}},
+        {"id": "approve-onecut-assets-no-pkt", "label": "다음: 이미지 생성", "to": "packet-insufficient", "when": {"packets": 0}},
+        {"id": "revert-onecut-g1", "label": "기획 수정", "to": "onecut-revert-confirm", "kind": "secondary"},
+        {"id": "back-my-onecut2", "label": "내 작품", "to": "my-works", "kind": "back"}
+      ],
+      "uxConditions": [
+        "패킷 부족 시 '다음' 클릭 → 402 → 충전 유도 화면",
+        "'기획 수정' → 무효화 범위 확인 모달 → 확인 시 Gate1로 revert"
+      ]
+    },
+    {
+      "id": "onecut-revert-confirm",
+      "number": "03.03",
+      "title": "되돌리기 확인",
+      "stage": 2,
+      "slot": 2,
+      "origin": "inferred",
+      "ui": {"overlay": "g3-onecut-assets"},
+      "body": "기획 단계로 되돌리면 자산·이미지가 초기화됩니다.",
+      "actions": [
+        {"id": "confirm-revert-onecut", "label": "되돌리기", "to": "g1-onecut-brief"},
+        {"id": "cancel-revert-onecut", "label": "취소", "to": "g3-onecut-assets", "kind": "close"}
+      ]
+    },
+    {
+      "id": "g5-onecut-review",
+      "number": "03.04",
+      "title": "⑤ 완성 — 한 컷",
+      "stage": 2,
+      "slot": 3,
+      "origin": "source",
+      "brief": "이미지 생성 결과. 다시 그리기·편집·공개·공유·내보내기.",
+      "body": "완성된 한 컷 광고",
+      "tone": "success",
+      "ui": {
+        "heading": "⑤ 완성",
+        "blocks": [
+          {"type": "visual", "label": "생성된 광고 이미지 + 말풍선 오버레이"},
+          {"type": "text", "label": "다시 그리기 · 편집 · 모션 · 릴스"},
+          {"type": "text", "label": "공개하기 · 공유 링크 복사 · 인스타 공유"}
+        ]
+      },
+      "actions": [
+        {"id": "redraw-onecut", "label": "다시 그리기", "to": "redraw-sheet", "kind": "inline"},
+        {"id": "edit-onecut", "label": "편집", "to": "cut-editor", "kind": "inline"},
+        {"id": "publish-onecut", "label": "공개하기", "to": "publish-confirm", "kind": "inline"},
+        {"id": "share-onecut", "label": "인스타 공유", "to": "insta-share", "kind": "inline"},
+        {"id": "export-onecut", "label": "내보내기 (ZIP·세로·인스타)", "to": "export-progress", "kind": "secondary"},
+        {"id": "back-my-onecut3", "label": "내 작품", "to": "my-works", "kind": "back"}
+      ],
+      "end": true
+    },
+
+    {
+      "id": "g1-insta-brief",
+      "number": "04.01",
+      "title": "① 기획 — 인스타툰 브리프",
+      "stage": 3,
+      "slot": 0,
+      "origin": "source",
+      "brief": "광고 목적·제품·무드·타겟·카피. 모델 1명 제한. 전 컷 제품 참조.",
+      "body": "인스타툰 브리프를 작성하세요",
+      "ui": {
+        "bar": "인스타툰 광고",
+        "heading": "① 기획",
+        "blocks": [
+          {"type": "input", "label": "광고 목적 · 핵심 메시지", "field": "episodeTitle"},
+          {"type": "text", "label": "제품 · 무드 · 타겟 · CTA · 카피 디자인"}
+        ]
+      },
+      "actions": [
+        {"id": "approve-insta-brief", "label": "다음: 대본", "to": "g2-insta-script"},
+        {"id": "back-my-insta", "label": "내 작품", "to": "my-works", "kind": "back"}
+      ]
+    },
+    {
+      "id": "g2-insta-script",
+      "number": "04.02",
+      "title": "② 대본 — 인스타툰",
+      "stage": 3,
+      "slot": 1,
+      "origin": "source",
+      "brief": "AI 대본 생성 → 컷별 행동·대사 편집. 톤 재생성(임팩트/감성/유머/신뢰). 1컷=훅카피, 마지막=헤드+서브.",
+      "body": "AI가 만든 대본을 확인하세요",
+      "ui": {
+        "heading": "② 대본",
+        "blocks": [
+          {"type": "text", "label": "장면 1 — 컷 목록 (행동·대사·훅/카피 배지)"},
+          {"type": "text", "label": "톤 재생성: 더 짧게 / 임팩트 / 감성 / 유머 / 신뢰"}
+        ]
+      },
+      "actions": [
+        {"id": "edit-cut-script", "label": "컷 편집", "to": "g2-insta-script", "kind": "inline"},
+        {"id": "regen-script-insta", "label": "톤 재생성", "to": "g2-insta-script", "kind": "inline"},
+        {"id": "approve-insta-script", "label": "다음: 자산 준비", "to": "g3-insta-assets"},
+        {"id": "revert-insta-g1", "label": "기획 수정", "to": "g1-insta-brief", "kind": "secondary"},
+        {"id": "back-my-insta2", "label": "내 작품", "to": "my-works", "kind": "back"}
+      ]
+    },
+    {
+      "id": "g3-insta-assets",
+      "number": "04.03",
+      "title": "③ 자산 — 인스타툰",
+      "stage": 3,
+      "slot": 2,
+      "origin": "source",
+      "brief": "화풍·캐릭터(시트 2패킷)·제품 사진·비율. 캐릭터 교체 = unlink→link(고아 보존).",
+      "body": "자산을 준비하세요",
+      "ui": {
+        "heading": "③ 자산 준비",
+        "blocks": [
+          {"type": "text", "label": "화풍 선택 (16종)"},
+          {"type": "text", "label": "캐릭터 카드 — 교체 · 시트 생성"},
+          {"type": "text", "label": "제품 사진 업로드"},
+          {"type": "text", "label": "비율: 9:16 / 1:1"}
+        ]
+      },
+      "actions": [
+        {"id": "swap-character", "label": "캐릭터 교체", "to": "character-picker", "kind": "inline"},
+        {"id": "approve-insta-assets", "label": "다음: 이미지 생성", "to": "g5-insta-generating"},
+        {"id": "approve-insta-assets-no-pkt", "label": "다음: 이미지 생성", "to": "packet-insufficient", "when": {"packets": 0}},
+        {"id": "revert-insta-g2", "label": "대본 수정", "to": "g2-insta-script", "kind": "secondary"},
+        {"id": "back-my-insta3", "label": "내 작품", "to": "my-works", "kind": "back"}
+      ]
+    },
+    {
+      "id": "character-picker",
+      "number": "04.04",
+      "title": "캐릭터 선택",
+      "stage": 3,
+      "slot": 3,
+      "origin": "source",
+      "ui": {"overlay": "g3-insta-assets"},
+      "body": "내 프로젝트 / 내 라이브러리 / 프리셋 탭에서 선택",
+      "actions": [
+        {"id": "pick-char", "label": "선택 완료", "to": "g3-insta-assets"},
+        {"id": "close-picker", "label": "취소", "to": "g3-insta-assets", "kind": "close"}
+      ]
+    },
+    {
+      "id": "g5-insta-generating",
+      "number": "04.05",
+      "title": "이미지 생성 중",
+      "stage": 3,
+      "slot": 4,
+      "origin": "inferred",
+      "tone": "pending",
+      "body": "이미지를 생성하고 있어요… (컷당 1패킷)",
+      "actions": [
+        {"id": "gen-insta-done", "label": "생성 완료", "to": "g5-insta-review", "kind": "simulation"},
+        {"id": "gen-insta-fail", "label": "일부 실패", "to": "g5-insta-review-partial", "kind": "simulation"}
+      ]
+    },
+    {
+      "id": "g5-insta-review-partial",
+      "number": "04.06",
+      "title": "⑤ 완성 — 일부 실패",
+      "stage": 3,
+      "slot": 5,
+      "origin": "inferred",
+      "tone": "error",
+      "body": "일부 컷 생성에 실패했어요. 실패한 컷만 다시 생성할 수 있습니다.",
+      "actions": [
+        {"id": "retry-failed-cuts", "label": "실패 컷 재생성", "to": "g5-insta-generating"},
+        {"id": "continue-partial", "label": "이대로 진행", "to": "g5-insta-review"}
+      ]
+    },
+    {
+      "id": "g5-insta-review",
+      "number": "04.07",
+      "title": "⑤ 완성 — 인스타툰",
+      "stage": 3,
+      "slot": 6,
+      "origin": "source",
+      "brief": "컷 그리드. 다시 그리기·편집·모션·공개·인스타 공유.",
+      "body": "완성된 인스타툰 4컷",
+      "tone": "success",
+      "ui": {
+        "heading": "⑤ 완성",
+        "blocks": [
+          {"type": "visual", "label": "4컷 그리드 (이미지 + 말풍선 + 효과)"},
+          {"type": "text", "label": "공개하기 · 인스타 공유 · 내보내기"}
+        ]
+      },
+      "actions": [
+        {"id": "redraw-insta", "label": "다시 그리기", "to": "redraw-sheet", "kind": "inline"},
+        {"id": "edit-insta", "label": "편집", "to": "cut-editor", "kind": "inline"},
+        {"id": "publish-insta", "label": "공개하기", "to": "publish-confirm", "kind": "inline"},
+        {"id": "share-insta", "label": "인스타 공유", "to": "insta-share"},
+        {"id": "export-insta", "label": "내보내기", "to": "export-progress", "kind": "secondary"},
+        {"id": "revert-insta-g3", "label": "콘티 수정", "to": "insta-revert-confirm", "kind": "secondary"},
+        {"id": "back-my-insta4", "label": "내 작품", "to": "my-works", "kind": "back"}
+      ],
+      "end": true
+    },
+    {
+      "id": "insta-revert-confirm",
+      "number": "04.08",
+      "title": "콘티 수정 확인",
+      "stage": 3,
+      "slot": 7,
+      "origin": "inferred",
+      "ui": {"overlay": "g5-insta-review"},
+      "body": "자산 단계로 되돌리면 생성된 이미지가 초기화됩니다.",
+      "actions": [
+        {"id": "confirm-revert-insta", "label": "되돌리기", "to": "g3-insta-assets"},
+        {"id": "cancel-revert-insta", "label": "취소", "to": "g5-insta-review", "kind": "close"}
+      ]
+    },
+
+    {
+      "id": "dp-brief",
+      "number": "05.01",
+      "title": "① 브리프 — 상세페이지",
+      "stage": 4,
+      "slot": 0,
+      "origin": "source",
+      "brief": "제품 사진(정면 필수 + 측면·후면·탑뷰·손) 업로드 → 제품 분석(0패킷).",
+      "body": "제품 사진을 올려주세요 (정면 필수)",
+      "ui": {
+        "bar": "상세페이지",
+        "heading": "① 브리프",
+        "blocks": [
+          {"type": "text", "label": "정면 사진 (필수) ★"},
+          {"type": "text", "label": "측면 · 후면 · 탑뷰 · 손 (선택)"},
+          {"type": "text", "label": "제품 분석 결과 (AI)"}
+        ]
+      },
+      "actions": [
+        {"id": "upload-photos", "label": "사진 업로드", "to": "dp-brief", "kind": "inline"},
+        {"id": "approve-dp-brief", "label": "다음: 섹션 대본", "to": "dp-sections"},
+        {"id": "back-my-dp", "label": "내 작품", "to": "my-works", "kind": "back"}
+      ],
+      "uxConditions": ["정면 사진 없으면 '다음' 비활성"]
+    },
+    {
+      "id": "dp-sections",
+      "number": "05.02",
+      "title": "② 섹션 — 상세페이지",
+      "stage": 4,
+      "slot": 1,
+      "origin": "source",
+      "brief": "8개 섹션 대본 자동 생성(0패킷). 섹션별 편집·순서 변경.",
+      "body": "섹션 대본을 확인하세요 (8개)",
+      "ui": {
+        "heading": "② 섹션 대본",
+        "blocks": [
+          {"type": "text", "label": "섹션 1~8 카드 목록 (드래그 순서 변경)"},
+          {"type": "text", "label": "각 섹션: 제목 · 본문 편집 가능"}
+        ]
+      },
+      "actions": [
+        {"id": "edit-section", "label": "섹션 편집", "to": "dp-sections", "kind": "inline"},
+        {"id": "approve-dp-sections", "label": "다음: 준비", "to": "dp-prepare"},
+        {"id": "revert-dp-brief", "label": "브리프 수정", "to": "dp-brief", "kind": "secondary"},
+        {"id": "back-my-dp2", "label": "내 작품", "to": "my-works", "kind": "back"}
+      ]
+    },
+    {
+      "id": "dp-prepare",
+      "number": "05.03",
+      "title": "③ 준비 — 상세페이지",
+      "stage": 4,
+      "slot": 2,
+      "origin": "source",
+      "brief": "생성 전 최종 확인. 섹션당 2패킷.",
+      "body": "이미지 생성을 시작할까요? (섹션당 2패킷)",
+      "actions": [
+        {"id": "start-dp-gen", "label": "생성 시작", "to": "dp-generating"},
+        {"id": "start-dp-gen-no-pkt", "label": "생성 시작", "to": "packet-insufficient", "when": {"packets": 0}},
+        {"id": "revert-dp-sections", "label": "섹션 수정", "to": "dp-sections", "kind": "secondary"},
+        {"id": "back-my-dp3", "label": "내 작품", "to": "my-works", "kind": "back"}
+      ]
+    },
+    {
+      "id": "dp-generating",
+      "number": "05.04",
+      "title": "생성 중 — 상세페이지",
+      "stage": 4,
+      "slot": 3,
+      "origin": "inferred",
+      "tone": "pending",
+      "body": "섹션 이미지를 생성하고 있어요…",
+      "actions": [
+        {"id": "dp-gen-done", "label": "생성 완료", "to": "dp-complete", "kind": "simulation"},
+        {"id": "dp-gen-fail", "label": "일부 실패", "to": "dp-complete-partial", "kind": "simulation"}
+      ]
+    },
+    {
+      "id": "dp-complete-partial",
+      "number": "05.05",
+      "title": "완성 — 일부 실패",
+      "stage": 4,
+      "slot": 4,
+      "origin": "inferred",
+      "tone": "error",
+      "body": "일부 섹션 생성에 실패했어요.",
+      "actions": [
+        {"id": "retry-dp-fail", "label": "실패 섹션 재생성", "to": "dp-generating"},
+        {"id": "continue-dp-partial", "label": "이대로 진행", "to": "dp-complete"}
+      ]
+    },
+    {
+      "id": "dp-complete",
+      "number": "05.06",
+      "title": "④ 완성 — 상세페이지",
+      "stage": 4,
+      "slot": 5,
+      "origin": "source",
+      "brief": "섹션별 이미지 확인. 문장 단위 검사 결과(빨간 경고·회색 알림). 세로 스택 export.",
+      "body": "완성된 상세페이지",
+      "tone": "success",
+      "ui": {
+        "heading": "④ 완성",
+        "blocks": [
+          {"type": "visual", "label": "섹션 이미지 세로 스택 미리보기"},
+          {"type": "notice", "label": "⚠ 확인 필요한 문구 (빨간) / 원문에 없는 글자 (회색)"},
+          {"type": "text", "label": "세로 1장 내보내기 · 공개하기"}
+        ]
+      },
+      "actions": [
+        {"id": "export-dp-vertical", "label": "세로 1장 내보내기", "to": "export-progress"},
+        {"id": "publish-dp", "label": "공개하기", "to": "publish-confirm", "kind": "inline"},
+        {"id": "redraw-dp-section", "label": "섹션 다시 그리기", "to": "dp-generating", "kind": "inline"},
+        {"id": "revert-dp-prepare", "label": "섹션 수정", "to": "dp-sections", "kind": "secondary"},
+        {"id": "back-my-dp4", "label": "내 작품", "to": "my-works", "kind": "back"}
+      ],
+      "end": true
+    },
+
+    {
+      "id": "g1-series-brief",
+      "number": "06.01",
+      "title": "① 기획 — 연재툰 1화",
+      "stage": 5,
+      "slot": 0,
+      "origin": "source",
+      "brief": "브랜드 연재툰 브리프. 직전 화 복사(2화~). 모델 link-previous(0패킷).",
+      "body": "연재툰 1화 브리프",
+      "ui": {
+        "bar": "브랜드 연재툰",
+        "heading": "① 기획 (1화)",
+        "blocks": [
+          {"type": "input", "label": "광고 목적 · 핵심 메시지", "field": "episodeTitle"},
+          {"type": "text", "label": "제품 · 무드 · 타겟 · CTA · 카피 디자인"},
+          {"type": "text", "label": "보여줄 특징 선택"}
+        ]
+      },
+      "actions": [
+        {"id": "approve-series-brief", "label": "다음: 대본", "to": "g2-series-script"},
+        {"id": "back-my-series", "label": "내 작품", "to": "my-works", "kind": "back"}
+      ]
+    },
+    {
+      "id": "g2-series-script",
+      "number": "06.02",
+      "title": "② 대본 — 연재툰",
+      "stage": 5,
+      "slot": 1,
+      "origin": "source",
+      "brief": "AI 대본. 컷 수 직접 입력(4~20). 훅카피·설명컷 배치 규칙.",
+      "body": "대본을 확인하세요",
+      "actions": [
+        {"id": "approve-series-script", "label": "다음: 자산 준비", "to": "g3-series-assets"},
+        {"id": "revert-series-g1", "label": "기획 수정", "to": "g1-series-brief", "kind": "secondary"},
+        {"id": "back-my-series2", "label": "내 작품", "to": "my-works", "kind": "back"}
+      ]
+    },
+    {
+      "id": "g3-series-assets",
+      "number": "06.03",
+      "title": "③ 자산 — 연재툰",
+      "stage": 5,
+      "slot": 2,
+      "origin": "source",
+      "brief": "화풍·캐릭터(시리즈 라이브러리 link)·제품·비율. 모델 2명 제한.",
+      "body": "자산을 준비하세요",
+      "actions": [
+        {"id": "approve-series-assets", "label": "다음: 이미지 생성", "to": "g5-series-generating"},
+        {"id": "approve-series-assets-no-pkt", "label": "다음: 이미지 생성", "to": "packet-insufficient", "when": {"packets": 0}},
+        {"id": "revert-series-g2", "label": "대본 수정", "to": "g2-series-script", "kind": "secondary"},
+        {"id": "back-my-series3", "label": "내 작품", "to": "my-works", "kind": "back"}
+      ]
+    },
+    {
+      "id": "g5-series-generating",
+      "number": "06.04",
+      "title": "생성 중 — 연재툰",
+      "stage": 5,
+      "slot": 3,
+      "origin": "inferred",
+      "tone": "pending",
+      "body": "이미지를 생성하고 있어요…",
+      "actions": [
+        {"id": "series-gen-done", "label": "생성 완료", "to": "g5-series-review", "kind": "simulation"},
+        {"id": "series-gen-fail", "label": "일부 실패", "to": "g5-series-review-partial", "kind": "simulation"}
+      ]
+    },
+    {
+      "id": "g5-series-review-partial",
+      "number": "06.05",
+      "title": "⑤ 완성 — 일부 실패",
+      "stage": 5,
+      "slot": 4,
+      "origin": "inferred",
+      "tone": "error",
+      "body": "일부 컷 생성에 실패했어요.",
+      "actions": [
+        {"id": "retry-series-fail", "label": "실패 컷 재생성", "to": "g5-series-generating"},
+        {"id": "continue-series-partial", "label": "이대로 진행", "to": "g5-series-review"}
+      ]
+    },
+    {
+      "id": "g5-series-review",
+      "number": "06.06",
+      "title": "⑤ 완성 — 연재툰 1화",
+      "stage": 5,
+      "slot": 5,
+      "origin": "source",
+      "brief": "컷 그리드. 다시 그리기·편집·공개·공유·내보내기. 시리즈 허브로 돌아가서 다음 화.",
+      "body": "완성된 연재툰 1화",
+      "tone": "success",
+      "actions": [
+        {"id": "redraw-series", "label": "다시 그리기", "to": "redraw-sheet", "kind": "inline"},
+        {"id": "edit-series", "label": "편집", "to": "cut-editor", "kind": "inline"},
+        {"id": "publish-series", "label": "공개하기", "to": "publish-confirm", "kind": "inline"},
+        {"id": "share-series-insta", "label": "인스타 공유", "to": "insta-share", "kind": "inline"},
+        {"id": "go-series-hub", "label": "시리즈 홈 (다음 화)", "to": "series-hub"},
+        {"id": "back-my-series4", "label": "내 작품", "to": "my-works", "kind": "back"}
+      ],
+      "end": true
+    },
+    {
+      "id": "series-hub",
+      "number": "06.07",
+      "title": "시리즈 홈",
+      "stage": 5,
+      "slot": 6,
+      "origin": "source",
+      "brief": "시리즈 에피소드 목록. 'N화 만들기' → 직전 화 복사(브리프·제품·보여줄 특징).",
+      "body": "브랜드 연재툰 시리즈",
+      "ui": {
+        "blocks": [
+          {"type": "text", "label": "시리즈 제목"},
+          {"type": "text", "label": "1화 (완성) · 2화 (진행 중) · …"},
+          {"type": "text", "label": "N화 만들기 버튼"}
+        ]
+      },
+      "actions": [
+        {"id": "open-ep1", "label": "1화 열기", "to": "g5-series-review", "kind": "inline"},
+        {"id": "create-next-ep", "label": "2화 만들기", "to": "g1-series-ep2", "set": {"seriesEp": 2}},
+        {"id": "back-my-series5", "label": "내 작품", "to": "my-works", "kind": "back"}
+      ]
+    },
+    {
+      "id": "g1-series-ep2",
+      "number": "06.08",
+      "title": "① 기획 — 연재툰 2화",
+      "stage": 5,
+      "slot": 7,
+      "origin": "source",
+      "brief": "직전 화 복사된 브리프 기반. 캐릭터 모델 link-previous(0패킷).",
+      "body": "2화 브리프 (1화 복사됨)",
+      "actions": [
+        {"id": "approve-ep2-brief", "label": "다음: 대본", "to": "g2-series-ep2-script"},
+        {"id": "back-series-hub", "label": "시리즈 홈", "to": "series-hub", "kind": "back"}
+      ]
+    },
+    {
+      "id": "g2-series-ep2-script",
+      "number": "06.09",
+      "title": "② 대본 — 연재툰 2화",
+      "stage": 5,
+      "slot": 8,
+      "origin": "inferred",
+      "body": "2화 대본을 확인하세요",
+      "actions": [
+        {"id": "approve-ep2-script", "label": "다음: 자산 준비", "to": "g3-series-ep2-assets"},
+        {"id": "revert-ep2-g1", "label": "기획 수정", "to": "g1-series-ep2", "kind": "secondary"},
+        {"id": "back-series-hub2", "label": "시리즈 홈", "to": "series-hub", "kind": "back"}
+      ]
+    },
+    {
+      "id": "g3-series-ep2-assets",
+      "number": "06.10",
+      "title": "③ 자산 — 연재툰 2화",
+      "stage": 5,
+      "slot": 9,
+      "origin": "inferred",
+      "body": "2화 자산 준비 (1화 캐릭터 자동 연결)",
+      "actions": [
+        {"id": "approve-ep2-assets", "label": "다음: 이미지 생성", "to": "g5-series-ep2-gen"},
+        {"id": "approve-ep2-assets-no-pkt", "label": "다음: 이미지 생성", "to": "packet-insufficient", "when": {"packets": 0}},
+        {"id": "revert-ep2-g2", "label": "대본 수정", "to": "g2-series-ep2-script", "kind": "secondary"},
+        {"id": "back-series-hub3", "label": "시리즈 홈", "to": "series-hub", "kind": "back"}
+      ]
+    },
+    {
+      "id": "g5-series-ep2-gen",
+      "number": "06.11",
+      "title": "생성 중 — 2화",
+      "stage": 5,
+      "slot": 10,
+      "origin": "inferred",
+      "tone": "pending",
+      "body": "2화 이미지를 생성하고 있어요…",
+      "actions": [
+        {"id": "ep2-gen-done", "label": "생성 완료", "to": "g5-series-ep2-review", "kind": "simulation"},
+        {"id": "ep2-gen-fail", "label": "일부 실패", "to": "g5-series-ep2-review-partial", "kind": "simulation"}
+      ]
+    },
+    {
+      "id": "g5-series-ep2-review-partial",
+      "number": "06.12",
+      "title": "⑤ 완성 — 2화 일부 실패",
+      "stage": 5,
+      "slot": 11,
+      "origin": "inferred",
+      "tone": "error",
+      "body": "일부 컷 생성에 실패했어요.",
+      "actions": [
+        {"id": "retry-ep2-fail", "label": "실패 컷 재생성", "to": "g5-series-ep2-gen"},
+        {"id": "continue-ep2-partial", "label": "이대로 진행", "to": "g5-series-ep2-review"}
+      ]
+    },
+    {
+      "id": "g5-series-ep2-review",
+      "number": "06.13",
+      "title": "⑤ 완성 — 연재툰 2화",
+      "stage": 5,
+      "slot": 12,
+      "origin": "source",
+      "body": "완성된 연재툰 2화",
+      "tone": "success",
+      "actions": [
+        {"id": "redraw-ep2", "label": "다시 그리기", "to": "redraw-sheet", "kind": "inline"},
+        {"id": "edit-ep2", "label": "편집", "to": "cut-editor", "kind": "inline"},
+        {"id": "publish-ep2", "label": "공개하기", "to": "publish-confirm", "kind": "inline"},
+        {"id": "go-series-hub-ep2", "label": "시리즈 홈", "to": "series-hub"},
+        {"id": "back-my-series-ep2", "label": "내 작품", "to": "my-works", "kind": "back"}
+      ],
+      "end": true
+    },
+
+    {
+      "id": "packets",
+      "number": "07.01",
+      "title": "패킷 충전",
+      "stage": 6,
+      "slot": 0,
+      "origin": "source",
+      "brief": "패킷 잔액 + 4종 상품(15/30/100/300) + 토스 결제 위젯 + 이용 내역.",
+      "body": "패킷을 충전하세요",
+      "ui": {
+        "bar": "패킷",
+        "blocks": [
+          {"type": "rows", "rows": [{"label": "잔여 패킷", "value": "{{packets}}개"}]},
+          {"type": "text", "label": "체험 15 · 시작 30 · 인기 100 · 대용량 300"},
+          {"type": "text", "label": "토스페이먼츠 결제 위젯"},
+          {"type": "text", "label": "이용 내역 (최근 30건)"}
+        ]
+      },
+      "actions": [
+        {"id": "select-product", "label": "상품 선택 (30패킷)", "to": "packets", "kind": "inline"},
+        {"id": "pay-toss", "label": "결제하기", "to": "payment-processing"},
+        {"id": "back-my-packets", "label": "내 작품", "to": "my-works", "kind": "back"}
+      ]
+    },
+    {
+      "id": "payment-processing",
+      "number": "07.02",
+      "title": "결제 처리 중",
+      "stage": 6,
+      "slot": 1,
+      "origin": "inferred",
+      "tone": "pending",
+      "body": "결제를 처리하고 있어요…",
+      "actions": [
+        {"id": "pay-success", "label": "결제 성공", "to": "payment-success", "kind": "simulation", "inc": {"packets": 30}},
+        {"id": "pay-fail", "label": "결제 실패", "to": "payment-fail", "kind": "simulation"}
+      ]
+    },
+    {
+      "id": "payment-success",
+      "number": "07.03",
+      "title": "결제 완료",
+      "stage": 6,
+      "slot": 2,
+      "origin": "inferred",
+      "tone": "success",
+      "body": "30패킷이 충전되었어요! 잔여: {{packets}}개",
+      "actions": [
+        {"id": "back-to-work", "label": "작품으로 돌아가기", "to": "my-works"},
+        {"id": "stay-packets", "label": "추가 충전", "to": "packets", "kind": "secondary"}
+      ]
+    },
+    {
+      "id": "payment-fail",
+      "number": "07.04",
+      "title": "결제 실패",
+      "stage": 6,
+      "slot": 3,
+      "origin": "inferred",
+      "tone": "error",
+      "body": "결제에 실패했어요. 다시 시도해 주세요.",
+      "actions": [
+        {"id": "retry-pay", "label": "다시 결제하기", "to": "packets"},
+        {"id": "back-my-payfail", "label": "내 작품", "to": "my-works", "kind": "secondary"}
+      ]
+    },
+    {
+      "id": "packet-insufficient",
+      "number": "07.05",
+      "title": "패킷 부족",
+      "stage": 6,
+      "slot": 4,
+      "origin": "source",
+      "tone": "error",
+      "brief": "402 가드. 패킷 부족 시 충전 유도.",
+      "body": "패킷이 부족해요. 충전 후 다시 시도하세요.",
+      "actions": [
+        {"id": "go-charge", "label": "패킷 충전하기", "to": "packets"},
+        {"id": "back-prev-insufficient", "label": "돌아가기", "to": "my-works", "kind": "back"}
+      ]
+    },
+
+    {
+      "id": "redraw-sheet",
+      "number": "08.01",
+      "title": "다시 그리기",
+      "stage": 7,
+      "slot": 0,
+      "origin": "source",
+      "brief": "바텀시트/팝오버. 메모(연출 지시) + 연출 강도(light/normal/strong) + 제품 참조 토글 + 인라인 확인.",
+      "body": "다시 그리기 옵션",
+      "ui": {
+        "blocks": [
+          {"type": "input", "label": "연출 메모 (선택)", "field": "episodeTitle", "inputType": "textarea"},
+          {"type": "text", "label": "연출 강도: 약하게 / 보통 / 강하게"},
+          {"type": "text", "label": "제품 참조: ON/OFF"},
+          {"type": "notice", "label": "1패킷이 차감됩니다"}
+        ]
+      },
+      "actions": [
+        {"id": "confirm-redraw", "label": "다시 그리기 (1패킷)", "to": "redraw-generating"},
+        {"id": "confirm-redraw-no-pkt", "label": "다시 그리기 (1패킷)", "to": "packet-insufficient", "when": {"packets": 0}},
+        {"id": "cancel-redraw", "label": "취소", "to": "g5-onecut-review", "kind": "close"}
+      ]
+    },
+    {
+      "id": "redraw-generating",
+      "number": "08.02",
+      "title": "재생성 중",
+      "stage": 7,
+      "slot": 1,
+      "origin": "inferred",
+      "tone": "pending",
+      "body": "컷을 다시 그리고 있어요…",
+      "actions": [
+        {"id": "redraw-done", "label": "재생성 완료", "to": "g5-onecut-review", "kind": "simulation"},
+        {"id": "redraw-fail", "label": "재생성 실패", "to": "redraw-fail-screen", "kind": "simulation"}
+      ]
+    },
+    {
+      "id": "redraw-fail-screen",
+      "number": "08.03",
+      "title": "재생성 실패",
+      "stage": 7,
+      "slot": 2,
+      "origin": "inferred",
+      "tone": "error",
+      "body": "이미지 재생성에 실패했어요. 패킷은 차감되지 않았습니다.",
+      "actions": [
+        {"id": "retry-redraw", "label": "다시 시도", "to": "redraw-sheet"},
+        {"id": "back-review-fail", "label": "돌아가기", "to": "g5-onecut-review", "kind": "secondary"}
+      ]
+    },
+    {
+      "id": "cut-editor",
+      "number": "08.04",
+      "title": "컷 편집기",
+      "stage": 7,
+      "slot": 3,
+      "origin": "source",
+      "brief": "전체 화면 편집. 말풍선 드래그·스타일(12종)·폰트·크기, 효과음 배치·회전·색상, 효과 레이어.",
+      "body": "말풍선·효과음·효과 편집",
+      "ui": {
+        "blocks": [
+          {"type": "visual", "label": "컷 이미지 + 편집 가능 오버레이"},
+          {"type": "text", "label": "도구: 말풍선 · 효과음 · 효과 · 내레이션"},
+          {"type": "text", "label": "말풍선 스타일: 둥근/사각/구름/생각/외침/속삭임/…"},
+          {"type": "text", "label": "◀ 이전 컷  |  다음 컷 ▶"}
+        ]
+      },
+      "actions": [
+        {"id": "save-edit", "label": "저장", "to": "g5-onecut-review"},
+        {"id": "cancel-edit", "label": "취소", "to": "g5-onecut-review", "kind": "back"},
+        {"id": "prev-cut", "label": "이전 컷", "to": "cut-editor", "kind": "inline"},
+        {"id": "next-cut", "label": "다음 컷", "to": "cut-editor", "kind": "inline"}
+      ]
+    },
+    {
+      "id": "publish-confirm",
+      "number": "08.05",
+      "title": "공개 확인",
+      "stage": 7,
+      "slot": 4,
+      "origin": "source",
+      "brief": "닉네임 없으면 NicknameModal 선행. 공개 시 공유 링크 + 브리프 공개 체크.",
+      "body": "작품을 공개할까요?",
+      "ui": {
+        "blocks": [
+          {"type": "toggle", "label": "브리프도 함께 공개", "field": "published"},
+          {"type": "text", "label": "공유 링크가 생성됩니다"}
+        ]
+      },
+      "actions": [
+        {"id": "confirm-publish", "label": "공개하기", "to": "published-state", "set": {"published": true}},
+        {"id": "set-nickname-first", "label": "닉네임 설정 필요", "to": "nickname-modal", "when": {"hasNickname": false}},
+        {"id": "cancel-publish", "label": "취소", "to": "g5-onecut-review", "kind": "close"}
+      ]
+    },
+    {
+      "id": "nickname-modal",
+      "number": "08.06",
+      "title": "닉네임 설정",
+      "stage": 7,
+      "slot": 5,
+      "origin": "source",
+      "ui": {"overlay": "publish-confirm"},
+      "body": "공개하려면 닉네임을 설정하세요.",
+      "actions": [
+        {"id": "save-nickname", "label": "저장", "to": "publish-confirm", "set": {"hasNickname": true}},
+        {"id": "cancel-nickname", "label": "취소", "to": "g5-onecut-review", "kind": "close"}
+      ]
+    },
+    {
+      "id": "published-state",
+      "number": "08.07",
+      "title": "공개 완료",
+      "stage": 7,
+      "slot": 6,
+      "origin": "inferred",
+      "tone": "success",
+      "body": "공개되었어요! 공유 링크를 복사하세요.",
+      "ui": {
+        "blocks": [
+          {"type": "text", "label": "공유 링크: ssagda.com/WEBTOON/view/abc123"},
+          {"type": "text", "label": "[링크 복사] [비공개로 전환]"}
+        ]
+      },
+      "actions": [
+        {"id": "copy-link", "label": "링크 복사", "to": "published-state", "kind": "inline"},
+        {"id": "unpublish", "label": "비공개로 전환", "to": "g5-onecut-review", "set": {"published": false}, "kind": "secondary"},
+        {"id": "back-review-pub", "label": "돌아가기", "to": "g5-onecut-review", "kind": "back"}
+      ]
+    },
+    {
+      "id": "insta-share",
+      "number": "08.08",
+      "title": "인스타 공유",
+      "stage": 7,
+      "slot": 7,
+      "origin": "source",
+      "brief": "1080×1080 JPEG 렌더 + 크레딧 워터마크. 모바일=Web Share API, 데스크톱=ZIP+안내.",
+      "body": "인스타그램에 공유",
+      "ui": {
+        "blocks": [
+          {"type": "visual", "label": "1080×1080 미리보기 (크레딧 포함)"},
+          {"type": "text", "label": "캡션 편집 · 복사"},
+          {"type": "text", "label": "모바일: 공유하기 / PC: ZIP 다운로드"}
+        ]
+      },
+      "actions": [
+        {"id": "share-native", "label": "공유하기 (모바일)", "to": "insta-share", "kind": "inline"},
+        {"id": "download-zip-insta", "label": "ZIP 다운로드", "to": "insta-share", "kind": "inline"},
+        {"id": "close-insta-share", "label": "닫기", "to": "g5-insta-review", "kind": "close"}
+      ],
+      "end": true
+    },
+    {
+      "id": "export-progress",
+      "number": "08.09",
+      "title": "내보내기",
+      "stage": 7,
+      "slot": 8,
+      "origin": "source",
+      "brief": "ZIP·세로 스트립·인스타 1:1·A4 옵션. ExportProgressModal.",
+      "body": "내보내기 형식을 선택하세요",
+      "actions": [
+        {"id": "export-zip", "label": "ZIP (개별 PNG)", "to": "export-progress", "kind": "inline"},
+        {"id": "export-vertical", "label": "세로 1장", "to": "export-progress", "kind": "inline"},
+        {"id": "export-insta-format", "label": "인스타그램 (1:1)", "to": "export-progress", "kind": "inline"},
+        {"id": "close-export", "label": "닫기", "to": "g5-onecut-review", "kind": "close"}
+      ]
+    },
+    {
+      "id": "public-viewer",
+      "number": "08.10",
+      "title": "공개 뷰어",
+      "stage": 7,
+      "slot": 9,
+      "origin": "source",
+      "brief": "공유 링크로 접근. 컷 뷰어 + 작가 프로필 + 구독 + 좋아요 + 댓글. '이렇게 만들었어요' 카드.",
+      "body": "작품 보기",
+      "ui": {
+        "blocks": [
+          {"type": "visual", "label": "컷 뷰어 (세로 스크롤 / 그리드)"},
+          {"type": "text", "label": "작가 · 구독 · 좋아요 · 댓글"},
+          {"type": "text", "label": "'이렇게 만들었어요' — 이 설정으로 만들기"}
+        ]
+      },
+      "actions": [
+        {"id": "from-example", "label": "이 설정으로 만들기", "to": "my-works", "kind": "inline"},
+        {"id": "share-viewer", "label": "공유", "to": "public-viewer", "kind": "inline"},
+        {"id": "back-landing-viewer", "label": "홈", "to": "landing", "kind": "back"}
+      ]
+    }
+  ],
+
+  "scenarios": [
+    {
+      "id": "landing-to-onecut",
+      "title": "랜딩 → 가입 → 첫 한 컷 완성 → 공유",
+      "steps": [
+        {"action": "cta-signup", "screen": "login"},
+        {"action": "oauth-kakao", "screen": "oauth-callback"},
+        {"action": "auth-success", "screen": "my-works", "vars": {"loggedIn": true, "packets": 3}},
+        {"action": "open-onecut-modal", "screen": "onecut-modal"},
+        {"action": "create-onecut", "screen": "g1-onecut-brief"},
+        {"action": "approve-onecut-brief", "screen": "g3-onecut-assets"},
+        {"action": "approve-onecut-assets", "screen": "g5-onecut-review"},
+        {"action": "share-onecut", "screen": "insta-share"}
+      ]
+    },
+    {
+      "id": "insta-full-flow",
+      "title": "인스타툰 4컷 — 브리프 → 대본 수정 → 자산(캐릭터 교체) → 완성 → 인스타 공유",
+      "start": "my-works",
+      "initial": {"loggedIn": true, "packets": 30},
+      "steps": [
+        {"action": "open-insta-modal", "screen": "insta-modal"},
+        {"action": "create-insta", "screen": "g1-insta-brief"},
+        {"action": "approve-insta-brief", "screen": "g2-insta-script"},
+        {"action": "edit-cut-script", "screen": "g2-insta-script", "hint": "컷 대사를 편집합니다"},
+        {"action": "approve-insta-script", "screen": "g3-insta-assets"},
+        {"action": "swap-character", "screen": "character-picker"},
+        {"action": "pick-char", "screen": "g3-insta-assets"},
+        {"action": "approve-insta-assets", "screen": "g5-insta-generating"},
+        {"action": "gen-insta-done", "screen": "g5-insta-review"},
+        {"action": "share-insta", "screen": "insta-share"}
+      ]
+    },
+    {
+      "id": "detail-page-flow",
+      "title": "상세페이지 — 브리프(사진) → 섹션 → 준비 → 완성 → 세로 1장",
+      "start": "my-works",
+      "initial": {"loggedIn": true, "packets": 30},
+      "steps": [
+        {"action": "open-detail-modal", "screen": "detail-modal"},
+        {"action": "create-detail", "screen": "dp-brief"},
+        {"action": "upload-photos", "screen": "dp-brief", "hint": "정면 사진을 업로드합니다"},
+        {"action": "approve-dp-brief", "screen": "dp-sections"},
+        {"action": "approve-dp-sections", "screen": "dp-prepare"},
+        {"action": "start-dp-gen", "screen": "dp-generating"},
+        {"action": "dp-gen-done", "screen": "dp-complete"},
+        {"action": "export-dp-vertical", "screen": "export-progress"}
+      ]
+    },
+    {
+      "id": "series-ep1-to-ep2",
+      "title": "연재툰 1화 → 2화",
+      "start": "my-works",
+      "initial": {"loggedIn": true, "packets": 30, "seriesEp": 1},
+      "steps": [
+        {"action": "open-series-modal", "screen": "series-modal"},
+        {"action": "create-series", "screen": "g1-series-brief", "vars": {"seriesEp": 1}},
+        {"action": "approve-series-brief", "screen": "g2-series-script"},
+        {"action": "approve-series-script", "screen": "g3-series-assets"},
+        {"action": "approve-series-assets", "screen": "g5-series-generating"},
+        {"action": "series-gen-done", "screen": "g5-series-review"},
+        {"action": "go-series-hub", "screen": "series-hub"},
+        {"action": "create-next-ep", "screen": "g1-series-ep2", "vars": {"seriesEp": 2}},
+        {"action": "approve-ep2-brief", "screen": "g2-series-ep2-script"},
+        {"action": "approve-ep2-script", "screen": "g3-series-ep2-assets"},
+        {"action": "approve-ep2-assets", "screen": "g5-series-ep2-gen"},
+        {"action": "ep2-gen-done", "screen": "g5-series-ep2-review"}
+      ]
+    },
+    {
+      "id": "packet-purchase-flow",
+      "title": "패킷 부족 → 요금 → 결제 → 복귀",
+      "start": "g3-onecut-assets",
+      "initial": {"loggedIn": true, "packets": 0},
+      "steps": [
+        {"action": "approve-onecut-assets-no-pkt", "screen": "packet-insufficient"},
+        {"action": "go-charge", "screen": "packets"},
+        {"action": "pay-toss", "screen": "payment-processing"},
+        {"action": "pay-success", "screen": "payment-success", "vars": {"packets": 30}},
+        {"action": "back-to-work", "screen": "my-works"}
+      ]
+    },
+    {
+      "id": "payment-fail-retry",
+      "title": "결제 실패 → 재시도 → 성공",
+      "start": "packets",
+      "initial": {"loggedIn": true, "packets": 0},
+      "steps": [
+        {"action": "pay-toss", "screen": "payment-processing"},
+        {"action": "pay-fail", "screen": "payment-fail"},
+        {"action": "retry-pay", "screen": "packets"},
+        {"action": "pay-toss", "screen": "payment-processing"},
+        {"action": "pay-success", "screen": "payment-success", "vars": {"packets": 30}}
+      ]
+    },
+    {
+      "id": "redraw-and-edit",
+      "title": "완성 컷 다시 그리기 → 편집 → 콘티 수정",
+      "start": "g5-onecut-review",
+      "initial": {"loggedIn": true, "packets": 10},
+      "steps": [
+        {"action": "redraw-onecut", "screen": "redraw-sheet"},
+        {"action": "confirm-redraw", "screen": "redraw-generating"},
+        {"action": "redraw-done", "screen": "g5-onecut-review"},
+        {"action": "edit-onecut", "screen": "cut-editor"},
+        {"action": "save-edit", "screen": "g5-onecut-review"}
+      ]
+    },
+    {
+      "id": "insta-revert-flow",
+      "title": "인스타툰 콘티 수정 (되돌리기)",
+      "start": "g5-insta-review",
+      "initial": {"loggedIn": true, "packets": 10},
+      "steps": [
+        {"action": "revert-insta-g3", "screen": "insta-revert-confirm"},
+        {"action": "confirm-revert-insta", "screen": "g3-insta-assets"}
+      ]
+    },
+    {
+      "id": "redraw-fail-retry",
+      "title": "재생성 실패 → 재시도",
+      "start": "g5-onecut-review",
+      "initial": {"loggedIn": true, "packets": 5},
+      "steps": [
+        {"action": "redraw-onecut", "screen": "redraw-sheet"},
+        {"action": "confirm-redraw", "screen": "redraw-generating"},
+        {"action": "redraw-fail", "screen": "redraw-fail-screen"},
+        {"action": "retry-redraw", "screen": "redraw-sheet"},
+        {"action": "confirm-redraw", "screen": "redraw-generating"},
+        {"action": "redraw-done", "screen": "g5-onecut-review"}
+      ]
+    },
+    {
+      "id": "login-fail-retry",
+      "title": "로그인 실패 → 재시도",
+      "steps": [
+        {"action": "cta-signup", "screen": "login"},
+        {"action": "oauth-kakao", "screen": "oauth-callback"},
+        {"action": "auth-fail", "screen": "login-fail"},
+        {"action": "retry-login", "screen": "login"},
+        {"action": "oauth-kakao", "screen": "oauth-callback"},
+        {"action": "auth-success", "screen": "my-works", "vars": {"loggedIn": true, "packets": 3}}
+      ]
+    },
+    {
+      "id": "insta-gen-fail-retry",
+      "title": "인스타툰 생성 실패 → 재시도",
+      "start": "g5-insta-generating",
+      "initial": {"loggedIn": true, "packets": 10},
+      "steps": [
+        {"action": "gen-insta-fail", "screen": "g5-insta-review-partial"},
+        {"action": "retry-failed-cuts", "screen": "g5-insta-generating"},
+        {"action": "gen-insta-done", "screen": "g5-insta-review"}
+      ]
+    },
+    {
+      "id": "onecut-revert-cancel",
+      "title": "한 컷 되돌리기 취소",
+      "start": "g3-onecut-assets",
+      "initial": {"loggedIn": true, "packets": 10},
+      "steps": [
+        {"action": "revert-onecut-g1", "screen": "onecut-revert-confirm"},
+        {"action": "cancel-revert-onecut", "screen": "g3-onecut-assets"}
+      ]
+    },
+    {
+      "id": "detail-section-fail-retry",
+      "title": "상세페이지 생성 실패 → 재시도",
+      "start": "dp-generating",
+      "initial": {"loggedIn": true, "packets": 20},
+      "steps": [
+        {"action": "dp-gen-fail", "screen": "dp-complete-partial"},
+        {"action": "retry-dp-fail", "screen": "dp-generating"},
+        {"action": "dp-gen-done", "screen": "dp-complete"}
+      ]
+    }
+  ],
+
+  "decisions": [
+    {"screen": "g5-onecut-review", "question": "다시 그리기 시 이전 버전 보관 정책: 최근 N개만? 무제한?"},
+    {"screen": "packets", "question": "환불 정책: 7일 이내 미사용 전액, 사용분 300원/개 — UI에 명시 여부"},
+    {"screen": "insta-share", "question": "인스타 공유 시 크레딧 워터마크 위치·크기 사용자 커스터마이징 가능 여부"}
+  ]
+}
