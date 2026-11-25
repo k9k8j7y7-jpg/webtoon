@@ -314,8 +314,38 @@ def check_model_smoke(db) -> dict:
         return {"key": "model_smoke", "status": "fail", "value": "오류", "detail": str(e)[:200]}
 
 
+def _ensure_smoke_project(db) -> int:
+    """전용 스모크 프로젝트를 찾거나 없으면 생성. project_id 반환."""
+    from app.projects.models import SMOKE_PROJECT_TITLE
+
+    row = db.execute(
+        text(
+            "SELECT id FROM projects "
+            "WHERE user_id = :uid AND title = :title AND deleted_at IS NULL "
+            "LIMIT 1"
+        ),
+        {"uid": TEST_USER_ID, "title": SMOKE_PROJECT_TITLE},
+    ).fetchone()
+    if row:
+        return row[0]
+
+    # 없으면 생성
+    db.execute(
+        text(
+            "INSERT INTO projects (user_id, title, kind, is_default, visibility) "
+            "VALUES (:uid, :title, 'ad', 0, 'private')"
+        ),
+        {"uid": TEST_USER_ID, "title": SMOKE_PROJECT_TITLE},
+    )
+    db.flush()
+    pid = db.execute(text("SELECT LAST_INSERT_ID()")).scalar()
+    db.commit()
+    log.info("script_smoke: created smoke project %s for u%s", pid, TEST_USER_ID)
+    return pid
+
+
 def check_script_smoke(db) -> dict:
-    """테스트 계정(u1)으로 한 컷 광고 에피소드 생성 → 대본 1회 → 삭제.
+    """전용 __smoke__ 프로젝트에 에피소드 생성 → 대본 1회 → 삭제.
 
     대본 500 사고(792c2ae) 재발 방지 — 텍스트 AI 파이프라인 E2E 검증.
     무료(0패킷), 에피소드는 즉시 soft-delete.
@@ -324,19 +354,8 @@ def check_script_smoke(db) -> dict:
     try:
         from app.workflow.gate import create_initial_gate_status
 
-        # 1. u1의 default project 찾기
-        row = db.execute(
-            text(
-                "SELECT id FROM projects "
-                "WHERE user_id = :uid AND is_default = 1 AND deleted_at IS NULL "
-                "LIMIT 1"
-            ),
-            {"uid": TEST_USER_ID},
-        ).fetchone()
-        if not row:
-            return {"key": "script_smoke", "status": "fail",
-                    "value": "프로젝트 없음", "detail": f"u{TEST_USER_ID} default project not found"}
-        project_id = row[0]
+        # 1. 전용 스모크 프로젝트 확보
+        project_id = _ensure_smoke_project(db)
 
         # 2. 에피소드 생성 (onecut_ad, gate 1)
         gs = create_initial_gate_status(is_ad=True, purpose="onecut_ad")
