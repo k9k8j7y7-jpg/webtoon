@@ -71,7 +71,7 @@ export default function WorkflowPage() {
       );
       setRevertModal(data.impact);
     } catch (err) {
-      alert(err.response?.data?.detail || '되돌아가기 정보 조회에 실패했습니다.');
+      alert(err.response?.data?.detail || '되돌아가기 정보를 불러오지 못했어요.');
     }
   };
 
@@ -85,7 +85,7 @@ export default function WorkflowPage() {
       setRevertModal(null);
       await loadStatus();
     } catch (err) {
-      alert(err.response?.data?.detail || '되돌아가기에 실패했습니다.');
+      alert(err.response?.data?.detail || '되돌아가기에 실패했어요.');
     } finally {
       setReverting(false);
     }
@@ -127,7 +127,7 @@ export default function WorkflowPage() {
   };
   const GateComponent = gateComponents[displayGate];
 
-  const gateLabels = { 1: '기획', 2: '대본', 3: '자산', 4: '콘티&장소', 5: '이미지' };
+  const gateLabels = { 1: '기획', 2: '대본', 3: '준비', 4: '콘티&장소', 5: '이미지' };
 
   return (
     <div>
@@ -227,7 +227,7 @@ export default function WorkflowPage() {
               </p>
               <ul className="space-y-1.5 text-sm font-bold text-red-600 dark:text-red-400">
                 {revertModal.gates_invalidated.length > 0 && (
-                  <li>· 게이트: {revertModal.gates_invalidated.join(', ')}</li>
+                  <li>· 단계: {revertModal.gates_invalidated.join(', ')}</li>
                 )}
                 {revertModal.characters_count > 0 && (
                   <li>· 캐릭터 {revertModal.characters_count}명</li>

@@ -103,7 +103,7 @@ export default function PacketsPage() {
           type: 'success',
           message: res.status === 'already_paid'
             ? '이미 처리된 주문입니다'
-            : `${res.packets_granted}패킷이 충전되었습니다!`,
+            : `${res.packets_granted}패킷 충전 완료!`,
         });
         load(0);
         loadOrders();

@@ -9,6 +9,7 @@ import resolveUrl from '../../../utils/resolveUrl';
 import useGateLoad from '../../../hooks/useGateLoad';
 import DetailLoad from './DetailLoad';
 import { Check, Loader2, Lock, User, Package, AlertTriangle, Plus, Camera, Library, X, Star } from 'lucide-react';
+import { styleKo } from '../../../utils/adBriefLabels';
 
 const chipCls = (on) =>
   `px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${on ? 'bg-comic-orange text-white' : 'bg-gray-100 dark:bg-zinc-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-zinc-700'}`;
@@ -273,7 +274,7 @@ export default function DetailPrepare({ projectId, episodeId, onRefresh, readOnl
                 <h3 className="font-bold text-ink-black dark:text-white flex items-center gap-2">
                   <Library size={18} className="text-purple-500" /> 캐릭터 불러오기
                 </h3>
-                {style && <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5 ml-7">그림체: {presets.find(p => p.key === style)?.label || style}</p>}
+                {style && <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5 ml-7">그림체: {styleKo(style)}</p>}
               </div>
               <button onClick={() => setShowPicker(false)} className="p-1 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg">
                 <X size={18} className="text-gray-500" />
@@ -284,7 +285,7 @@ export default function DetailPrepare({ projectId, episodeId, onRefresh, readOnl
             {styleConfirm && (
               <div className="mx-4 mt-3 p-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl">
                 <p className="text-sm font-bold text-orange-700 dark:text-orange-300 mb-2">그림체가 조금 달라질 수 있어요</p>
-                <p className="text-xs text-orange-600 dark:text-orange-400 mb-3">현재 스타일과 다른 그림체({styleConfirm.style})로 만든 캐릭터입니다.</p>
+                <p className="text-xs text-orange-600 dark:text-orange-400 mb-3">현재 스타일과 다른 그림체({styleKo(styleConfirm.style)})로 만든 캐릭터입니다.</p>
                 <div className="flex gap-2">
                   <button onClick={() => setStyleConfirm(null)} className="px-3 py-1.5 text-xs font-bold text-gray-500 dark:text-gray-400 border border-border dark:border-zinc-700 rounded-lg">취소</button>
                   <button onClick={() => pickChar(styleConfirm)} className="px-3 py-1.5 text-xs font-bold text-white bg-orange-500 rounded-lg hover:bg-orange-600">그래도 바꾸기</button>

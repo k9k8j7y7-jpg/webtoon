@@ -5,7 +5,7 @@
 import { useState, useEffect } from 'react';
 import api from '../../api/client';
 import { Sparkles, RefreshCw, Check, ChevronDown, ChevronUp, X } from 'lucide-react';
-import { AD_PURPOSES, AD_MOODS } from '../../utils/adBriefLabels';
+import { AD_PURPOSES, AD_MOODS, styleKo } from '../../utils/adBriefLabels';
 
 const COPY_DIRECTIONS = [
   { key: 'shorter', label: '더 짧게' },
@@ -310,7 +310,7 @@ export default function AdBriefForm({ projectId, episodeId, gateStatus, onBriefD
         <div className="space-y-2">
           <label className="text-xs font-bold text-gray-500 dark:text-gray-400 block">제품</label>
           <input type="text" value={productName} onChange={e => setProductName(e.target.value)}
-            placeholder="제품명 (예: MILBON SCALP SUPPORT OIL+)"
+            placeholder="제품명 (예: 밀본 스칼프 오일)"
             className="w-full px-3 py-2 border border-border dark:border-zinc-700 rounded-xl bg-white dark:bg-zinc-800 text-ink-black dark:text-white placeholder-gray-400 text-sm focus:outline-none focus:border-amber-400" />
           <textarea value={productInfo} onChange={e => setProductInfo(e.target.value)}
             placeholder="제품 특징·활용법 (상세페이지 문구를 붙여 넣어도 돼요)"
@@ -542,8 +542,8 @@ export default function AdBriefForm({ projectId, episodeId, gateStatus, onBriefD
           {/* 추천 스타일 */}
           {briefResult.recommended_style && (
             <p className="text-[11px] text-gray-400 dark:text-gray-500">
-              추천 스타일: <span className="font-bold text-gray-600 dark:text-gray-300">{briefResult.recommended_style}</span>
-              <span className="ml-1">(자산 단계에서 바꿀 수 있어요)</span>
+              추천 스타일: <span className="font-bold text-gray-600 dark:text-gray-300">{styleKo(briefResult.recommended_style)}</span>
+              <span className="ml-1">(준비 단계에서 바꿀 수 있어요)</span>
             </p>
           )}
 

@@ -34,6 +34,17 @@ export const DEVICE_KR = {
   steps: '단계', size_compare: '크기 비교', process: '작용 과정',
 };
 
+// 그림 스타일 프리셋 한글 매핑 — Gate3Assets·DetailPrepare·AdBriefForm 공용
+export const STYLE_LABEL_KO = {
+  korean_webtoon: '한국 웹툰체', romance: '순정/로맨스체', sd_gag: 'SD/개그체',
+  kakao_webtoon: '카카오웹툰풍', action_shonen: '소년만화', semi_realistic: '반실사',
+  anime: '애니메이션풍', watercolor: '수채화', pixel_art: '픽셀아트',
+  fantasy_rpg: '판타지 RPG', cyberpunk: '네온 사이버펑크', storybook: '그림책풍',
+  emotional_romance: '감성로맨스', marvel: '마블풍', western_fantasy: '서양판타지',
+  bw_manga: '흑백 만화',
+};
+export const styleKo = (key) => STYLE_LABEL_KO[key] || key?.replace(/_/g, ' ') || '';
+
 // 키 → 한글 라벨. 모르는 키는 null(내부 키 노출 금지)
 export function labelOf(list, key) {
   if (!key) return null;

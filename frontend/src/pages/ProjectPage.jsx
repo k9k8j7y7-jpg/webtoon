@@ -62,6 +62,8 @@ export default function ProjectPage() {
   const [seriesChips, setSeriesChips] = useState([]);
   const [seriesCreating, setSeriesCreating] = useState(false);
   const [seriesJobMessage, setSeriesJobMessage] = useState('');
+  const [toast, setToast] = useState('');
+  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 4000); };
 
   // 온보딩 예시 칩 (마운트마다 랜덤 3개)
   const onboardingChips = useMemo(() => pickRandomChips(3), []);
@@ -103,7 +105,7 @@ export default function ProjectPage() {
       setShowModal(false);
       navigate(`/projects/${projectId}/episodes/${data.id}/workflow`);
     } catch (e) {
-      alert('에피소드 생성에 실패했습니다.');
+      showToast('만들지 못했어요.');
       setCreating(false);
     }
   };
@@ -128,7 +130,7 @@ export default function ProjectPage() {
       setShowAdTitleModal(false);
       navigate(`/projects/${projectId}/episodes/${data.id}/workflow`);
     } catch (e) {
-      alert(e.response?.data?.detail || '에피소드 생성에 실패했습니다.');
+      showToast(e.response?.data?.detail || '만들지 못했어요.');
       setCreating(false);
     }
   };
@@ -142,19 +144,19 @@ export default function ProjectPage() {
         : await api.post(`/projects/${projectId}/episodes`, { episode_no: 1, title: '1화', is_ad: true, purpose: 'brand_series' });
       navigate(`/projects/${projectId}/episodes/${data.id}/workflow`);
     } catch (e) {
-      alert(e.response?.data?.detail || '새 화를 만들지 못했어요.');
+      showToast(e.response?.data?.detail || '새 화를 만들지 못했어요.');
       setCreating(false);
     }
   };
 
   const handleDeleteEpisode = async (e, episodeId) => {
     e.stopPropagation();
-    if (!confirm('이 에피소드를 삭제하시겠습니까?')) return;
+    if (!confirm('이 작품을 지울까요?')) return;
     try {
       await api.delete(`/projects/${projectId}/episodes/${episodeId}`);
       setEpisodes((prev) => prev.filter((ep) => ep.id !== episodeId));
     } catch {
-      alert('에피소드 삭제에 실패했습니다.');
+      showToast('삭제하지 못했어요.');
     }
   };
 
@@ -197,7 +199,7 @@ export default function ProjectPage() {
       setShowSeriesModal(false);
       navigate(`/projects/${projectId}/series/${created.id}`);
     } catch (e) {
-      alert(e?.response?.data?.detail || e.message || '시리즈 생성에 실패했습니다.');
+      showToast(e?.response?.data?.detail || e.message || '시리즈를 만들지 못했어요.');
       setSeriesCreating(false);
       setSeriesJobMessage('');
     }
@@ -205,12 +207,12 @@ export default function ProjectPage() {
 
   const handleDeleteSeries = async (e, sid) => {
     e.stopPropagation();
-    if (!confirm('이 시리즈를 삭제하시겠습니까?')) return;
+    if (!confirm('이 시리즈를 지울까요?')) return;
     try {
       await api.delete(`/series/${sid}`);
       setSeriesList((prev) => prev.filter((s) => s.id !== sid));
     } catch (e) {
-      alert(e?.response?.data?.detail || '시리즈 삭제에 실패했습니다.');
+      showToast(e?.response?.data?.detail || '시리즈를 삭제하지 못했어요.');
     }
   };
 
@@ -234,7 +236,7 @@ export default function ProjectPage() {
       const stepMap = { 1: 'STEP 1 브리프', 2: 'STEP 2 대본', 3: 'STEP 3 준비', 4: 'STEP 4 완성', 5: 'STEP 4 완성' };
       return stepMap[g] || `STEP ${g}`;
     }
-    const labels = { 1: 'STEP 1 기획', 2: 'STEP 2 대본', 3: 'STEP 3 자산 준비', 4: 'STEP 4 콘티·장소', 5: 'STEP 5 웹툰 만들기' };
+    const labels = { 1: 'STEP 1 기획', 2: 'STEP 2 대본', 3: 'STEP 3 준비', 4: 'STEP 4 콘티·장소', 5: 'STEP 5 웹툰 만들기' };
     return labels[g] || `STEP ${g}`;
   };
 
@@ -750,6 +752,12 @@ export default function ProjectPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-xl shadow-lg text-sm font-bold animate-bounce-in">
+          {toast}
         </div>
       )}
     </div>

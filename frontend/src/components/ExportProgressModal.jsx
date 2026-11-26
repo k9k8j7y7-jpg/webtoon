@@ -8,7 +8,7 @@
 import { X, Download, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 
 export default function ExportProgressModal({ state, done, total, format, error, onCancel, onRetry, onClose }) {
-  const formatLabel = { png_cuts: 'PNG 묶음', vertical_single: '세로 1장', instagram_carousel: '인스타 정사각', a4_grid: 'A4 인쇄용', a4_single: 'A4 인쇄용' }[format] || format;
+  const formatLabel = { png_cuts: 'PNG 묶음', vertical_single: '세로 1장', instagram_carousel: '인스타 정사각', a4_grid: 'A4 인쇄용', a4_single: 'A4 인쇄용', vertical_stack: '세로 스택' }[format] || format;
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
 
   // 예상 시간 (컷당 약 1.2초 기준)

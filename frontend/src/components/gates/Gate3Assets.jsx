@@ -10,15 +10,7 @@ import { PAGE_FORMATS, FORMAT_KEYS } from '../../utils/pageFormats';
 const API_BASE = import.meta.env.VITE_API_URL || '/WEBTOON';
 
 // (102) 그림체 키 → 한글 라벨
-const STYLE_LABEL_KO = {
-  korean_webtoon: '한국 웹툰체', romance: '순정/로맨스체', sd_gag: 'SD/개그체',
-  kakao_webtoon: '카카오웹툰풍', action_shonen: '소년만화', semi_realistic: '반실사',
-  anime: '애니메이션풍', watercolor: '수채화', pixel_art: '픽셀아트',
-  fantasy_rpg: '판타지 RPG', cyberpunk: '네온 사이버펑크', storybook: '그림책풍',
-  emotional_romance: '감성로맨스', marvel: '마블풍', western_fantasy: '서양판타지',
-  bw_manga: '흑백 만화',
-};
-const styleKo = (key) => STYLE_LABEL_KO[key] || key?.replace(/_/g, ' ') || '';
+import { styleKo } from '../../utils/adBriefLabels';
 
 export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatus }) {
   const [characters, setCharacters] = useState([]);
@@ -366,9 +358,10 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
     const targets = scriptChars.filter((sc) => !photoRealKeys.has(sc.ref_key) && !linkedKeys.has(sc.ref_key));
     const n = targets.length;
     if (n === 0) {
-      window.alert(photoRealCount > 0
+      setToast(photoRealCount > 0
         ? `만들 캐릭터 시트가 없어요 (실사 캐릭터 ${photoRealCount}명 제외)`
         : '만들 캐릭터 시트가 없어요');
+      setTimeout(() => setToast(''), 4000);
       return;
     }
     if (!window.confirm(`대본 등장인물 ${n}명의 캐릭터 시트를 만듭니다 (${n}×2패킷). 진행할까요?`)) return;
@@ -1187,7 +1180,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
       } catch (err) {
         const detail = err.response?.data?.detail;
         const msg = typeof detail === 'string' ? detail : '참고 광고 업로드에 실패했어요';
-        alert(msg);
+        setToast(msg); setTimeout(() => setToast(''), 4000);
       } finally {
         setRefAdUploading(false);
       }
@@ -1202,7 +1195,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
         );
         setRefAds(data.reference_ads || refAds.map((a, i) => i === idx ? { ...a, follow_layout: !a.follow_layout } : a));
       } catch (err) {
-        alert(err.response?.data?.detail || '변경에 실패했어요');
+        setToast(err.response?.data?.detail || '변경에 실패했어요'); setTimeout(() => setToast(''), 4000);
       }
     };
 
@@ -1213,7 +1206,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
         setRefAds(refAds.filter((_, i) => i !== idx));
         await onRefresh();
       } catch (err) {
-        alert(err.response?.data?.detail || '삭제에 실패했어요');
+        setToast(err.response?.data?.detail || '삭제에 실패했어요'); setTimeout(() => setToast(''), 4000);
       }
     };
 
@@ -1343,7 +1336,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
         {hasStyle && (
           <p className="text-xs font-bold text-green-600 dark:text-green-400 mt-3">
             <Check size={12} className="inline mr-1" />
-            {styles.preset_key} 스타일 선택됨
+            {styleKo(styles.preset_key)} 스타일 선택됨
           </p>
         )}
 
@@ -2210,7 +2203,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
                   <Library size={18} className="text-purple-500" /> 캐릭터 불러오기
                 </h3>
                 {styles?.preset_key && (
-                  <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5 ml-7">그림체: {[...(presets.core || []), ...(presets.beta || [])].find(p => p.key === styles.preset_key)?.label || styles.preset_key}</p>
+                  <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5 ml-7">그림체: {styleKo(styles.preset_key)}</p>
                 )}
               </div>
               <button onClick={() => { setShowPicker(false); setMappingState(null); setReplaceState(null); }} className="p-1 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg">
@@ -2285,7 +2278,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
             {/* 탭 */}
             {!mappingState && !replaceState && (() => {
               const styleName = styles?.preset_key
-                ? [...(presets.core || []), ...(presets.beta || [])].find(p => p.key === styles.preset_key)?.label || styles.preset_key
+                ? styleKo(styles.preset_key)
                 : '';
               return (
               <div className="flex border-b border-border dark:border-zinc-700">
@@ -2330,7 +2323,7 @@ export default function Gate3Assets({ projectId, episodeId, onRefresh, gateStatu
                   {pickerTab === 'project' && projectChars.length === 0 && (
                     <div className="text-center py-8">
                       <p className="text-sm text-gray-400 dark:text-gray-500">
-                        {styles?.preset_key || ''} 캐릭터가 아직 없어요
+                        {styleKo(styles?.preset_key)} 캐릭터가 아직 없어요
                       </p>
                       <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                         새로 만들거나 다른 스타일을 선택하세요
@@ -2436,7 +2429,7 @@ function DramaLevelSelector({ projectId, episodeId, gateStatus, onRefresh }) {
       await api.post(`/projects/${projectId}/episodes/${episodeId}/drama-level`, { drama_level: level });
       await onRefresh();
     } catch (err) {
-      alert(err.response?.data?.detail || '저장하지 못했어요');
+      setToast(err.response?.data?.detail || '저장하지 못했어요'); setTimeout(() => setToast(''), 4000);;
     } finally {
       setSaving(false);
     }

@@ -58,7 +58,7 @@ export default function Gate2Script({ projectId, episodeId, onRefresh, readOnly 
       setScript(data);
       if (isInvalidated) setRegenerated(true);
     } catch (err) {
-      setError(err.response?.data?.detail || '대본 생성에 실패했습니다.');
+      setError(err.response?.data?.detail || '대본을 만들지 못했어요.');
     } finally {
       setGenerating(false);
     }
@@ -147,7 +147,7 @@ export default function Gate2Script({ projectId, episodeId, onRefresh, readOnly 
       // 무효화 전파 결과를 게이트 진행 표시에 반영
       if (onRefresh) await onRefresh();
     } catch (err) {
-      setSaveError(err.response?.data?.detail || '저장에 실패했습니다. 다시 시도해주세요.');
+      setSaveError(err.response?.data?.detail || '저장하지 못했어요. 다시 해보세요.');
     } finally {
       setSaving(false);
     }
@@ -408,7 +408,7 @@ export default function Gate2Script({ projectId, episodeId, onRefresh, readOnly 
           <div className="mb-4 p-4 bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-200 dark:border-amber-800 rounded-xl">
             <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300 text-sm font-bold mb-2">
               <AlertTriangle size={16} />
-              기획이 수정되어 대본을 다시 생성해야 합니다
+              기획이 수정되어 대본을 다시 만들어야 해요
             </div>
             <button
               onClick={handleGenerate}
@@ -452,7 +452,7 @@ export default function Gate2Script({ projectId, episodeId, onRefresh, readOnly 
         )}
 
         {!script && readOnly && (
-          <p className="text-gray-400 dark:text-zinc-500 text-sm font-bold">저장된 대본 데이터가 없습니다.</p>
+          <p className="text-gray-400 dark:text-zinc-500 text-sm font-bold">아직 대본이 없어요.</p>
         )}
 
         {error && (

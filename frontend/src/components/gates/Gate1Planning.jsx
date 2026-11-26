@@ -631,7 +631,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
           <div className="px-4 py-3 bg-purple-50 dark:bg-purple-900/20 border-2 border-purple-200 dark:border-purple-800 rounded-2xl flex items-center gap-2">
             <Lightbulb size={16} className="text-purple-500 shrink-0" />
             <span className="text-sm font-bold text-purple-600 dark:text-purple-400">
-              연작 회차는 시리즈 기획(바이블)을 따릅니다. 기획을 수정하려면 시리즈 홈에서 바이블을 수정하세요.
+              연작 회차는 시리즈 기획(시리즈 기본 설정)을 따릅니다. 기획을 수정하려면 시리즈 홈에서 시리즈 기본 설정을 수정하세요.
             </span>
           </div>
         )}
@@ -709,9 +709,9 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
         <div className="glass-card p-6">
           <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2 mb-4">
             <Lightbulb size={20} className="text-amber-500" />
-            게이트 1 — 기획
+            STEP 1 — 기획
             {isSeriesDerived && (
-              <span className="text-xs font-bold text-purple-500 bg-purple-100 dark:bg-purple-900/40 px-2 py-0.5 rounded-full">파생 기획</span>
+              <span className="text-xs font-bold text-purple-500 bg-purple-100 dark:bg-purple-900/40 px-2 py-0.5 rounded-full">시리즈에서 가져온 기획</span>
             )}
           </h2>
           {planning ? (
@@ -721,7 +721,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
                 <p className="font-bold font-serif text-ink-black dark:text-white mt-1">{planning.title}</p>
               </div>
               <div>
-                <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">로그라인</span>
+                <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">한 줄 소개</span>
                 <p className="text-sm font-bold text-gray-700 dark:text-gray-300 mt-1">{planning.logline}</p>
               </div>
               <div>
@@ -746,7 +746,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
               )}
             </div>
           ) : (
-            <p className="text-gray-400 dark:text-zinc-500 text-sm font-bold">저장된 기획 데이터가 없습니다.</p>
+            <p className="text-gray-400 dark:text-zinc-500 text-sm font-bold">아직 기획이 없어요.</p>
           )}
         </div>
       </div>
@@ -1543,7 +1543,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
       <div className="glass-card p-6">
         <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white flex items-center gap-2 mb-4">
           <Lightbulb size={20} className="text-amber-500" />
-          게이트 1 — 기획
+          STEP 1 — 기획
         </h2>
 
         <div className="space-y-5">
@@ -1801,7 +1801,7 @@ export default function Gate1Planning({ projectId, episodeId, onRefresh, gateSta
           </div>
 
           <div>
-            <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">로그라인</span>
+            <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">한 줄 소개</span>
             {editing ? (
               <textarea
                 value={editData.logline}

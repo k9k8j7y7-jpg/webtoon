@@ -194,9 +194,9 @@ export default function ViewerPage() {
   };
 
   if (error) {
-    const msg = error === 404 ? '작품을 찾을 수 없습니다'
-              : error === 403 ? '비공개 작품입니다'
-              : '오류가 발생했습니다';
+    const msg = error === 404 ? '작품을 찾을 수 없어요'
+              : error === 403 ? '비공개 작품이에요'
+              : '오류가 발생했어요';
     return (
       <div className="min-h-screen bg-[#0A0F1D] text-white flex flex-col items-center justify-center gap-6"
            style={{ fontFamily: "'Noto Sans KR', sans-serif" }}>
@@ -333,11 +333,14 @@ export default function ViewerPage() {
                 cd.emphasis && `강조 '${cd.emphasis}'`,
               ].filter(Boolean).join(' · ');
               const od = b.onecut_device;
-              const deviceText = od && DEVICE_KR[od.device]
+              const deviceOn = od && od.device && od.device !== 'OFF' && DEVICE_KR[od.device];
+              const deviceText = deviceOn
                 ? `${DEVICE_KR[od.device]}${od.labels?.length ? ' · ' + od.labels.join(', ') : ''}`
                 : null;
-              const points = (b.visual_points || [])
-                .map(p => p.feature + (DEVICE_KR[p.device] ? ` (${DEVICE_KR[p.device]})` : ''));
+              const points = deviceOn
+                ? (b.visual_points || [])
+                    .map(p => p.feature + (DEVICE_KR[p.device] ? ` (${DEVICE_KR[p.device]})` : ''))
+                : [];
               return (
                 <>
                   <Row label="광고 목적" value={labelOf(AD_PURPOSES, b.ad_purpose)} />

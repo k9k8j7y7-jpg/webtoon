@@ -111,8 +111,28 @@ def check_ssl() -> dict:
         return {"key": "ssl", "status": "fail", "value": "오류", "detail": str(e)[:200]}
 
 
+def _read_deploy_times_24h() -> list[datetime]:
+    """~/deploy.log에서 24h 이내 배포 시각 목록 반환."""
+    deploy_log = Path.home() / "deploy.log"
+    if not deploy_log.exists():
+        return []
+    cutoff = datetime.utcnow() - timedelta(hours=24)
+    times: list[datetime] = []
+    for line in deploy_log.read_text().strip().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            dt = datetime.fromisoformat(line)
+            if dt >= cutoff:
+                times.append(dt)
+        except ValueError:
+            continue
+    return times
+
+
 def check_systemd() -> dict:
-    """ezitoon-api active + 24h 재시작 횟수."""
+    """ezitoon-api active + 24h 크래시 재시작 횟수 (배포 재시작 제외)."""
     try:
         # is-active
         r = subprocess.run(
@@ -125,17 +145,50 @@ def check_systemd() -> dict:
                     "value": active,
                     "detail": "ezitoon-api not active"}
 
-        # 24h 재시작 횟수 (journalctl)
+        # 24h 재시작 횟수 (journalctl) — systemd 행만 카운트
         r2 = subprocess.run(
             ["journalctl", "-u", "ezitoon-api", "--since", "24 hours ago",
-             "--no-pager", "-o", "short-precise"],
+             "--no-pager", "-o", "short-iso"],
             capture_output=True, text=True, timeout=10,
         )
-        restart_count = r2.stdout.count("Started ")
-        status = "warn" if restart_count >= 3 else "ok"
+        # "Started ezitoon-api" 만 세서 uvicorn "Started server" 이중 카운트 방지
+        started_lines = [
+            ln for ln in r2.stdout.splitlines()
+            if "Started ezitoon-api" in ln
+        ]
+        total_restarts = len(started_lines)
+
+        # 배포 재시작 차감: deploy.log 시각 ±90초 이내면 배포로 간주
+        deploy_times = _read_deploy_times_24h()
+        deploy_restarts = 0
+        for ln in started_lines:
+            # 행 앞부분 ISO 타임스탬프 추출: "2026-11-25T02:18:59+0000 ..."
+            ts_str = ln.split()[0] if ln.strip() else ""
+            try:
+                # +0000 → +00:00
+                if ts_str.endswith("+0000"):
+                    ts_str = ts_str[:-5] + "+00:00"
+                ts = datetime.fromisoformat(ts_str).replace(tzinfo=None)
+                for dt in deploy_times:
+                    if abs((ts - dt).total_seconds()) < 90:
+                        deploy_restarts += 1
+                        break
+            except (ValueError, IndexError):
+                continue
+
+        crash_restarts = max(0, total_restarts - deploy_restarts)
+
+        if crash_restarts >= 2:
+            status = "fail"
+        elif crash_restarts >= 1:
+            status = "warn"
+        else:
+            status = "ok"
+
+        detail = f"24h 내 총 {total_restarts}회 (배포 {deploy_restarts} · 크래시 {crash_restarts})"
         return {"key": "systemd", "status": status,
-                "value": f"active · 재시작 {restart_count}회",
-                "detail": f"24h 내 {restart_count}회 시작 기록"}
+                "value": f"active · 크래시 {crash_restarts}회",
+                "detail": detail}
     except Exception as e:
         return {"key": "systemd", "status": "fail", "value": "오류", "detail": str(e)[:200]}
 

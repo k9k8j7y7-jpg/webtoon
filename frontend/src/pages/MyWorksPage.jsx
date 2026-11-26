@@ -98,7 +98,8 @@ export default function MyWorksPage() {
       }
       setWorks(prev => prev.filter(w => !(w.kind === item.kind && w.id === item.id)));
     } catch (err) {
-      alert(err.response?.data?.detail || '삭제하지 못했어요');
+      setToast(err.response?.data?.detail || '삭제하지 못했어요');
+      setTimeout(() => setToast(''), 4000);
     }
   };
 
@@ -190,10 +191,10 @@ export default function MyWorksPage() {
       )}
 
       {/* ── 5. 생성 모달 ── */}
-      {modal === 'onecut' && <OnecutModal onClose={() => setModal(null)} onCreated={onCreated} />}
-      {modal === 'instatoon' && <InstatoonModal onClose={() => setModal(null)} onCreated={onCreated} />}
-      {modal === 'series' && <SeriesModal onClose={() => setModal(null)} onCreated={onCreated} />}
-      {modal === 'detail' && <DetailModal onClose={() => setModal(null)} onCreated={onCreated} />}
+      {modal === 'onecut' && <OnecutModal onClose={() => setModal(null)} onCreated={onCreated} onError={(msg) => { setToast(msg); setTimeout(() => setToast(''), 4000); }} />}
+      {modal === 'instatoon' && <InstatoonModal onClose={() => setModal(null)} onCreated={onCreated} onError={(msg) => { setToast(msg); setTimeout(() => setToast(''), 4000); }} />}
+      {modal === 'series' && <SeriesModal onClose={() => setModal(null)} onCreated={onCreated} onError={(msg) => { setToast(msg); setTimeout(() => setToast(''), 4000); }} />}
+      {modal === 'detail' && <DetailModal onClose={() => setModal(null)} onCreated={onCreated} onError={(msg) => { setToast(msg); setTimeout(() => setToast(''), 4000); }} />}
     </div>
   );
 }
@@ -327,7 +328,7 @@ const chipCls = (active) =>
   }`;
 
 /* ── 한 컷 모달 ── */
-function OnecutModal({ onClose, onCreated }) {
+function OnecutModal({ onClose, onCreated, onError }) {
   const [title, setTitle] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const placeholder = `한 컷 광고 ${todayLabel()}`;
@@ -342,7 +343,7 @@ function OnecutModal({ onClose, onCreated }) {
       const { data } = await api.post(`/my/works?${params.toString()}`);
       onCreated(data);
     } catch (err) {
-      alert(err.response?.data?.detail || '만들지 못했어요. 다시 시도해주세요.');
+      onError?.(err.response?.data?.detail || '만들지 못했어요. 다시 시도해주세요.');
       setSubmitting(false);
     }
   };
@@ -370,7 +371,7 @@ function OnecutModal({ onClose, onCreated }) {
 }
 
 /* ── 상세페이지 모달 (제목만) ── */
-function DetailModal({ onClose, onCreated }) {
+function DetailModal({ onClose, onCreated, onError }) {
   const [title, setTitle] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const placeholder = `상세페이지 ${todayLabel()}`;
@@ -384,7 +385,7 @@ function DetailModal({ onClose, onCreated }) {
       const { data } = await api.post(`/my/works?${params.toString()}`);
       onCreated(data);
     } catch (err) {
-      alert(err.response?.data?.detail || '만들지 못했어요. 다시 시도해주세요.');
+      onError?.(err.response?.data?.detail || '만들지 못했어요. 다시 시도해주세요.');
       setSubmitting(false);
     }
   };
@@ -411,7 +412,7 @@ function DetailModal({ onClose, onCreated }) {
 }
 
 /* ── 인스타툰 모달 ── */
-function InstatoonModal({ onClose, onCreated }) {
+function InstatoonModal({ onClose, onCreated, onError }) {
   const [title, setTitle] = useState('');
   const [cutCount, setCutCount] = useState(6);
   const [customCut, setCustomCut] = useState('');
@@ -424,7 +425,7 @@ function InstatoonModal({ onClose, onCreated }) {
 
   const handleSubmit = async () => {
     const c = activeCut;
-    if (c < 4 || c > 10) { alert('컷 수는 4~10 사이로 입력해주세요.'); return; }
+    if (c < 4 || c > 10) { onError?.('컷 수는 4~10 사이로 입력해주세요.'); return; }
     if (submitting) return;
     setSubmitting(true);
     try {
@@ -433,7 +434,7 @@ function InstatoonModal({ onClose, onCreated }) {
       const { data } = await api.post(`/my/works?${params.toString()}`);
       onCreated(data);
     } catch (err) {
-      alert(err.response?.data?.detail || '만들지 못했어요. 다시 시도해주세요.');
+      onError?.(err.response?.data?.detail || '만들지 못했어요. 다시 시도해주세요.');
       setSubmitting(false);
     }
   };
@@ -493,7 +494,7 @@ function InstatoonModal({ onClose, onCreated }) {
 }
 
 /* ── 브랜드 연재툰 모달 ── */
-function SeriesModal({ onClose, onCreated }) {
+function SeriesModal({ onClose, onCreated, onError }) {
   const [title, setTitle] = useState('');
   const [cutCount, setCutCount] = useState(6);
   const [customCut, setCustomCut] = useState('');
@@ -509,9 +510,9 @@ function SeriesModal({ onClose, onCreated }) {
   const activeCut = showCustom ? (parseInt(customCut, 10) || 0) : cutCount;
 
   const handleSubmit = async () => {
-    if (!title.trim()) { alert('시리즈 이름을 입력해주세요.'); return; }
+    if (!title.trim()) { onError?.('시리즈 이름을 입력해주세요.'); return; }
     const c = activeCut;
-    if (c < 4 || c > 20) { alert('컷 수는 4~20 사이로 입력해주세요.'); return; }
+    if (c < 4 || c > 20) { onError?.('컷 수는 4~20 사이로 입력해주세요.'); return; }
     if (submitting) return;
     setSubmitting(true);
     try {
@@ -524,7 +525,7 @@ function SeriesModal({ onClose, onCreated }) {
       const { data } = await api.post(`/my/works?${params.toString()}`);
       onCreated(data);
     } catch (err) {
-      alert(err.response?.data?.detail || '만들지 못했어요. 다시 시도해주세요.');
+      onError?.(err.response?.data?.detail || '만들지 못했어요. 다시 시도해주세요.');
       setSubmitting(false);
     }
   };

@@ -69,8 +69,8 @@ fi
 VER=$(git rev-parse --short HEAD)
 "${SSH[@]}" "echo '$VER' > $REMOTE/backend/VERSION"; echo "VERSION=$VER"
 
-# 3) 재시작 + health
-"${SSH[@]}" "sudo systemctl restart ezitoon-api && for i in \$(seq 1 30); do curl -fsS -m 2 $INTERNAL_HEALTH 2>/dev/null | grep -q '\"status\":\"ok\"' && exit 0; sleep 1; done; echo 'FAIL: 내부 health'; sudo journalctl -u ezitoon-api --no-pager -n 40; exit 3"
+# 3) 배포 마커 기록 + 재시작 + health
+"${SSH[@]}" "date -u +%Y-%m-%dT%H:%M:%S >> ~/deploy.log && sudo systemctl restart ezitoon-api && for i in \$(seq 1 30); do curl -fsS -m 2 $INTERNAL_HEALTH 2>/dev/null | grep -q '\"status\":\"ok\"' && exit 0; sleep 1; done; echo 'FAIL: 내부 health'; sudo journalctl -u ezitoon-api --no-pager -n 40; exit 3"
 echo "내부 health: $("${SSH[@]}" "curl -fsS $INTERNAL_HEALTH")"
 EXT=$(curl -fsS -m 10 "$EXTERNAL_HEALTH" || true)
 echo "외부 health: $EXT"

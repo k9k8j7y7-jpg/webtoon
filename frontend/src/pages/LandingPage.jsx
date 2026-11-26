@@ -515,7 +515,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center md:items-start gap-8">
           <div className="flex flex-col items-center md:items-start gap-1.5">
             <h2 className="text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-500 to-cyan-400">{SITE_INFO.serviceName}</h2>
-            <p className="text-gray-500 text-sm mt-1">AI 웹툰 자동화의 새로운 표준</p>
+            <p className="text-gray-500 text-sm mt-1">사장님의 가게를 웹툰으로</p>
             <p className="text-gray-600 text-xs mt-1">{SITE_INFO.companyName} | 대표 {SITE_INFO.ceo}</p>
             <p className="text-gray-600 text-xs">사업자등록번호 {SITE_INFO.bizNo} | 통신판매업 {SITE_INFO.salesNo}</p>
             <p className="text-gray-600 text-xs">{SITE_INFO.address}</p>

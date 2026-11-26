@@ -41,12 +41,15 @@ export default function SeriesPage() {
 
   const jobRunning = !!activeJob;
 
+  const [toast, setToast] = useState('');
+  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
+
   const loadSeries = useCallback(async () => {
     try {
       const { data } = await api.get(`/series/${seriesId}`);
       setSeries(data);
     } catch {
-      alert('시리즈를 불러올 수 없습니다.');
+      showToast('시리즈를 불러올 수 없습니다.');
       navigate(`/projects/${projectId}`);
     } finally {
       setLoading(false);
@@ -227,7 +230,7 @@ export default function SeriesPage() {
   const handleDeleteItem = (no) => {
     const item = series.outline.find((x) => x.no === no);
     if (item?.episode_id) {
-      alert('작품이 연결된 회차는 삭제할 수 없습니다.');
+      showToast('작품이 연결된 회차는 삭제할 수 없습니다.');
       return;
     }
     if (!confirm(`${no}화를 삭제합니다.`)) return;
@@ -273,7 +276,7 @@ export default function SeriesPage() {
       const { data } = await api.put(`/series/${seriesId}/outline`, outline);
       setSeries(data);
     } catch (e) {
-      alert(e?.response?.data?.detail || '저장에 실패했습니다.');
+      showToast(e?.response?.data?.detail || '저장에 실패했습니다.');
     }
   };
 
@@ -313,7 +316,7 @@ export default function SeriesPage() {
         setBibleScriptBanner(data.episodes_with_scripts);
       }
     } catch (e) {
-      alert(e?.response?.data?.detail || '바이블 저장에 실패했습니다.');
+      showToast(e?.response?.data?.detail || '시리즈 설정을 저장하지 못했어요.');
     } finally {
       setBibleSaving(false);
     }
@@ -454,7 +457,7 @@ export default function SeriesPage() {
           >
             <span className="font-bold text-ink-black dark:text-white flex items-center gap-2">
               <FileText size={16} className="text-purple-500" />
-              바이블
+              시리즈 설정
             </span>
             <div className="flex items-center gap-2">
               {!bibleEditing && (
@@ -665,7 +668,7 @@ export default function SeriesPage() {
       {/* 아웃라인 목록 */}
       <div className="mb-4 flex items-center justify-between flex-wrap gap-2">
         <h2 className="text-lg font-bold font-serif text-ink-black dark:text-white">
-          회차 아웃라인 <span className="text-gray-400 text-base font-normal">({outline.length}화)</span>
+          회차 목록 <span className="text-gray-400 text-base font-normal">({outline.length}화)</span>
         </h2>
         <div className="flex items-center gap-2 flex-wrap">
           {/* from_no 재생성 */}
@@ -712,7 +715,7 @@ export default function SeriesPage() {
 
       {outline.length === 0 ? (
         <div className="text-center py-12 text-gray-400 dark:text-zinc-500 font-bold">
-          아웃라인이 없습니다. 바이블을 먼저 생성해주세요.
+          회차 목록이 없어요. 시리즈 설정을 먼저 만들어주세요.
         </div>
       ) : (
         <div className="space-y-3 mb-8">
@@ -1028,6 +1031,11 @@ export default function SeriesPage() {
             </div>
             );
           })}
+        </div>
+      )}
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-xl shadow-lg text-sm font-bold animate-bounce-in">
+          {toast}
         </div>
       )}
     </div>
